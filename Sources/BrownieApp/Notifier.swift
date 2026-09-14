@@ -24,14 +24,16 @@ enum Notifier {
         let cards = UNNotificationCategory(identifier: "cards", actions: [UNNotificationAction(identifier: "show", title: "Show me", options: [.foreground]), UNNotificationAction(identifier: "later", title: "Later")], intentIdentifiers: [])
         let skipped = UNNotificationCategory(identifier: "skipped", actions: [UNNotificationAction(identifier: "run", title: "Run now", options: [.foreground]), UNNotificationAction(identifier: "ok", title: "OK")], intentIdentifiers: [])
         let paused = UNNotificationCategory(identifier: "paused", actions: [UNNotificationAction(identifier: "show", title: "Show", options: [.foreground]), UNNotificationAction(identifier: "stop", title: "Stop")], intentIdentifiers: [])
-        center.setNotificationCategories([cards, skipped, paused])
+        let brief = UNNotificationCategory(identifier: "brief", actions: [UNNotificationAction(identifier: "show", title: "Open the brief", options: [.foreground]), UNNotificationAction(identifier: "later", title: "Later")], intentIdentifiers: [])
+        center.setNotificationCategories([cards, skipped, paused, brief])
     }
 
-    static func post(_ title: String, body: String, id: String = UUID().uuidString, respectQuietHours: Bool = false, category: String? = nil, cardID: String? = nil) {
+    static func post(_ title: String, body: String, id: String = UUID().uuidString, respectQuietHours: Bool = false, category: String? = nil, cardID: String? = nil, briefID: String? = nil) {
         guard available else { return }
         let c = UNMutableNotificationContent(); c.title = title; c.body = body
         if let category { c.categoryIdentifier = category }
         if let cardID { c.userInfo = ["card": cardID] }
+        if let briefID { c.userInfo = ["brief": briefID] }
         var trigger: UNNotificationTrigger? = nil
         if respectQuietHours {
             // Never before 7 AM: a run that ends at 3:41 AM notifies at 7:30.
@@ -56,6 +58,13 @@ enum Notifier {
     }
 
     static func paused(_ title: String, body: String) { post(title, body: body, id: "hands.paused", category: "paused") }
+
+    /// Ten minutes before: the first line of the brief, and a button to the rest.
+    static func brief(_ b: Brief) {
+        let mins = max(1, Int(b.startsAt.timeIntervalSinceNow / 60))
+        let first = b.text.split(separator: "\n").first(where: { !$0.hasPrefix("#") && !$0.trimmingCharacters(in: .whitespaces).isEmpty }).map(String.init) ?? "Your brief is ready."
+        post("\(b.title) in \(mins) minute\(mins == 1 ? "" : "s")", body: String(first.prefix(160)), id: "brief.\(b.id)", category: "brief", briefID: b.id)
+    }
 }
 
 final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
@@ -73,6 +82,7 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
             default:   // "show" or the notification body itself
                 m.overlay = .none; m.screen = .forYou
                 if let id = info["card"] as? String { m.overlay = .card(id) }
+                if let id = info["brief"] as? String { m.overlay = .brief(id) }
             }
         }
     }

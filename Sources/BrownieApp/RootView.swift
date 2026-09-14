@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import Domain
+import Brain
 
 struct RootView: View {
     @EnvironmentObject var m: AppModel
@@ -21,7 +22,7 @@ struct RootView: View {
         .environment(\.theme, theme)
         .font(.system(size: 13))
         .foregroundStyle(theme.ink)
-        .frame(minWidth: 1040, minHeight: 680)
+        .frame(minWidth: 960, minHeight: 620)
         .overlay(alignment: .top) { if let a = m.announcement { Banner(text: a) { m.announcement = nil } } }
     }
 
@@ -31,9 +32,18 @@ struct RootView: View {
         case .firing(let id): FiringView(cardID: id)
         case .processing: ProcessingView()
         case .letter: LetterView()
+        case .weekly: WeeklyView()
+        case .brief(let id): BriefView(briefID: id)
+        case .teach: TeachView()
+        case .recipeRun(let id): RecipeRunView(recipeID: id)
+        case .editRecipe(let id): RecipeEditorView(recipeID: id)
         case .none:
             switch m.screen {
             case .forYou: ForYouView()
+            case .ask: AskView()
+            case .loops: LoopsView()
+            case .recipes: RecipesView()
+            case .sendLog: SendLogView()
             case .notes: KnowledgeView()
             case .graph: GraphView()
             case .excluded: ExcludedView()
@@ -60,10 +70,14 @@ struct Sidebar: View {
             Spacer().frame(height: 44)
             VStack(alignment: .leading, spacing: 2) {
                 item("For You", "sun.max", .forYou, badge: m.cards.isEmpty ? nil : "\(m.cards.count)")
+                item("Ask", "bubble.left", .ask)
+                item("Loops", "arrow.triangle.2.circlepath", .loops, badge: m.openLoopCount == 0 ? nil : "\(m.openLoopCount)")
                 header("Knowledge")
                 item("Notes", "book.closed", .notes)
                 item("Graph", "point.3.connected.trianglepath.dotted", .graph)
                 item("Excluded", "lock", .excluded)
+                header("Hands")
+                item("Recipes", "hand.raised", .recipes, badge: m.recipeRun.running ? "running" : (m.recipes.isEmpty ? nil : "\(m.recipes.count)"))
                 header("App")
                 item("Settings", "gearshape", .settings)
             }.padding(.horizontal, 10)
@@ -71,6 +85,11 @@ struct Sidebar: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) { Pulse(); Text(m.sidebarStatus.0).font(.system(size: 12, weight: .medium)) }
                 Text(m.sidebarStatus.1).font(.system(size: 11)).foregroundStyle(t.ink2)
+                if m.showSendLine, let s = m.lastNightSend {
+                    Button { m.overlay = .none; m.screen = .sendLog } label: {
+                        Text(s.requests == 0 ? "0 bytes left your Mac" : "\(s.bytes.formattedBytes) left your Mac · \(s.requests) request\(s.requests == 1 ? "" : "s")").font(.system(size: 11)).foregroundStyle(t.ink2).underline()
+                    }.buttonStyle(.plain)
+                }
                 Wordmark().padding(.top, 6)
                 HStack(spacing: 6) { Image(systemName: "sparkle").font(.system(size: 10)); Text("Brain: \(m.brainName)") }.font(.system(size: 11)).foregroundStyle(t.ink2)
             }.padding(16).overlay(alignment: .top) { Rectangle().fill(t.sep).frame(height: 1) }
@@ -95,13 +114,13 @@ struct Sidebar: View {
 
 struct Toolbar<Trailing: View>: View {
     @Environment(\.theme) var t
-    let title: String; var subtitle: String = ""; var back: (() -> Void)? = nil; @ViewBuilder var trailing: Trailing
+    let title: String; var subtitle: String = ""; var back: (() -> Void)? = nil; var backLabel = "For You"; @ViewBuilder var trailing: Trailing
     var body: some View {
         HStack(spacing: 12) {
-            if let back { BButton(title: "For You", kind: .quiet, systemImage: "chevron.left", action: back) }
-            Text(title).font(.system(size: 15, weight: .semibold))
-            if !subtitle.isEmpty { Text(subtitle).font(.system(size: 11)).foregroundStyle(t.ink2) }
-            Spacer()
+            if let back { BButton(title: backLabel, kind: .quiet, systemImage: "chevron.left", action: back) }
+            if !title.isEmpty { Text(title).font(.system(size: 15, weight: .semibold)).lineLimit(1).layoutPriority(1) }
+            if !subtitle.isEmpty { Text(subtitle).font(.system(size: 11)).foregroundStyle(t.ink2).lineLimit(1).truncationMode(.tail) }
+            Spacer(minLength: 8)
             trailing
         }.padding(.horizontal, 20).frame(height: 52).overlay(alignment: .bottom) { Rectangle().fill(t.sep).frame(height: 1) }
     }

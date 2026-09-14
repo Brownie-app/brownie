@@ -37,6 +37,9 @@ final class HandsController: ObservableObject {
             guard e.keyCode == 49, e.modifierFlags.contains([.command, .shift]) else { return }
             Task { @MainActor in NSApp.activate(ignoringOtherApps: true); self?.showCommandBar = true }
         }
+        // A running recipe shows in the same floating panel as Hands, with the same Stop.
+        NotificationCenter.default.addObserver(forName: .brownieRecipeRunning, object: nil, queue: .main) { [weak self] _ in Task { @MainActor in self?.showPanel() } }
+        NotificationCenter.default.addObserver(forName: .brownieRecipeDone, object: nil, queue: .main) { [weak self] _ in Task { @MainActor in self?.hidePanel(after: 6) } }
     }
 
     private func remember(_ goal: String) {
@@ -79,6 +82,7 @@ final class HandsController: ObservableObject {
     }
 
     func run(_ goal: String) {
+        if let r = m.recipe(named: goal) { m.overlay = .none; m.screen = .recipes; NSApp.activate(ignoringOtherApps: true); m.runRecipe(r.id); return }
         showPanel()
         remember(goal)
         m.markWalkthrough("hands")
@@ -103,7 +107,7 @@ final class HandsController: ObservableObject {
         }
     }
 
-    func stop() { Task { await m.hands?.stop() } }
+    func stop() { m.stopRecipe(); Task { await m.hands?.stop() } }
 
     // MARK: panel
 
@@ -138,7 +142,7 @@ struct HandsOverlay: View {
                 HStack(spacing: 12) { Image(systemName: "waveform").foregroundStyle(accent); Text(t.isEmpty ? "Listening…" : "“\(t)”").font(.system(size: 15, weight: .medium)) }
                 Text("Transcribed on this Mac · let go to start").font(.system(size: 11)).foregroundStyle(.white.opacity(0.6))
             case .running(let steps):
-                HStack { Text("Hands is working").font(.system(size: 15, weight: .semibold)); Spacer(); Button("Stop") { controller.stop() }.buttonStyle(.plain).padding(.horizontal, 10).frame(height: 26).background(RoundedRectangle(cornerRadius: 6).fill(Color(hex: 0xD94F45))) }
+                HStack { Text(m.runningRecipeName.map { "Running “\($0)”" } ?? "Hands is working").font(.system(size: 15, weight: .semibold)); Spacer(); Button("Stop") { controller.stop() }.buttonStyle(.plain).padding(.horizontal, 10).frame(height: 26).background(RoundedRectangle(cornerRadius: 6).fill(Color(hex: 0xD94F45))) }
                 ForEach(Array(steps.enumerated()), id: \.offset) { _, s in HStack(spacing: 8) { Circle().fill(accent).frame(width: 6, height: 6); Text(s).font(.system(size: 12)).lineLimit(1) } }
                 Text("Hands never presses Send, Pay or Delete. Those stay yours.").font(.system(size: 11)).foregroundStyle(.white.opacity(0.6))
             case .paused(let w): HStack(spacing: 10) { Circle().fill(accent).frame(width: 10, height: 10); Text(w).font(.system(size: 14, weight: .medium)) }

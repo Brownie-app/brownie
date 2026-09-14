@@ -1,0 +1,230 @@
+{
+ "pages": [
+  {
+   "id": "page-1",
+   "name": "Prototype"
+  },
+  {
+   "id": "page-2",
+   "name": "All 14 screens"
+  },
+  {
+   "id": "page-3",
+   "name": "Knowledge as the product"
+  }
+ ],
+ "artboards": [
+  {
+   "file": "Main.dc.html",
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 900,
+   "title": "Prototype \u00b7 Loops, Money, Hands 2.0, Trust",
+   "page": "page-1",
+   "is_interactive": true
+  },
+  {
+   "file": "MenuBar.dc.html",
+   "x": 1560,
+   "y": 0,
+   "w": 560,
+   "h": 420,
+   "title": "Menu bar \u00b7 Ask, recipes, panic wipe",
+   "page": "page-1"
+  },
+  {
+   "file": "Notifications.dc.html",
+   "x": 1560,
+   "y": 560,
+   "w": 560,
+   "h": 560,
+   "title": "Notifications \u00b7 brief, came back, weekly",
+   "page": "page-1"
+  },
+  {
+   "file": "CameBack.dc.html",
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 900,
+   "title": "01 \u00b7 A card that came back",
+   "page": "page-2"
+  },
+  {
+   "file": "Loops.dc.html",
+   "x": 1540,
+   "y": 0,
+   "w": 1440,
+   "h": 900,
+   "title": "02 \u00b7 Loops \u2014 commitments both ways",
+   "page": "page-2"
+  },
+  {
+   "file": "Brief.dc.html",
+   "x": 0,
+   "y": 1040,
+   "w": 1440,
+   "h": 900,
+   "title": "03 \u00b7 Pre-meeting brief",
+   "page": "page-2"
+  },
+  {
+   "file": "Weekly.dc.html",
+   "x": 1540,
+   "y": 1040,
+   "w": 1440,
+   "h": 900,
+   "title": "04 \u00b7 Weekly letter",
+   "page": "page-2"
+  },
+  {
+   "file": "Recipes.dc.html",
+   "x": 0,
+   "y": 2080,
+   "w": 1440,
+   "h": 900,
+   "title": "05 \u00b7 Recipes",
+   "page": "page-2"
+  },
+  {
+   "file": "RecipeEditor.dc.html",
+   "w": 1440,
+   "h": 900,
+   "title": "06 \u00b7 Recipe editor",
+   "page": "page-2",
+   "x": 1540,
+   "y": 2080
+  },
+  {
+   "file": "RecipeEditorSmall.dc.html",
+   "w": 1100,
+   "h": 700,
+   "title": "07 \u00b7 Recipe editor \u00b7 13-inch window",
+   "page": "page-2",
+   "x": 0,
+   "y": 3120
+  },
+  {
+   "file": "TeachWatching.dc.html",
+   "x": 1540,
+   "y": 3120,
+   "w": 1440,
+   "h": 900,
+   "title": "08 \u00b7 Teach Hands \u2014 watching",
+   "page": "page-2"
+  },
+  {
+   "file": "TeachTune.dc.html",
+   "x": 0,
+   "y": 4160,
+   "w": 1440,
+   "h": 900,
+   "title": "09 \u00b7 Teach Hands \u2014 make it reusable",
+   "page": "page-2"
+  },
+  {
+   "file": "TeachSaved.dc.html",
+   "x": 1540,
+   "y": 4160,
+   "w": 1440,
+   "h": 900,
+   "title": "10 \u00b7 Teach Hands \u2014 saved",
+   "page": "page-2"
+  },
+  {
+   "file": "WhatLeft.dc.html",
+   "x": 0,
+   "y": 5200,
+   "w": 1440,
+   "h": 900,
+   "title": "11 \u00b7 What left your Mac",
+   "page": "page-2"
+  },
+  {
+   "file": "LocalBrain.dc.html",
+   "x": 1540,
+   "y": 5200,
+   "w": 1440,
+   "h": 900,
+   "title": "12 \u00b7 Brain \u2014 This Mac only",
+   "page": "page-2"
+  },
+  {
+   "file": "HandsSettings.dc.html",
+   "x": 0,
+   "y": 6240,
+   "w": 1440,
+   "h": 900,
+   "title": "13 \u00b7 Hands \u2014 Shortcuts, Siri, ladder",
+   "page": "page-2"
+  },
+  {
+   "file": "PanicWipe.dc.html",
+   "x": 1540,
+   "y": 6240,
+   "w": 1440,
+   "h": 900,
+   "title": "14 \u00b7 Panic wipe",
+   "page": "page-2"
+  },
+  {
+   "file": "Ask.dc.html",
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 900,
+   "title": "01 \u00b7 Ask Brownie \u2014 answers with deep-linked evidence",
+   "page": "page-3"
+  },
+  {
+   "file": "NotesVault.dc.html",
+   "x": 1540,
+   "y": 0,
+   "w": 1440,
+   "h": 900,
+   "title": "02 \u00b7 Notes as an Obsidian vault \u2014 wikilinks, iCloud",
+   "page": "page-3"
+  },
+  {
+   "file": "KnowledgeSettings.dc.html",
+   "x": 0,
+   "y": 1040,
+   "w": 1440,
+   "h": 900,
+   "title": "03 \u00b7 Settings \u00b7 Knowledge \u2014 vault, Obsidian, MCP for other AIs, what they asked",
+   "page": "page-3"
+  },
+  {
+   "file": "Freshness.dc.html",
+   "x": 1540,
+   "y": 1040,
+   "w": 1440,
+   "h": 900,
+   "title": "04 \u00b7 Settings \u00b7 Overnight \u2014 reads during the day",
+   "page": "page-3"
+  }
+ ],
+ "annotations": [
+  {
+   "id": "brief-1",
+   "x": 0,
+   "y": -150,
+   "w": 560,
+   "page": "page-1",
+   "text": "Brownie v2 \u2014 the bets on top of the shipping app.\n\nClick around the prototype: Loops in the sidebar, the Rohan card \u2192 brief, the Sunday letter, Recipes \u2192 Teach Hands (a 3-step flow), the footer link \u2192 What left your Mac, Settings \u2192 Brain \u2192 This Mac only, Settings \u2192 Privacy \u2192 Erase everything.\n\nFirst-time tips play once per new screen and complete on the action, as in v1."
+  },
+  {
+   "id": "kb-note",
+   "x": 0,
+   "y": -170,
+   "w": 620,
+   "page": "page-3",
+   "text": "Knowledge as the product \u2014 four screens to react to.\n\n1 \u00b7 Ask: every claim carries a chip; clicking opens the original chat, mail or note.\n2 \u00b7 Notes: the knowledge base is an Obsidian vault \u2014 [[wikilinks]], Open in Obsidian, a mirror in iCloud Drive for the phone.\n3 \u00b7 Settings \u2192 Knowledge: vault location, Obsidian, iCloud; and \u201cLet your other AIs read your notes\u201d \u2014 Brownie as an MCP server that runs ON THIS MAC only (no hosting, no port, no account): Claude Desktop / Cursor / Raycast start it on demand. ChatGPT needs a public URL, so it's marked not possible. Per-app allow list and a log of what each app asked.\n4 \u00b7 Settings \u2192 Overnight: reads during the day every hour / 3 hours, only when idle and on power."
+  }
+ ],
+ "launch": {
+  "view": "canvas",
+  "page": "page-3"
+ }
+}

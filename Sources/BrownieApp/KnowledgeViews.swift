@@ -50,7 +50,7 @@ struct KnowledgeView: View {
                                 else { BButton(title: "Edit", kind: .quiet) { draft = n.body; editing = true }; BButton(title: "Delete", kind: .destructive) { Task { try? await m.knowledge.delete(relativePath: n.relativePath); await m.reload() } } } }
                             Text("Sources: \(n.sources.joined(separator: ", ")) · updated \(n.updatedAt.formatted(date: .abbreviated, time: .shortened))").font(.system(size: 12)).foregroundStyle(t.ink2)
                             if editing { TextEditor(text: $draft).font(.system(size: 13, design: .monospaced)).frame(minHeight: 400).scrollContentBackground(.hidden).background(t.code).cornerRadius(6) }
-                            else { Text(n.body).font(.system(size: 14)).lineSpacing(4).textSelection(.enabled) }
+                            else { WikiText(body: n.body) }
                             CardBox(padding: 12) { HStack(spacing: 10) { Image(systemName: "lock").foregroundStyle(t.ink2); Text("Anything you delete here is gone from the knowledge base for good.").font(.system(size: 11)).foregroundStyle(t.ink2) } }
                         }.padding(24).frame(maxWidth: 720, alignment: .leading)
                     } else {
@@ -183,5 +183,48 @@ struct ExcludedView: View {
     func reason(_ r: VerdictReason) -> String {
         switch r { case .modelDrop: return "The reader judged it not vault-worthy"; case .emptySummary: return "Nothing to say about it"; case .parseFailed: return "The reader's reply couldn't be read (dropped, fail-closed)"
         case .modelSensitive: return "The reader flagged it sensitive"; case .piiBackstop: return "Matched an ID / card / account pattern"; case .loadFailed: return "The item couldn't be opened"; case .readerFailed: return "The reader errored"; case .kept: return "" }
+    }
+}
+
+
+/// The note body with `[[Name]]` rendered as links to the note of that name (grey when it doesn't exist yet).
+struct WikiText: View {
+    @EnvironmentObject var m: AppModel
+    @Environment(\.theme) var t
+    let text: String
+    init(body: String) { text = body }
+    var pieces: [(String, Bool)] {
+        var out: [(String, Bool)] = []
+        var rest = Substring(text)
+        while let open = rest.range(of: "[["), let close = rest[open.upperBound...].range(of: "]]") {
+            out.append((String(rest[..<open.lowerBound]), false))
+            out.append((String(rest[open.upperBound..<close.lowerBound]), true))
+            rest = rest[close.upperBound...]
+        }
+        out.append((String(rest), false))
+        return out
+    }
+    var body: some View {
+        // One Text with attributed runs keeps selection and wrapping; links become buttons via the openURL handler.
+        Text(attributed).font(.system(size: 14)).lineSpacing(4).textSelection(.enabled)
+            .environment(\.openURL, OpenURLAction { url in
+                guard url.scheme == "brownie-note", let name = url.host?.removingPercentEncoding ?? url.path.dropFirst().removingPercentEncoding else { return .systemAction }
+                if let p = m.notePath(named: name) { m.openNote(p) } else { m.announcement = "No note called “\(name)” yet." }
+                return .handled
+            })
+    }
+    var attributed: AttributedString {
+        var a = AttributedString()
+        for (piece, isLink) in pieces {
+            var run = AttributedString(piece)
+            if isLink {
+                let exists = m.notePath(named: piece) != nil
+                run.foregroundColor = exists ? t.accentInk : t.ink2
+                run.underlineStyle = .single
+                if let u = URL(string: "brownie-note://" + (piece.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed) ?? "")) { run.link = u }
+            }
+            a += run
+        }
+        return a
     }
 }

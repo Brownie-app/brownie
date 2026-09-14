@@ -23,8 +23,11 @@ let walkthroughTips: [String: Tip] = [
     "graph": Tip(title: "People, sized by how much is known.", body: "Click anyone to see what Brownie knows about them.", action: "Click a person"),
     "excluded": Tip(title: "Here’s what it chose not to keep.", body: "The reason is recorded, never the content. Widen the window to see a week.", action: "Switch to 7 days"),
     "sources": Tip(title: "You decide what it reads.", body: "Turn a source off and its notes stay; nothing new is read. Chats are off until you pick them one by one.", action: "Flip any switch"),
+    "loops": Tip(title: "Promises, both ways.", body: "What you said you’d do and what others said they’d do for you, from your chats. A loop closes by itself when the next read sees it done.", action: "Press Nudge on any loop"),
+    "recipes": Tip(title: "Teach it once.", body: "Do something the way you always do, and Hands turns it into a recipe it can repeat — on a schedule, or when you ask.", action: "Press “Teach Hands something”"),
+    "sendlog": Tip(title: "Nothing is hidden about what goes out.", body: "Every request to the brain is here, byte for byte. Open one and read exactly what was sent.", action: "Open any row"),
 ]
-let walkthroughOrder = ["foryou", "card", "knowledge", "graph", "excluded", "sources"]
+let walkthroughOrder = ["foryou", "card", "knowledge", "graph", "excluded", "sources", "loops", "recipes", "sendlog"]
 
 struct Walkthrough: View {
     @EnvironmentObject var m: AppModel
@@ -35,7 +38,10 @@ struct Walkthrough: View {
         switch m.overlay {
         case .card: k = "card"
         case .none:
-            switch m.screen { case .forYou: k = m.cards.isEmpty ? nil : "foryou"; case .notes: k = m.folders.isEmpty ? nil : "knowledge"; case .graph: k = "graph"; case .excluded: k = "excluded"; case .settings: k = "sources" }
+            switch m.screen {
+            case .forYou: k = m.cards.isEmpty ? nil : "foryou"; case .notes: k = m.folders.isEmpty ? nil : "knowledge"; case .graph: k = "graph"; case .excluded: k = "excluded"; case .settings: k = "sources"
+            case .loops: k = m.loops.contains { $0.status == .open } ? "loops" : nil; case .recipes: k = "recipes"; case .sendLog: k = m.sendLog.isEmpty ? nil : "sendlog"; case .ask: k = nil
+            }
         default: k = nil
         }
         guard let k, !m.walkthroughDone.contains(k), m.onboardingDone else { return nil }

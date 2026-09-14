@@ -14,8 +14,12 @@ public struct ActionItem: Codable, Sendable, Equatable {
     public let dueDate: String?
     public let sources: [String]
     public let urgency: Urgency
-    public init(title: String, action: String, importance: String, dueDate: String?, sources: [String], urgency: Urgency) {
-        self.title = title; self.action = action; self.importance = importance; self.dueDate = dueDate; self.sources = sources; self.urgency = urgency
+    /// Set when the item is a loop the user already fired a card for and nothing changed — it "came back".
+    public var cameBack: Bool?
+    /// The loop this item is about, when it is.
+    public var loopID: String?
+    public init(title: String, action: String, importance: String, dueDate: String?, sources: [String], urgency: Urgency, cameBack: Bool? = nil, loopID: String? = nil) {
+        self.title = title; self.action = action; self.importance = importance; self.dueDate = dueDate; self.sources = sources; self.urgency = urgency; self.cameBack = cameBack; self.loopID = loopID
     }
 }
 
@@ -84,13 +88,18 @@ public struct Card: Codable, Sendable, Identifiable, Equatable {
     public let createdAt: Date
     public var snoozedUntil: Date?
     public var resolvedAt: Date?
+    /// True when a card for the same loop was fired earlier and the next read saw no change.
+    public var cameBack: Bool?
+    public var loopID: String?
+    public var isComeBack: Bool { cameBack ?? false }
 
     public init(id: String, title: String, sourceLabel: String, why: String, actionLabel: String, dueLine: String,
                 urgency: Urgency, draftLabel: String, draft: String, recipe: Recipe, evidence: [Evidence],
-                verification: Verification, verifiedLine: String, state: CardState = .ready, createdAt: Date) {
+                verification: Verification, verifiedLine: String, state: CardState = .ready, createdAt: Date, cameBack: Bool? = nil, loopID: String? = nil) {
         self.id = id; self.title = title; self.sourceLabel = sourceLabel; self.why = why; self.actionLabel = actionLabel
         self.dueLine = dueLine; self.urgency = urgency; self.draftLabel = draftLabel; self.draft = draft; self.recipe = recipe
         self.evidence = evidence; self.verification = verification; self.verifiedLine = verifiedLine; self.state = state; self.createdAt = createdAt
+        self.cameBack = cameBack; self.loopID = loopID
     }
 
     /// Ready cards expire two mornings after they were made; snoozed ones come back when due.
@@ -113,7 +122,7 @@ public struct Card: Codable, Sendable, Identifiable, Equatable {
         case .browser, .computerUse: r = recipe
         }
         return Card(id: id, title: title, sourceLabel: sourceLabel, why: why, actionLabel: actionLabel, dueLine: dueLine, urgency: urgency,
-                    draftLabel: draftLabel, draft: text, recipe: r, evidence: evidence, verification: verification, verifiedLine: verifiedLine, state: state, createdAt: createdAt)
+                    draftLabel: draftLabel, draft: text, recipe: r, evidence: evidence, verification: verification, verifiedLine: verifiedLine, state: state, createdAt: createdAt, cameBack: cameBack, loopID: loopID)
     }
 
     public var fireLabel: String {

@@ -17,3 +17,5 @@ Rules that always win:
 - Other people's lives are notes about them only insofar as they touch the user's.
 
 When every note is written, call `finish` with one line describing the shape of the knowledge base.
+
+Wikilinks: the knowledge base is an Obsidian vault. Whenever a note mentions another note's subject — a person, a group, a trip, a project — write it as `[[Name]]` using that note's file name without `.md` (`[[Priya]]`, `[[Goa October]]`). Link on first mention in a paragraph, not every time. Never link to a note that does not exist unless you are creating it in the same pass.

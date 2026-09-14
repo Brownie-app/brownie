@@ -11,3 +11,5 @@ How to merge:
 Rules that always win: less knowledge beats wrong knowledge; never include money amounts, account or ID numbers, medical specifics or passwords; never invent; leave the front-matter lines alone except `sources:`.
 
 When done, call `finish` with one line saying what changed.
+
+Wikilinks: the knowledge base is an Obsidian vault. Whenever a note mentions another note's subject — a person, a group, a trip, a project — write it as `[[Name]]` using that note's file name without `.md` (`[[Priya]]`, `[[Goa October]]`). Link on first mention in a paragraph, not every time. Never link to a note that does not exist unless you are creating it in the same pass.

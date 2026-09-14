@@ -17,10 +17,13 @@ public actor RunCoordinator {
         public var policy: any SensitivityPolicy
         public var clock: Clock
         public var calendarText: @Sendable () async -> String?
+        /// Names the stage about to talk to the brain, for the "What left your Mac" log.
+        public var stage: @Sendable (_ purpose: String, _ detail: String) -> Void
         public init(store: any RunStore, knowledge: any KnowledgeStore, sources: [any Source], reader: (any LocalModel)?, brain: (any Brain)?,
-                    policy: any SensitivityPolicy, clock: Clock = SystemClock(), calendarText: @escaping @Sendable () async -> String? = { nil }) {
+                    policy: any SensitivityPolicy, clock: Clock = SystemClock(), calendarText: @escaping @Sendable () async -> String? = { nil },
+                    stage: @escaping @Sendable (String, String) -> Void = { _, _ in }) {
             self.store = store; self.knowledge = knowledge; self.sources = sources; self.reader = reader; self.brain = brain
-            self.policy = policy; self.clock = clock; self.calendarText = calendarText
+            self.policy = policy; self.clock = clock; self.calendarText = calendarText; self.stage = stage
         }
     }
 
@@ -96,6 +99,7 @@ public actor RunCoordinator {
             let summaries = try await store.summaries(since: nil)
             if let brain = deps.brain, !summaries.isEmpty {
                 onEvent(.progress(RunProgress(stage: .synthesising, stats: stats)))
+                deps.stage("Update your notes", "\(summaries.count) summaries and the notes they touch")
                 let builder = try KnowledgeBuilder(brain: brain, store: deps.knowledge, runStore: store)
                 let readStats = stats
                 var usage = try await builder.sync(summaries: summaries, progress: { p in var p = p; p.stats = readStats; onEvent(.progress(p)) }, onEvent: { e in if case .message(let m) = e { onEvent(.thought(m)) } })
@@ -103,6 +107,7 @@ public actor RunCoordinator {
                 // welcome letter, once
                 if (try await store.value(SettingKey.letter) ?? "").isEmpty, let readme = try await deps.knowledge.note(at: "README.md") {
                     do {
+                        deps.stage("Write the welcome letter", "your README and the night's numbers")
                         let (letter, u) = try await LetterWriter(brain: brain).write(readme: readme.body, numbers: "\(stats.read) read, \(stats.kept) kept, \(stats.sensitive) erased on sight")
                         try await store.setValue(SettingKey.letter, letter); usage = usage + u
                     } catch { log.warn("letter not written this run: \(error)") }
@@ -112,18 +117,33 @@ public actor RunCoordinator {
                 let recent = try await store.summaries(since: deps.clock.now().addingTimeInterval(-7 * 86400))
                 let instructions = try await store.value(SettingKey.standingInstructions) ?? ""
                 let max = Int(try await store.value(SettingKey.cardsPerMorning) ?? "5") ?? 5
-                let (candidates, u1) = try await Judge(brain: brain, clock: deps.clock).findActionItems(summaries: recent, calendar: await deps.calendarText(), instructions: instructions, max: 8)
+                let openLoops = await LoopLedger.load(store).filter { $0.status == .open }
+                let cal = await deps.calendarText()
+                deps.stage("Judge what matters", "\(recent.count) summaries from the last 7 days\(cal == nil ? "" : ", the calendar for 8 days"), \(openLoops.count) open loops")
+                let (findings, u1) = try await Judge(brain: brain, clock: deps.clock).judge(summaries: recent, calendar: cal, instructions: instructions, openLoops: openLoops, max: 8)
+                let candidates = findings.items
                 usage = usage + u1
+                let allLoops = LoopLedger.merge(existing: await LoopLedger.load(store), found: findings.newLoops, updates: findings.updates, items: candidates, now: deps.clock.now())
+                await LoopLedger.save(allLoops, store)
                 try await store.setValue(SettingKey.candidates, String(data: JSONEncoder().encode(candidates), encoding: .utf8))
 
                 onEvent(.progress(RunProgress(stage: .preparing, stats: stats)))
+                deps.stage("Prepare the cards", "\(candidates.count) candidates, the summaries, and the notes the brain chose to read")
                 let (cards, u2) = try await Preparer(brain: brain, knowledge: deps.knowledge, clock: deps.clock).prepare(candidates: candidates, summaries: recent, instructions: instructions, max: max) { e in if case .message(let m) = e { onEvent(.thought(m)) } }
                 usage = usage + u2
-                try await Self.saveCards(cards, store: store)
+                // New cards replace the ones still waiting; what the user already fired, snoozed or dismissed stays.
+                let kept = try await Self.loadCards(store: store).filter { $0.state != .ready }
+                try await Self.saveCards(kept + cards, store: store)
                 try await store.setValue("brain.lastUsage", String(data: JSONEncoder().encode(usage), encoding: .utf8))
+
+                // Sunday: the week in a letter, once per week
+                if let u = try await writeWeeklyIfDue(brain: brain, store: store, cards: cards, loops: allLoops, calendar: cal) { usage = usage + u }
 
                 // 5. FINISH — summaries are disposable only after a fully successful chain
                 try await store.wipeSummaries()
+                if (try await store.value(SettingKey.icloudMirror) ?? "false") == "true", let root = (deps.knowledge as? FileKnowledgeStore)?.rootURL {
+                    do { _ = try Vault.mirror(root) } catch { log.warn("iCloud mirror: \(error)") }
+                }
                 outcome = .ran(cards: cards.count)
             } else if deps.brain == nil {
                 outcome = .failedBrain(.notConfigured)
@@ -152,6 +172,41 @@ public actor RunCoordinator {
         log.info("run #\(runID) ended: \(outcome) · \(stats)")
         onEvent(.progress(RunProgress(stage: .done, stats: stats)))
         return outcome
+    }
+
+    /// Sunday's letter. Written on the first run on or after Sunday for the ISO week that ends that Sunday.
+    private func writeWeeklyIfDue(brain: any Brain, store: any RunStore, cards: [Card], loops: [Loop], calendar: String?, force: Bool = false) async throws -> Usage? {
+        let now = deps.clock.now()
+        var cal = Calendar.current; cal.timeZone = deps.clock.timeZone
+        guard force || cal.component(.weekday, from: now) == 1 else { return nil }
+        let week = WeeklyWriter.isoWeek(now)
+        let existing = try await store.value(SettingKey.weekly(week)) ?? ""
+        guard force || existing.isEmpty else { return nil }
+        let weekStart = cal.date(byAdding: .day, value: -6, to: cal.startOfDay(for: now)) ?? now
+        let runs = (try await store.recentRuns(limit: 20)).filter { $0.startedAt >= weekStart }
+        let read = runs.reduce(0) { $0 + $1.stats.read }, kept = runs.reduce(0) { $0 + $1.stats.kept }, erased = runs.reduce(0) { $0 + $1.stats.sensitive }
+        let sends = try await store.sendLog(since: weekStart)
+        let bytes = sends.reduce(0) { $0 + $1.bytes }
+        let allCards = try await Self.loadCards(store: store) + cards
+        let weekCards = allCards.filter { ($0.resolvedAt ?? $0.createdAt) >= weekStart }
+        let weekLoops = loops.filter { $0.status == .open || ($0.closedAt ?? .distantPast) >= weekStart }
+        let readme = try await deps.knowledge.note(at: "README.md")?.body ?? ""
+        let f = DateFormatter(); f.dateFormat = "d MMM"
+        deps.stage("Write the Sunday letter", "this week's numbers, \(weekCards.count) cards, \(weekLoops.count) loops, your README")
+        let (text, u) = try await WeeklyWriter(brain: brain).write(range: "\(f.string(from: weekStart))–\(f.string(from: now))",
+            numbers: "\(runs.count) of 7 nights ran · \(read) read · \(kept) kept · \(erased) sensitive erased · \(weekCards.filter { $0.state == .fired }.count) cards fired by the user · \(weekLoops.filter { $0.status == .closed }.count) loops closed, \(weekLoops.filter { $0.status == .open && $0.openedAt >= weekStart }.count) opened",
+            bytes: bytes < 1024 ? "\(bytes) bytes" : String(format: "%.0f KB", Double(bytes) / 1024), cards: weekCards, loops: weekLoops, readme: readme, calendar: calendar)
+        try await store.setValue(SettingKey.weekly(week), text)
+        try await store.setValue(SettingKey.weeklyLatest, week)
+        log.info("weekly letter written for \(week)")
+        return u
+    }
+
+    /// The app's "Write my week now" button.
+    public func writeWeeklyNow() async throws {
+        guard let brain = deps.brain else { throw BrainError.notConfigured }
+        let loops = await LoopLedger.load(deps.store)
+        _ = try await writeWeeklyIfDue(brain: brain, store: deps.store, cards: [], loops: loops, calendar: await deps.calendarText(), force: true)
     }
 
     static func describe(_ a: Availability) -> String {

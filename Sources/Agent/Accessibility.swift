@@ -33,10 +33,11 @@ public struct UISnapshot: Sendable {
 }
 
 /// Not Sendable by design — lives on one actor.
-final class AXSession {
+public final class AXSession {
     private var refs: [Int: AXUIElement] = [:]
 
-    func snapshot(maxElements: Int = 400) -> UISnapshot? {
+    public init() {}
+    public func snapshot(maxElements: Int = 400) -> UISnapshot? {
         guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
         let axApp = AXUIElementCreateApplication(app.processIdentifier)
         var winRef: CFTypeRef?
@@ -79,6 +80,30 @@ final class AXSession {
         return AXUIElementSetAttributeValue(el, kAXValueAttribute as CFString, text as CFTypeRef) == .success
     }
 
+    /// The element that has keyboard focus in the frontmost app, registered so it can be typed into.
+    public func focusedTextElement() -> UISnapshot.Element? {
+        guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
+        var f: CFTypeRef?
+        AXUIElementCopyAttributeValue(AXUIElementCreateApplication(app.processIdentifier), kAXFocusedUIElementAttribute as CFString, &f)
+        guard let f else { return nil }
+        let el = f as! AXUIElement
+        let role = String((attr(el, kAXRoleAttribute) as? String ?? "AX?").dropFirst(2))
+        let title = (attr(el, kAXTitleAttribute) as? String) ?? (attr(el, kAXDescriptionAttribute) as? String) ?? (attr(el, kAXPlaceholderValueAttribute) as? String) ?? ""
+        let id = (refs.keys.max() ?? 0) + 1
+        refs[id] = el
+        return .init(id: id, role: role, title: title, value: (attr(el, kAXValueAttribute) as? String) ?? "", frame: frame(el), actions: [], depth: 0)
+    }
+
+    func focus(_ id: Int) -> Bool {
+        guard let el = refs[id] else { return false }
+        return AXUIElementSetAttributeValue(el, kAXFocusedAttribute as CFString, kCFBooleanTrue) == .success
+    }
+    func value(of id: Int) -> String {
+        guard let el = refs[id], let v = attr(el, kAXValueAttribute) else { return "" }
+        return (v as? String) ?? ((v as? NSNumber).map { $0.stringValue } ?? "")
+    }
+    func frame(of id: Int) -> CGRect? { refs[id].map(frame) }
+
     func titleOf(_ id: Int) -> String { refs[id].flatMap { (attr($0, kAXTitleAttribute) as? String) ?? (attr($0, kAXDescriptionAttribute) as? String) } ?? "" }
 
     private func attr(_ el: AXUIElement, _ name: String) -> AnyObject? {
@@ -93,8 +118,8 @@ final class AXSession {
 }
 
 /// Synthetic input. Note: CGEvent clicks move the real pointer; Hands prefers AX actions, which don't.
-enum VirtualInput {
-    static func click(_ p: CGPoint) {
+public enum VirtualInput {
+    public static func click(_ p: CGPoint) {
         for type in [CGEventType.leftMouseDown, .leftMouseUp] {
             CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: p, mouseButton: .left)?.post(tap: .cghidEventTap)
             usleep(40_000)

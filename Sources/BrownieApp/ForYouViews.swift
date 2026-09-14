@@ -1,12 +1,13 @@
 import SwiftUI
 import Domain
+import Brain
 
 struct ForYouView: View {
     @EnvironmentObject var m: AppModel
     @Environment(\.theme) var t
     var body: some View {
         VStack(spacing: 0) {
-            Toolbar(title: "For You", subtitle: m.lastRun.map { "Prepared \(relative($0.startedAt))" } ?? "Nothing read yet") {
+            Toolbar(title: "For You", subtitle: m.lastRun.map { ($0.trigger == .daytime ? "Refreshed " : "Prepared ") + relative($0.startedAt) + ($0.trigger == .daytime ? " while you were away" : "") } ?? "Nothing read yet") {
                 BButton(title: m.isRunning ? "Reading…" : "Analyze now", systemImage: "arrow.clockwise") { if m.isRunning { m.overlay = .processing } else { m.analyzeNow() } }
             }
             ScrollView {
@@ -17,6 +18,7 @@ struct ForYouView: View {
                     }
                     if m.modelPath == nil { ReaderMissing() }
                     if let letter = m.letter, !m.letterOpened, !letter.isEmpty { LetterTeaser() }
+                    if let w = m.weekly, !w.isEmpty, !m.weeklySeen { WeeklyTeaser() }
                     HStack { Text(headline).font(.system(size: 17, weight: .semibold)); Spacer(); Text("Ranked by urgency · nothing is sent until you tap").font(.system(size: 11)).foregroundStyle(t.ink2) }
                     if m.cards.isEmpty { EmptyCards() }
                     else {
@@ -151,7 +153,7 @@ struct CardTile: View {
     var body: some View {
         CardBox {
             VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 8) { UrgencyDot(urgency: card.urgency); Text(card.title).font(.system(size: 14, weight: .semibold)).lineLimit(1); Spacer(); Chip(text: card.sourceLabel) }
+                HStack(spacing: 8) { UrgencyDot(urgency: card.urgency); Text(card.title).font(.system(size: 14, weight: .semibold)).lineLimit(1); Spacer(); if card.isComeBack { CameBackChip() }; Chip(text: card.sourceLabel) }
                 Text(card.why).font(.system(size: 12.5)).foregroundStyle(t.ink2).lineLimit(3)
                 HStack(spacing: 8) { Chip(text: card.actionLabel, accent: true); Text(card.dueLine).font(.system(size: 11)).foregroundStyle(t.ink2) }
             }.frame(maxWidth: .infinity, alignment: .leading)
@@ -170,9 +172,19 @@ struct NumbersRow: View {
                     Text("Last run, in numbers").fontWeight(.semibold)
                     Text("\(run.stats.read) read · \(run.stats.kept) kept · \(run.stats.dropped) not worth keeping · \(run.stats.sensitive) sensitive erased" + (run.stats.deferred > 0 ? " · \(run.stats.deferred) deferred to the next run" : "") + (m.bulkUnread > 0 ? " · \(m.bulkUnread) files in bulk folders never read" : "")).font(.system(size: 11)).foregroundStyle(t.ink2)
                 }
-                Spacer(); BButton(title: "What was excluded", kind: .quiet) { m.screen = .excluded }
+                Spacer()
+                if m.showSendLine, let s = m.lastNightSend { BButton(title: s.requests == 0 ? "0 bytes left your Mac" : "See exactly what left (\(s.bytes.formattedBytes))", kind: .quiet) { m.screen = .sendLog } }
+                BButton(title: "What was excluded", kind: .quiet) { m.screen = .excluded }
             }
         }
+    }
+}
+
+struct CameBackChip: View {
+    @Environment(\.theme) var t
+    var body: some View {
+        HStack(spacing: 4) { Image(systemName: "arrow.counterclockwise").font(.system(size: 9, weight: .bold)); Text("Came back") }
+            .font(.system(size: 11, weight: .medium)).foregroundStyle(t.bad).padding(.horizontal, 8).frame(height: 20).background(Capsule().fill(t.bad.opacity(0.12)))
     }
 }
 
@@ -192,9 +204,16 @@ struct CardDetailView: View {
                     BButton(title: "Not now", kind: .quiet) { m.dismiss(c.id) }
                     BButton(title: c.fireLabel, kind: .primary, systemImage: "arrow.right") { if editing { m.updateDraft(c.id, draft); editing = false }; m.fire(c.id) }.walkthroughTarget("card")
                 }
-                ScrollView {
-                    HStack(alignment: .top, spacing: 24) {
+                TwoColumn(sideWidth: 340) {
                         VStack(alignment: .leading, spacing: 18) {
+                            if c.isComeBack {
+                                CardBox(padding: 14) {
+                                    HStack(alignment: .top, spacing: 12) {
+                                        Image(systemName: "arrow.counterclockwise").foregroundStyle(t.bad).padding(.top, 2)
+                                        VStack(alignment: .leading, spacing: 2) { Text("This card came back").fontWeight(.semibold); Text("You sent a message about this before. The next read saw no reply, so Brownie brought it back with a gentler nudge instead of letting it drop.").font(.system(size: 12.5)).foregroundStyle(t.ink2) }
+                                    }.frame(maxWidth: .infinity, alignment: .leading)
+                                }.overlay(RoundedRectangle(cornerRadius: 10).stroke(t.bad.opacity(0.35)))
+                            }
                             section("Why this is here") { Text(c.why).font(.system(size: 14)) }
                             section(c.draftLabel) {
                                 VStack(alignment: .leading, spacing: 10) {
@@ -208,9 +227,11 @@ struct CardDetailView: View {
                                 }
                             }
                             section("What will happen when you tap") {
+                                HStack(spacing: 6) { Rung(methodName(c.recipe), on: true); if case .computerUse = c.recipe {} else { Rung("Screen, only if that fails", on: false) } }.padding(.bottom, 2)
                                 VStack(alignment: .leading, spacing: 8) { ForEach(Array(c.recipe.stepsInWords.enumerated()), id: \.offset) { i, s in HStack(alignment: .top, spacing: 10) { Text("\(i + 1)").font(.system(size: 10, weight: .semibold)).foregroundStyle(t.ink2).frame(width: 18, height: 18).background(Circle().fill(t.ctl2)); Text(s) } } }
                             }
                         }
+                } side: {
                         VStack(alignment: .leading, spacing: 14) {
                             section("Evidence") {
                                 VStack(alignment: .leading, spacing: 8) {
@@ -225,8 +246,7 @@ struct CardDetailView: View {
                                 HStack(spacing: 8) { ZStack { Circle().fill(c.verification == .verified ? t.ok : t.warn).frame(width: 18, height: 18); Image(systemName: c.verification == .verified ? "checkmark" : "questionmark").font(.system(size: 10, weight: .bold)).foregroundStyle(.white) }; Text(c.verifiedLine.isEmpty ? (c.verification == .verified ? "Checked against your notes." : "Shown with lower confidence.") : c.verifiedLine).font(.system(size: 12.5)) }
                             }
                             BButton(title: "Never show cards like this", kind: .destructive) { m.instructions += "\nDon't show cards like: \(c.title)"; m.set(SettingKey.standingInstructions, m.instructions); m.dismiss(c.id) }
-                        }.frame(width: 340)
-                    }.padding(EdgeInsets(top: 24, leading: 28, bottom: 24, trailing: 28))
+                        }
                 }
             }
         } else { ForYouView() }
@@ -234,6 +254,9 @@ struct CardDetailView: View {
 
     func section<C: View>(_ title: String, @ViewBuilder _ c: () -> C) -> some View {
         CardBox(padding: 18) { VStack(alignment: .leading, spacing: 8) { Eyebrow(text: title); c() }.frame(maxWidth: .infinity, alignment: .leading) }
+    }
+    func methodName(_ r: Recipe) -> String {
+        switch r { case .whatsapp: return "WhatsApp link"; case .imessage, .mail: return "AppleScript"; case .calendar: return "Calendar (EventKit)"; case .note: return "A file in your notes"; case .browser: return "Your browser"; case .computerUse: return "Screen — Hands reads the accessibility tree" }
     }
 }
 

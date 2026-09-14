@@ -23,7 +23,7 @@ public struct Preparer: Sendable {
         p = p.replacingOccurrences(of: "{{max}}", with: String(max))
         p = p.replacingOccurrences(of: "{{now}}", with: Judge.now(clock))
         p = p.replacingOccurrences(of: "{{instructions}}", with: instructions.isEmpty ? "" : "THE USER'S STANDING INSTRUCTIONS:\n\(instructions)\n")
-        let cand = candidates.enumerated().map { i, c in "\(i + 1). \(c.title) [\(c.urgency.rawValue)] — \(c.action)\n   why: \(c.importance)\n   due: \(c.dueDate ?? "—") · sources: \(c.sources.joined(separator: ", "))" }.joined(separator: "\n")
+        let cand = candidates.enumerated().map { i, c in "\(i + 1). \(c.title) [\(c.urgency.rawValue)] — \(c.action)\n   why: \(c.importance)\n   due: \(c.dueDate ?? "—") · sources: \(c.sources.joined(separator: ", "))" + (c.loopID.map { " · loopID: \($0)" } ?? "") + ((c.cameBack ?? false) ? " · CAME BACK: the user already sent one message about this and got no answer" : "") }.joined(separator: "\n")
         p = p.replacingOccurrences(of: "{{candidates}}", with: cand)
         p = p.replacingOccurrences(of: "{{summaries}}", with: Judge.trim(summaries.enumerated().map { Judge.line($1, $0 + 1) }.joined(separator: "\n"), to: BrainLimits.corpusPartBudget / 2))
 
@@ -64,7 +64,8 @@ public struct Preparer: Sendable {
         return Card(id: UUID().uuidString, title: title, sourceLabel: d["sourceLabel"] as? String ?? recipe.channelName, why: d["why"] as? String ?? "",
                     actionLabel: d["actionLabel"] as? String ?? "Do it", dueLine: d["dueLine"] as? String ?? "", urgency: Urgency(rawValue: d["urgency"] as? String ?? "medium") ?? .medium,
                     draftLabel: d["draftLabel"] as? String ?? "Draft", draft: d["draft"] as? String ?? "", recipe: recipe, evidence: ev,
-                    verification: (d["verification"] as? String) == "verified" ? .verified : .unverified, verifiedLine: d["verifiedLine"] as? String ?? "", createdAt: now)
+                    verification: (d["verification"] as? String) == "verified" ? .verified : .unverified, verifiedLine: d["verifiedLine"] as? String ?? "", createdAt: now,
+                    cameBack: d["cameBack"] as? Bool, loopID: (d["loopID"] as? String).flatMap { $0.isEmpty || $0 == "null" ? nil : $0 })
     }
 
     static func recipe(from r: [String: Any]) -> Recipe? {

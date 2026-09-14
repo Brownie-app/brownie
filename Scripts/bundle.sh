@@ -32,6 +32,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
+  <key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>app.brownie.mac</string><key>CFBundleURLSchemes</key><array><string>brownie</string></array></dict></array>
   <key>NSAppleEventsUsageDescription</key><string>Brownie drives Messages, Mail and Calendar for the cards you fire.</string>
   <key>NSContactsUsageDescription</key><string>To show names instead of phone numbers in your chats.</string>
   <key>NSMicrophoneUsageDescription</key><string>Hold-to-talk for Hands. Speech is recognised on this Mac.</string>

@@ -1,0 +1,1130 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: -apple-system, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #1d1d1f; background: #d8d8dc; }
+    a { color: #b3762a; } a:hover { color: #8f5c1f; }
+    .win { --side: #ececee; --content: #ffffff; --ink: #1d1d1f; --ink2: #6e6e73; --ink3: #aeaeb2; --sep: rgba(0,0,0,0.10); --ctl: rgba(0,0,0,0.05); --ctl2: rgba(0,0,0,0.09); --card: #ffffff; --cardb: rgba(0,0,0,0.08); --accent: #d8983a; --accent-ink: #8f5c1f; --accent-soft: rgba(216,152,58,0.14); --ok: #2f9e5a; --warn: #c9853a; --bad: #d94f45; --chip: #f4f4f6; --code: #f6f6f7; }
+    .win.dark { --side: #2a2a2d; --content: #1e1e21; --ink: #f2f2f4; --ink2: #a1a1a8; --ink3: #6a6a70; --sep: rgba(255,255,255,0.10); --ctl: rgba(255,255,255,0.07); --ctl2: rgba(255,255,255,0.12); --card: #27272b; --cardb: rgba(255,255,255,0.08); --accent: #e2a54a; --accent-ink: #f0c47c; --accent-soft: rgba(226,165,74,0.16); --chip: #303034; --code: #232326; }
+    .win { width: 1440px; height: 900px; display: flex; border-radius: 10px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.28), 0 0 0 0.5px rgba(0,0,0,0.25); background: var(--content); color: var(--ink); font-size: 13px; line-height: 1.4; }
+    .side { width: 220px; flex-shrink: 0; background: var(--side); border-right: 1px solid var(--sep); display: flex; flex-direction: column; }
+    .lights { display: flex; gap: 8px; padding: 20px 0 0 18px; }
+    .light { width: 12px; height: 12px; border-radius: 50%; }
+    .nav { display: flex; flex-direction: column; gap: 2px; padding: 18px 10px 0 10px; }
+    .navh { font-size: 11px; font-weight: 600; color: var(--ink3); padding: 14px 8px 4px 8px; text-transform: uppercase; letter-spacing: 0.02em; }
+    .navi { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; border-radius: 6px; cursor: pointer; color: var(--ink); font-size: 13px; }
+    .navi:hover { background: var(--ctl); }
+    .navi.on { background: var(--ctl2); font-weight: 500; }
+    .navi svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; color: var(--ink2); }
+    .navi.on svg { color: var(--accent-ink); }
+    .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+    .bar { height: 52px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; border-bottom: 1px solid var(--sep); }
+    .title { font-size: 15px; font-weight: 600; }
+    .body { flex: 1; overflow: auto; padding: 24px 28px; }
+    .btn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid var(--cardb); background: var(--card); color: var(--ink); box-shadow: 0 1px 1px rgba(0,0,0,0.04); white-space: nowrap; }
+    .btn.p { background: var(--accent); border-color: transparent; color: #1a1205; }
+    .btn.q { background: transparent; border-color: transparent; box-shadow: none; color: var(--ink2); }
+    .btn.d { color: var(--bad); }
+    .btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .card { background: var(--card); border: 1px solid var(--cardb); border-radius: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    .h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2; }
+    .h2 { font-size: 17px; font-weight: 600; letter-spacing: -0.005em; }
+    .sub { color: var(--ink2); }
+    .tiny { font-size: 11px; color: var(--ink2); }
+    .chip { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 8px; border-radius: 10px; background: var(--chip); font-size: 11px; font-weight: 500; color: var(--ink2); }
+    .chip svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+    .urg { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .sep { height: 1px; background: var(--sep); }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .tog { width: 38px; height: 22px; border-radius: 11px; background: var(--ctl2); position: relative; flex-shrink: 0; }
+    .tog::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.25); }
+    .tog.on { background: var(--accent); }
+    .tog.on::after { left: 18px; }
+    .field { height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--cardb); background: var(--card); display: flex; align-items: center; color: var(--ink); font-size: 13px; }
+    .code { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 12px; background: var(--code); border-radius: 6px; padding: 12px 14px; color: var(--ink); white-space: pre-wrap; line-height: 1.5; }
+    .tabs { display: flex; gap: 2px; padding: 3px; background: var(--ctl); border-radius: 8px; }
+    .tab { height: 24px; padding: 0 12px; border-radius: 6px; display: flex; align-items: center; font-size: 12px; font-weight: 500; cursor: pointer; color: var(--ink2); }
+    .tab.on { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,0.12); }
+    .kv { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 10px 16px; align-items: center; }
+    .ico { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+    .prog { height: 6px; border-radius: 3px; background: var(--ctl2); overflow: hidden; }
+    .prog > div { height: 100%; background: var(--accent); border-radius: 3px; }
+    .step { display: flex; gap: 10px; align-items: flex-start; }
+    .dot { width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+    .dot svg { width: 11px; height: 11px; stroke: #fff; fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+    table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+    th { text-align: left; font-weight: 600; color: var(--ink2); font-size: 11px; padding: 8px 12px; border-bottom: 1px solid var(--sep); }
+    td { padding: 9px 12px; border-bottom: 1px solid var(--sep); vertical-align: top; }
+    .note h3 { font-size: 15px; margin: 0 0 8px 0; }
+    .note p { margin: 0 0 10px 0; }
+    .note ul { margin: 0 0 10px 18px; padding: 0; }
+    .note li { margin: 3px 0; }
+    .envelope { width: 420px; height: 260px; border-radius: 12px; background: linear-gradient(160deg, #f4e7cf, #e7c894); position: relative; box-shadow: 0 10px 30px rgba(120,80,20,0.25); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    .envelope::before { content: ""; position: absolute; left: 0; top: 0; right: 0; height: 130px; background: linear-gradient(170deg, #f9efdd, #ecd2a5); clip-path: polygon(0 0, 100% 0, 50% 100%); border-radius: 12px 12px 0 0; }
+    .seal { position: relative; width: 56px; height: 56px; border-radius: 50%; background: var(--accent); box-shadow: 0 3px 8px rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: center; }
+    .seal svg { width: 26px; height: 26px; stroke: #1a1205; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .cursor { position: absolute; width: 18px; height: 22px; }
+    .pulse { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+    .rail { width: 260px; flex-shrink: 0; border-right: 1px solid var(--sep); overflow: auto; padding: 8px; display: flex; flex-direction: column; gap: 1px; }
+    .raili { padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+    .raili.on { background: var(--ctl2); font-weight: 500; }
+    .raili svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.6; color: var(--ink2); flex-shrink: 0; }
+    .main { position: relative; }
+    .scrim { position: absolute; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; background: rgba(20,20,22,0.38); z-index: 5; pointer-events: none; }
+    .spot { position: relative; z-index: 6; box-shadow: 0 0 0 3px var(--accent), 0 0 0 9px var(--accent-soft); }
+    .tip { position: absolute; z-index: 7; width: 300px; background: var(--card); border: 1px solid var(--cardb); border-radius: 10px; box-shadow: 0 14px 36px rgba(0,0,0,0.28); padding: 14px 16px 12px 16px; display: flex; flex-direction: column; gap: 6px; }
+    .tip .arrow { position: absolute; width: 12px; height: 12px; background: var(--card); border-left: 1px solid var(--cardb); border-top: 1px solid var(--cardb); transform: rotate(45deg); }
+    .tip .eyebrow { font-size: 11px; font-weight: 600; color: var(--accent-ink); text-transform: uppercase; letter-spacing: 0.04em; }
+    .tip .t { font-size: 14px; font-weight: 600; }
+    .tip .b { font-size: 12.5px; color: var(--ink2); }
+    .tip .do { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 500; margin-top: 2px; }
+    .tip .do svg { width: 14px; height: 14px; stroke: var(--accent-ink); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .tip .foot { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
+    .navi .cnt { margin-left: auto; font-size: 11px; color: var(--ink2); }
+    .wm { display: flex; align-items: center; gap: 8px; }
+    .wm .t { font-size: 15px; font-weight: 700; letter-spacing: -0.02em; }
+    .wm .d { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); margin-left: -5px; margin-top: -12px; }
+    .ledg { display: grid; grid-template-columns: 28px minmax(0, 1fr) 150px 120px 130px; gap: 12px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--sep); }
+    .ledg.h { border-top: none; padding-bottom: 4px; }
+    .ledg.h div { font-size: 11px; font-weight: 600; color: var(--ink2); }
+    .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--ctl2); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: var(--ink2); }
+    .st { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; }
+    .st i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+    .amt { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 13.5px; }
+    .bar2 { height: 8px; border-radius: 4px; background: var(--ctl); overflow: hidden; }
+    .bar2 > div { height: 100%; border-radius: 4px; background: var(--accent); }
+    .notif { width: 360px; background: var(--card); border: 1px solid var(--cardb); border-radius: 14px; box-shadow: 0 12px 34px rgba(0,0,0,0.22); padding: 12px 14px; display: flex; gap: 10px; align-items: flex-start; }
+    .notif .app { width: 34px; height: 34px; border-radius: 8px; flex-shrink: 0; }
+    .ladder { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .rung { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px; border-radius: 11px; font-size: 11px; font-weight: 500; border: 1px solid var(--cardb); color: var(--ink2); background: var(--card); }
+    .rung.pick { background: var(--accent-soft); color: var(--accent-ink); border-color: transparent; }
+    .rung.off { opacity: 0.55; }
+    .rung svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .rec { width: 64px; height: 64px; border-radius: 50%; background: var(--bad); box-shadow: 0 0 0 8px rgba(217,79,69,0.18); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    .rec.live { box-shadow: 0 0 0 6px rgba(217,79,69,0.22), 0 0 0 12px rgba(217,79,69,0.08); }
+    .param { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 6px; background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; border-bottom: 2px solid var(--accent); }
+    .seg { display: flex; gap: 2px; padding: 2px; background: var(--ctl); border-radius: 7px; flex-shrink: 0; }
+    .seg div { height: 22px; padding: 0 10px; border-radius: 5px; display: flex; align-items: center; font-size: 11.5px; font-weight: 500; color: var(--ink2); cursor: pointer; white-space: nowrap; }
+    .seg div.on { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,0.12); }
+    .logrow { display: grid; grid-template-columns: 70px minmax(0, 1fr) 90px 110px 24px; gap: 14px; align-items: center; padding: 11px 16px; border-top: 1px solid var(--sep); cursor: pointer; }
+    .logrow:hover { background: var(--ctl); }
+    .payload { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 11.5px; line-height: 1.55; background: var(--code); border-radius: 8px; padding: 12px 14px; white-space: pre-wrap; color: var(--ink); max-height: 260px; overflow: auto; }
+    .sheet-scrim { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(20,20,22,0.45); z-index: 20; display: flex; align-items: center; justify-content: center; }
+    .sheet { width: 460px; background: var(--card); border-radius: 14px; box-shadow: 0 24px 60px rgba(0,0,0,0.4); padding: 22px 24px; display: flex; flex-direction: column; gap: 12px; }
+    .hold { position: relative; height: 34px; border-radius: 8px; background: var(--bad); color: #fff; font-weight: 600; display: flex; align-items: center; justify-content: center; cursor: pointer; overflow: hidden; user-select: none; }
+    .hold::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: rgba(0,0,0,0.25); }
+    .hold:active::before { width: 100%; transition: width 1.5s linear; }
+    .pill { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 12px; background: var(--ok); color: #fff; font-size: 11.5px; font-weight: 600; }
+    .pill svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+    .letter { max-width: 640px; font-size: 14.5px; line-height: 1.6; }
+    .letter p { margin: 0 0 14px 0; }
+    .letter h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink2); margin: 22px 0 8px 0; }
+    .srow sc-if, .srow .k sc-if { display: contents; }
+    .msg { display: flex; gap: 12px; align-items: flex-start; max-width: 720px; }
+    .msg .who { width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
+    .msg .bubble { padding: 12px 16px; border-radius: 12px; background: var(--card); border: 1px solid var(--cardb); font-size: 14px; line-height: 1.5; }
+    .msg.me .bubble { background: var(--accent-soft); border-color: transparent; }
+    .cite { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px; border-radius: 11px; background: var(--chip); font-size: 11.5px; font-weight: 500; color: var(--accent-ink); cursor: pointer; border: 1px solid var(--cardb); vertical-align: middle; margin: 0 2px; }
+    .cite:hover { background: var(--accent-soft); }
+    .cite svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .ask { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 12px; background: var(--card); border: 1px solid var(--cardb); box-shadow: 0 6px 24px rgba(0,0,0,0.08); }
+    .ask .in { flex: 1; font-size: 14px; color: var(--ink3); }
+    .approw { display: grid; grid-template-columns: 36px minmax(0, 1fr) 150px 120px; gap: 12px; align-items: center; padding: 11px 16px; border-top: 1px solid var(--sep); }
+    .appico { width: 36px; height: 36px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; color: #fff; }
+    .wikilink { color: var(--accent-ink); font-weight: 500; border-bottom: 1px dotted var(--accent); }
+    .win.compact { width: 1100px; height: 700px; }
+    .win.compact .side { width: 200px; }
+    .ed { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 22px; align-content: start; }
+    .win.compact .ed { grid-template-columns: minmax(0, 1fr); }
+    .srow { display: grid; grid-template-columns: 22px 26px minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 12px 14px; border-top: 1px solid var(--sep); }
+    .srow:hover { background: var(--ctl); }
+    .srow .n { width: 22px; height: 22px; border-radius: 50%; background: var(--ctl2); color: var(--ink2); font-size: 10.5px; font-weight: 600; display: flex; align-items: center; justify-content: center; margin-top: 3px; }
+    .srow .k { width: 26px; height: 26px; border-radius: 7px; background: var(--accent-soft); color: var(--accent-ink); display: flex; align-items: center; justify-content: center; margin-top: 1px; }
+    .srow .k svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .srow .verb { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink2); }
+    .srow .ml { font-size: 13.5px; margin-top: 2px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-start; }
+    .srow .edit { margin-top: 6px; }
+    .srow .acts { display: flex; gap: 2px; opacity: 0.25; }
+    .srow:hover .acts { opacity: 1; }
+    .ibtn { width: 26px; height: 26px; border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--ink2); }
+    .ibtn:hover { background: var(--ctl2); color: var(--ink); }
+    .ibtn.d:hover { color: var(--bad); }
+    .ibtn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .tbox { width: 100%; box-sizing: border-box; min-height: 56px; padding: 10px 12px; border-radius: 8px; background: var(--code); border: 1px solid var(--cardb); font: inherit; font-size: 13.5px; color: var(--ink); white-space: pre-wrap; }
+    .tbox:focus-within { border-color: var(--accent); }
+    .addrow { display: flex; gap: 8px; align-items: center; padding: 12px 14px; border-top: 1px solid var(--sep); flex-wrap: wrap; }
+    .field.grow { flex: 1; min-width: 160px; }
+    .namefield { font-size: 17px; font-weight: 600; background: transparent; border: none; border-bottom: 1px dashed var(--ink3); padding: 2px 0; color: var(--ink); }
+  </style>
+</helmet>
+
+<div class="win {{themeClass}} {{compactClass}}">
+
+  <!-- ───────── Sidebar ───────── -->
+  <div class="side">
+    <div class="lights">
+      <div class="light" style="background: #ff5f57;"></div>
+      <div class="light" style="background: #febc2e;"></div>
+      <div class="light" style="background: #28c840;"></div>
+    </div>
+    <div class="nav">
+      <div class="navi {{nav.foryou}}" onClick="{{goForYou}}">
+        <svg viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"></path><circle cx="12" cy="12" r="4"></circle></svg>
+        <span>For You</span><span class="cnt">{{cardCount}}</span>
+      </div>
+      <div class="navi {{nav.ask}}" onClick="{{goAsk}}">
+        <svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"></path><path d="M8 9h8M8 12h5"></path></svg>
+        <span>Ask</span>
+      </div>
+      <div class="navi {{nav.loops}}" onClick="{{goLoops}}">
+        <svg viewBox="0 0 24 24"><path d="M17 3l4 4-4 4"></path><path d="M3 11V9a2 2 0 0 1 2-2h16"></path><path d="M7 21l-4-4 4-4"></path><path d="M21 13v2a2 2 0 0 1-2 2H3"></path></svg>
+        <span>Loops</span><span class="cnt">{{loopCount}}</span>
+      </div>
+      <div class="navh">Knowledge</div>
+      <div class="navi {{nav.knowledge}}" onClick="{{goKnowledge}}">
+        <svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"></path><path d="M4 20.5V5.5M8 7h8M8 11h6"></path></svg>
+        <span>Notes</span>
+      </div>
+      <div class="navi" style="color: var(--ink2);" onClick="{{goKnowledge}}">
+        <svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"></circle><circle cx="18" cy="8" r="2.5"></circle><circle cx="12" cy="18" r="2.5"></circle><path d="M8.2 7l7.4 0.8M7.4 8.2l3.4 7.6M16.6 10.2l-3.4 5.6"></path></svg>
+        <span>Graph</span>
+      </div>
+      <div class="navi" style="color: var(--ink2);">
+        <svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+        <span>Excluded</span>
+      </div>
+      <div class="navh">Hands</div>
+      <div class="navi {{nav.recipes}}" onClick="{{goRecipes}}">
+        <svg viewBox="0 0 24 24"><path d="M7 11V6a2 2 0 0 1 4 0v5"></path><path d="M11 10V4a2 2 0 0 1 4 0v6"></path><path d="M15 10V6a2 2 0 0 1 4 0v8a6 6 0 0 1-6 6h-2a6 6 0 0 1-5.6-3.8L4 13a1.8 1.8 0 0 1 3-1.8l0 0"></path></svg>
+        <span>Recipes</span><span class="cnt">3</span>
+      </div>
+      <div class="navh">App</div>
+      <div class="navi {{nav.settings}}" onClick="{{goSettings}}">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"></path></svg>
+        <span>Settings</span>
+      </div>
+    </div>
+    <div style="margin-top: auto; padding: 14px 16px 16px 16px; border-top: 1px solid var(--sep); display: flex; flex-direction: column; gap: 8px;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <div class="pulse"></div>
+        <div style="font-size: 12px; font-weight: 500;">Last run 3:00 AM</div>
+      </div>
+      <div class="tiny">255 items read · 38 kept · <span style="cursor: pointer; text-decoration: underline; text-underline-offset: 2px;" onClick="{{goLeft}}">14 KB left your Mac</span></div>
+      <div class="wm" style="margin-top: 4px;">
+        <svg viewBox="0 0 256 256" style="width: 24px; height: 24px; border-radius: 6px;"><defs><linearGradient id="wbg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1B2033"></stop><stop offset="1" stop-color="#2E2A3F"></stop></linearGradient><linearGradient id="wsun" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F6C46A"></stop><stop offset="1" stop-color="#D8983A"></stop></linearGradient></defs><rect width="256" height="256" fill="url(#wbg)"></rect><path d="M78 44h56c26 0 44 14 44 36 0 12-6 22-16 28 16 5 26 18 26 36 0 26-20 42-50 42H78z" fill="none" stroke="#F3E4C6" stroke-width="18" stroke-linejoin="round"></path><path d="M78 44v142" stroke="#F3E4C6" stroke-width="18" stroke-linecap="round"></path><path d="M96 166a34 34 0 0 1 68 0" fill="url(#wsun)"></path><path d="M60 166h150" stroke="#F3E4C6" stroke-width="10" stroke-linecap="round"></path><rect x="0" y="171" width="256" height="85" fill="#1B2033" opacity="0.55"></rect></svg>
+        <span class="t">brownie</span><span class="d"></span>
+      </div>
+      <div class="tiny" style="display: flex; align-items: center; gap: 6px;">
+        <svg class="ico" viewBox="0 0 24 24" style="width: 12px; height: 12px;"><path d="M12 2l3 7h7l-5.5 4.5L18.5 21 12 16.8 5.5 21l2-7.5L2 9h7z"></path></svg>
+        <span>Brain: {{brain}}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────── Content ───────── -->
+  <div class="main">
+
+    <!-- ===== FIRST-TIME WALKTHROUGH (one per screen, completes on the action) ===== -->
+    <sc-if value="{{ftue.active}}" hint-placeholder-val="{{ false }}">
+      <div class="scrim"></div>
+      <div class="tip" style="left: {{ftue.left}}; top: {{ftue.top}}; right: {{ftue.right}};">
+        <div class="arrow" style="left: {{ftue.ax}}; top: {{ftue.ay}}; right: {{ftue.ar}};"></div>
+        <div class="eyebrow">First time here · {{ftue.n}} of 3</div>
+        <div class="t">{{ftue.title}}</div>
+        <div class="b">{{ftue.body}}</div>
+        <div class="do"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"></path></svg><span>{{ftue.action}}</span></div>
+        <div class="foot">
+          <div class="tiny">Shown once. Done when you do it.</div>
+          <div class="btn q" style="height: 22px; padding: 0 6px;" onClick="{{ftue.skip}}"><span>Skip</span></div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ===== PANIC WIPE SHEET ===== -->
+    <sc-if value="{{panic}}" hint-placeholder-val="{{ false }}">
+      <div class="sheet-scrim">
+        <div class="sheet">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div class="dot" style="width: 28px; height: 28px; background: var(--bad);"><svg viewBox="0 0 24 24" style="width: 15px; height: 15px;"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"></path></svg></div>
+            <div class="h2">Erase everything Brownie knows</div>
+          </div>
+          <div class="sub">This deletes, right now, on this Mac:</div>
+          <div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px;">
+            <div class="step"><div class="dot" style="background: var(--ctl2);"></div><div>The knowledge base — 84 notes, every person and every loop</div></div>
+            <div class="step"><div class="dot" style="background: var(--ctl2);"></div><div>All cards, the send log and the recipes you taught Hands</div></div>
+            <div class="step"><div class="dot" style="background: var(--ctl2);"></div><div>Sign-ins to Gmail and Telegram, and your brain key from the Keychain</div></div>
+            <div class="step"><div class="dot" style="background: var(--ctl2);"></div><div>The 3 AM wake and the helper that holds the Mac awake</div></div>
+          </div>
+          <div class="tiny">The 3.7 GB reader model stays unless you also uninstall. Nothing needs to be deleted anywhere else — there is nowhere else.</div>
+          <div class="hold" onClick="{{panicDone}}"><span>Hold to erase</span></div>
+          <div class="btn q" style="align-self: center;" onClick="{{panicOff}}"><span>Keep everything</span></div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ===== FOR YOU ===== -->
+    <sc-if value="{{is.foryou}}" hint-placeholder-val="{{ true }}">
+      <div class="bar">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div class="title">For You</div>
+          <div class="tiny">Prepared overnight · Sunday 20 Sep · refreshed 11:40 while you were away</div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <div class="btn" onClick="{{goForYou}}">
+            <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4"></path><path d="M21 3v6h-6"></path></svg>
+            <span>Analyze now</span>
+          </div>
+        </div>
+      </div>
+      <div class="body" style="display: flex; flex-direction: column; gap: 20px;">
+        <div class="card" style="padding: 16px 18px; display: flex; align-items: center; gap: 16px; cursor: pointer;" onClick="{{goWeekly}}">
+          <div class="seal" style="width: 40px; height: 40px;"><svg viewBox="0 0 24 24" style="width: 18px; height: 18px;"><path d="M4 6h16v12H4z"></path><path d="M4 7l8 6 8-6"></path></svg></div>
+          <div style="flex: 1;">
+            <div style="font-weight: 600;">Your week, in a letter</div>
+            <div class="sub">It’s Sunday. Seven nights, what closed, what’s still open, and who you went quiet on.</div>
+          </div>
+          <svg class="ico" viewBox="0 0 24 24" style="color: var(--ink3);"><path d="M9 6l6 6-6 6"></path></svg>
+        </div>
+        <div>
+          <div class="row" style="margin-bottom: 12px;">
+            <div class="h2">{{cardCount}} things worth your attention</div>
+            <div class="tiny">Ranked by urgency · nothing is sent until you tap</div>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px;">
+            <sc-for list="{{cards}}" as="c" hint-placeholder-count="4">
+              <div class="card" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; cursor: pointer;" onClick="{{c.open}}">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <div class="urg" style="background: {{c.urgColor}};"></div>
+                  <div style="font-weight: 600; font-size: 14px; flex: 1;">{{c.title}}</div>
+                  <sc-if value="{{c.back}}" hint-placeholder-val="{{ false }}"><div class="chip" style="background: rgba(217,79,69,0.12); color: var(--bad);"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path></svg><span>Came back</span></div></sc-if>
+                  <div class="chip"><span>{{c.source}}</span></div>
+                </div>
+                <div class="sub" style="font-size: 12.5px;">{{c.why}}</div>
+                <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
+                  <div class="chip" style="background: var(--accent-soft); color: var(--accent-ink);"><span>{{c.actionLabel}}</span></div>
+                  <div class="tiny">{{c.due}}</div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        <div class="card" style="padding: 14px 18px; display: flex; align-items: center; gap: 14px;">
+          <div style="flex: 1;">
+            <div style="font-weight: 600;">Last night, in numbers</div>
+            <div class="tiny">3:00–3:41 AM · 255 read · 38 kept · 4 sensitive erased · 3 requests to the brain, 14.2 KB of summaries, 0 bytes of raw messages</div>
+          </div>
+          <div class="btn q" onClick="{{goLeft}}"><span>See exactly what left</span></div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ===== CARD DETAIL ===== -->
+    <sc-if value="{{is.card}}" hint-placeholder-val="{{ false }}">
+      <div class="bar">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div class="btn q" onClick="{{goForYou}}"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"></path></svg><span>For You</span></div>
+          <div class="title">{{card.title}}</div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <div class="btn q" onClick="{{goForYou}}"><span>Not now</span></div>
+          <div class="btn"><span>Edit draft</span></div>
+          <div class="btn p" onClick="{{goForYou}}"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"></path></svg><span>{{card.fireLabel}}</span></div>
+        </div>
+      </div>
+      <div class="body" style="display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px;">
+        <div style="display: flex; flex-direction: column; gap: 18px;">
+          <sc-if value="{{card.back}}" hint-placeholder-val="{{ false }}">
+            <div class="card" style="padding: 14px 16px; display: flex; gap: 12px; align-items: flex-start; border-color: rgba(217,79,69,0.4); background: rgba(217,79,69,0.07);">
+              <svg class="ico" viewBox="0 0 24 24" style="color: var(--bad); margin-top: 2px;"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path></svg>
+              <div><div style="font-weight: 600;">This card came back</div><div class="sub" style="margin-top: 2px;">You sent the first message on Thursday. Two reads later there is still no reply, so Brownie brought it back with a gentle nudge instead of letting it drop.</div></div>
+            </div>
+          </sc-if>
+          <div class="card" style="padding: 18px 20px; display: flex; flex-direction: column; gap: 8px;">
+            <div class="tiny" style="text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;">Why this is here</div>
+            <div style="font-size: 14px;">{{card.why}}</div>
+          </div>
+          <div class="card" style="padding: 18px 20px; display: flex; flex-direction: column; gap: 10px;">
+            <div class="row">
+              <div class="tiny" style="text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;">{{card.draftLabel}}</div>
+              <div class="chip"><span>in your voice</span></div>
+            </div>
+            <div class="code" style="font-family: inherit; font-size: 13.5px;">{{card.draft}}</div>
+            <div class="tiny">You can edit this before it goes. Brownie never sends on its own.</div>
+          </div>
+          <div class="card" style="padding: 18px 20px; display: flex; flex-direction: column; gap: 10px;">
+            <div class="row">
+              <div class="tiny" style="text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;">How Hands will do it</div>
+              <div class="ladder">
+                <div class="rung pick"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"></path></svg><span>{{card.method}}</span></div>
+                <div class="rung off"><span>Screen, only if that fails</span></div>
+              </div>
+            </div>
+            <sc-for list="{{recipe}}" as="s" hint-placeholder-count="3">
+              <div class="step"><div class="dot" style="background: var(--ctl2); color: var(--ink2); font-size: 10px; font-weight: 600;">{{s.n}}</div><div>{{s.text}}</div></div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <div class="card" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 10px;">
+            <div class="tiny" style="text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;">Evidence</div>
+            <sc-for list="{{card.evidence}}" as="e" hint-placeholder-count="3">
+              <div style="display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-top: 1px solid var(--sep);">
+                <div style="display: flex; gap: 8px; align-items: center;"><div class="chip"><span>{{e.src}}</span></div><div class="tiny">{{e.when}}</div></div>
+                <div style="font-size: 12.5px;">{{e.text}}</div>
+              </div>
+            </sc-for>
+            <div class="tiny">Summaries were written on your Mac. Raw messages never left it.</div>
+          </div>
+          <div class="btn q d" onClick="{{goForYou}}"><span>Never show cards like this</span></div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ===== LOOPS ===== -->
+    <sc-if value="{{is.loops}}" hint-placeholder-val="{{ false }}">
+      <div class="bar">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div class="title">Loops</div>
+          <div class="tiny">Promises in both directions, found in your chats and mail</div>
+        </div>
+        <div class="tabs {{spot.looptabs}}">
+          <div class="tab {{loopTabs.mine}}" onClick="{{loopMine}}">You owe · 4</div>
+          <div class="tab {{loopTabs.theirs}}" onClick="{{loopTheirs}}">Owed to you · 3</div>
+          <div class="tab {{loopTabs.closed}}" onClick="{{loopClosed}}">Closed this week · 5</div>
+        </div>
+      </div>
+      <div class="body" style="display: flex; flex-direction: column; gap: 18px;">
+        <div class="card">
+          <div class="ledg h"><div></div><div>Who · what</div><div>Said where</div><div>Due</div><div>Status</div></div>
+          <sc-for list="{{loops}}" as="l" hint-placeholder-count="4">
+            <div class="ledg">
+              <div class="avatar">{{l.ini}}</div>
+              <div>
+                <div style="font-weight: 600;">{{l.who}} <span style="font-weight: 400; color: var(--ink2);">·</span> {{l.what}}</div>
+                <div class="tiny" style="margin-top: 2px;">{{l.quote}}</div>
+              </div>
+              <div class="tiny">{{l.where}}</div>
+              <div style="font-size: 12.5px; color: {{l.dueColor}};">{{l.due}}</div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div class="st"><i style="background: {{l.stColor}};"></i><span>{{l.status}}</span></div>
+                <div class="btn q" style="height: 22px; padding: 0 6px; margin-left: auto;" onClick="{{l.act}}"><span>{{l.actLabel}}</span></div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <div class="card" style="padding: 14px 18px; display: flex; gap: 14px; align-items: center;">
+          <div style="flex: 1;">
+            <div style="font-weight: 600;">How a loop closes</div>
+            <div class="tiny">A loop opens when someone (you included) says they’ll do something. It closes when the next read sees it done — a reply, a file sent, a payment mentioned. If you fired a card and nothing changed by the next read, the card comes back.</div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ===== PRE-MEETING BRIEF ===== -->
+    <sc-if value="{{is.brief}}" hint-placeholder-val="{{ false }}">
+      <div class="bar">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div class="btn q" onClick="{{goForYou}}"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"></path></svg><span>For You</span></div>
+          <div class="title">Pricing review · 4:00 PM</div>
+          <div class="tiny">in 10 minutes · Rohan, Meera</div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <div class="btn"><span>Open Tuesday’s notes</span></div>
+          <div class="btn p"><span>Join the call</span></div>
+        </div>
+      </div>
+      <div class="body" style="display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 24px; align-content: start;">
+        <div style="display: flex; flex-direction: column; gap: 18px;">
+          <div class="notif" style="align-self: flex-start;">
+            <svg class="app" viewBox="0 0 256 256" style="border-radius: 8px;"><rect width="256" height="256" fill="#1B2033"></rect><path d="M78 44h56c26 0 44 14 44 36 0 12-6 22-16 28 16 5 26 18 26 36 0 26-20 42-50 42H78z" fill="none" stroke="#F3E4C6" stroke-width="18" stroke-linejoin="round"></path><path d="M78 44v142" stroke="#F3E4C6" stroke-width="18" stroke-linecap="round"></path><path d="M96 166a34 34 0 0 1 68 0" fill="#E2A54A"></path><path d="M60 166h150" stroke="#F3E4C6" stroke-width="10" stroke-linecap="round"></path></svg>
+            <div style="flex: 1;"><div class="row"><div style="font-weight: 600; font-size: 12.5px;">Pricing review in 10 minutes</div><div class="tiny">now</div></div><div style="font-size: 12.5px; color: var(--ink2);">Rohan expects the annual toggle decided. You still owe Meera the mobile mocks. Two open loops with Rohan.</div></div>
+          </div>
+          <div class="card" style="padding: 18px 20px; display: flex; flex-direction: column; gap: 14px;">
+            <div class="tiny" style="text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;">Who’s in the room</div>
+            <div style="display: flex; gap: 12px;"><div class="avatar">R</div><div><div style="font-weight: 600;">Rohan <span class="tiny" style="font-weight: 400;">· co-founder, runs product</span></div><div style="font-size: 13px; margin-top: 3px;">You agreed on Tuesday, in WhatsApp, to ship the pricing page before this review. He said “the annual toggle is the whole point.” Three of the tickets are still open. He prefers short answers and gets impatient with options — bring one recommendation, not three.</div></div></div>
+            <div style="display: flex; gap: 12px;"><div class="avatar">M</div><div><div style="font-weight: 600;">Meera <span class="tiny" style="font-weight: 400;">· design, joined in July</span></div><div style="font-size: 13px; margin-top: 3px;">She sent the desktop pricing mocks on Friday and asked twice for your notes on the mobile layout; you haven’t replied. Last meeting she raised whether the free tier should survive — that’s unresolved and she’ll raise it again.</div></div></div>
+          </div>
+          <div class="card" style="padding: 18px 20px; display: flex; flex-direction: column; gap: 8px;">
+            <div class="tiny" style="text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;">Suggested order</div>
+            <div class="step"><div class="dot" style="background: var(--ctl2); color: var(--ink2); font-size: 10px; font-weight: 600;">1</div><div>Decide the annual toggle first — it unblocks two of the three tickets.</div></div>
+            <div class="step"><div class="dot" style="background: var(--ctl2); color: var(--ink2); font-size: 10px; font-weight: 600;">2</div><div>Tell Meera when she’ll get the mobile notes; you’ve said “tomorrow” once already.</div></div>
+            <div class="step"><div class="dot" style="background: var(--ctl2); color: var(--ink2); font-size: 10px; font-weight: 600;">3</div><div>Free tier: park it with a date rather than reopen it.</div></div>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <div class="card" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 10px;">
+            <div class="tiny" style="text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;">Open loops with them</div>
+            <div style="padding: 8px 0; border-top: 1px solid var(--sep);"><div class="st"><i style="background: var(--bad);"></i><span>You → Meera</span></div><div style="font-size: 12.5px; margin-top: 2px;">Notes on the mobile layout · promised Wednesday</div></div>
+            <div style="padding: 8px 0; border-top: 1px solid var(--sep);"><div class="st"><i style="background: var(--warn);"></i><span>You → Rohan</span></div><div style="font-size: 12.5px; margin-top: 2px;">Pricing page live before this review · 3 tickets open</div></div>
+            <div style="padding: 8px 0; border-top: 1px solid var(--sep);"><div class="st"><i style="background: var(--ok);"></i><span>Rohan → you</span></div><div style="font-size: 12.5px; margin-top: 2px;">Competitor pricing sheet · sent Thursday, in Drive</div></div>
+            <div class="btn q" style="align-self: flex-start;" onClick="{{goLoops}}"><span>All loops</span></div>
+          </div>
+          <div class="card" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 8px;">
+            <div class="tiny" style="text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;">Since you last met</div>
+            <div style="font-size: 12.5px;">Tuesday’s call ended on “ship before Saturday”. Since then: 14 messages in the Founders chat, one Linear ticket closed by Meera, the mocks sent Friday.</div>
+            <div class="tiny">Built from your People notes at 3:50 PM. Nothing was sent anywhere to make it.</div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ===== WEEKLY LETTER ===== -->
+    <sc-if value="{{is.weekly}}" hint-placeholder-val="{{ false }}">
+      <div class="bar">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div class="btn q" onClick="{{goForYou}}"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"></path></svg><span>For You</span></div>
+          <div class="title">Your week</div>
+          <div class="tiny">14–20 September · written this morning</div>
+        </div>
+        <div style="display: flex; gap: 8px;"><div class="btn q"><span>Save as a note</span></div></div>
+      </div>
+      <div class="body" style="display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 32px; align-content: start;">
+        <div class="letter">
+          <p>Seven nights, all of them plugged in. I read 1,240 things and kept 61. Nothing you wrote left this Mac; 91 KB of my summaries did, to the brain you chose.</p>
+          <h3>What closed</h3>
+          <p>Amma got the scan report on Tuesday, four days after you said “tonight” — she replied with a heart and hasn’t asked again. The Goa dates are settled: 3–6 October, Priya booked the villa on Thursday. Sunil has Form 16. Rohan got the weekly numbers on Monday at 9:02, from the recipe you taught Hands.</p>
+          <h3>Still open</h3>
+          <p>Meera has asked for the mobile notes three times now; the last “tomorrow” was Wednesday. Karan still hasn’t sent his villa share, and you haven’t mentioned it. Adobe renews on Friday whether or not you decide.</p>
+          <h3>People you went quiet on</h3>
+          <p>Your sister — last message from you was 12 days ago, hers was a photo of the twins. Karan, who wrote twice about the cricket tickets. Neither is urgent; both would notice.</p>
+          <h3>Next week</h3>
+          <p>Three meetings you should not walk into cold: the pricing review on Monday, Dr. Menon on Wednesday, the landlord on Friday. I’ll have a brief ready ten minutes before each.</p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <div class="card" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 10px;">
+            <div class="tiny" style="text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;">The week in numbers</div>
+            <div class="kv" style="grid-template-columns: minmax(0, 1fr) auto; font-size: 12.5px;">
+              <div>Nights run</div><div class="amt">7 of 7</div>
+              <div>Read · kept</div><div class="amt">1,240 · 61</div>
+              <div>Sensitive erased</div><div class="amt">11</div>
+              <div>Cards fired by you</div><div class="amt">9</div>
+              <div>Loops closed · opened</div><div class="amt">5 · 3</div>
+              <div>Raw data sent</div><div class="amt" style="color: var(--ok);">0 bytes</div>
+            </div>
+          </div>
+          <div class="btn" onClick="{{goLoops}}"><span>Open loops</span></div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ===== RECIPES ===== -->
+    <sc-if value="{{is.recipes}}" hint-placeholder-val="{{ false }}">
+      <div class="bar">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div class="title">Recipes</div>
+          <div class="tiny">Things you taught Hands once, and it does again</div>
+        </div>
+        <div class="btn p {{spot.teach}}" onClick="{{goTeach}}"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="3.5" fill="currentColor"></circle></svg><span>Teach Hands something</span></div>
+      </div>
+      <div class="body" style="display: flex; flex-direction: column; gap: 18px;">
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px;">
+          <sc-for list="{{recipes}}" as="r" hint-placeholder-count="3">
+            <div class="card" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 10px;">
+              <div style="font-weight: 600; font-size: 14px;">{{r.name}}</div>
+              <div class="sub" style="font-size: 12.5px;">{{r.what}}</div>
+              <div class="tiny">{{r.when}}</div>
+              <div class="ladder">
+                <div class="rung pick"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"></path></svg><span>{{r.method}}</span></div>
+                <div class="rung off"><span>Screen if needed</span></div>
+              </div>
+              <div class="row" style="margin-top: 4px;"><div class="tiny">{{r.runs}}</div><div style="display: flex; gap: 6px;"><div class="btn q" style="height: 24px;" onClick="{{goEdit}}"><span>Edit</span></div><div class="btn" style="height: 24px;"><span>Run now</span></div></div></div>
+            </div>
+          </sc-for>
+        </div>
+        <div class="card" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 10px;">
+          <div style="font-weight: 600;">How Hands picks a way in — most reliable first, the screen last</div>
+          <div class="ladder">
+            <div class="rung pick"><span>1 · App link</span></div><div class="tiny">→</div>
+            <div class="rung pick"><span>2 · Shortcut or AppleScript</span></div><div class="tiny">→</div>
+            <div class="rung pick"><span>3 · The app’s own API (MCP)</span></div><div class="tiny">→</div>
+            <div class="rung"><span>4 · Look at the screen and click</span></div>
+          </div>
+          <div class="tiny">Every recipe shows which rung it uses. A recipe that needs the screen tells you so, and you can ask it to stop and show you rather than guess.</div>
+        </div>
+        <div class="card" style="padding: 16px 18px; display: flex; align-items: center; gap: 14px;">
+          <div style="flex: 1;"><div style="font-weight: 600;">From anywhere</div><div class="tiny">Every recipe is an action in Apple Shortcuts. “Hey Siri, run weekly numbers.” Also ⌘⇧Space, then the recipe’s name.</div></div>
+          <div class="btn q" onClick="{{goHands}}"><span>Shortcuts &amp; Siri</span></div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ===== TEACH HANDS ===== -->
+    <sc-if value="{{is.teach}}" hint-placeholder-val="{{ false }}">
+      <div class="bar">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div class="btn q" onClick="{{goRecipes}}"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"></path></svg><span>Recipes</span></div>
+          <div class="title">Teach Hands</div>
+          <div class="tiny">{{teach.stepLabel}}</div>
+        </div>
+        <div class="tabs">
+          <div class="tab {{teach.t1}}">Show me</div><div class="tab {{teach.t2}}">Watching</div><div class="tab {{teach.t3}}">Make it reusable</div><div class="tab {{teach.t4}}">Saved</div>
+        </div>
+      </div>
+
+      <sc-if value="{{teach.s1}}" hint-placeholder-val="{{ true }}">
+        <div class="body" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; text-align: center;">
+          <div class="rec" onClick="{{teachRecord}}"><svg viewBox="0 0 24 24" style="width: 26px; height: 26px; stroke: #fff; fill: none; stroke-width: 2;"><circle cx="12" cy="12" r="4" fill="#fff"></circle></svg></div>
+          <div class="h1">Do it once, the way you always do.</div>
+          <div class="sub" style="max-width: 520px;">Brownie watches the buttons you press and the text you type — the same accessibility tree screen readers use, not pixels, not a recording. When you stop, it turns what you did into a recipe and asks what should change each time.</div>
+          <div class="tiny">It will not record passwords, and it stops itself at Send, Pay and Delete.</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{teach.s2}}" hint-placeholder-val="{{ false }}">
+        <div class="body" style="display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 24px; align-content: start;">
+          <div class="card" style="padding: 18px 20px; display: flex; flex-direction: column; gap: 12px;">
+            <div class="row"><div style="display: flex; align-items: center; gap: 8px;"><div class="rec live" style="width: 12px; height: 12px; box-shadow: 0 0 0 4px rgba(217,79,69,0.18);"></div><div style="font-weight: 600;">Watching · 0:41</div></div><div class="btn" onClick="{{teachStop}}"><span>Stop</span></div></div>
+            <div class="sep"></div>
+            <sc-for list="{{captured}}" as="a" hint-placeholder-count="4">
+              <div class="step"><div class="dot" style="background: var(--ok);"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"></path></svg></div><div><div style="font-size: 13px;">{{a.text}}</div><div class="tiny">{{a.how}}</div></div></div>
+            </sc-for>
+            <div class="step"><div class="dot" style="background: var(--ctl2);"></div><div class="sub">Waiting for your next action…</div></div>
+          </div>
+          <div class="card" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 8px;">
+            <div class="tiny" style="text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;">What’s being kept</div>
+            <div style="font-size: 12.5px;">Which app, which button (by its name in the accessibility tree), what you typed. Not a screenshot, not a video.</div>
+            <div style="font-size: 12.5px;">Password fields are skipped automatically. Press Stop before Send — Hands will always leave that to you.</div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{teach.s3}}" hint-placeholder-val="{{ false }}">
+        <div class="body" style="display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 24px; align-content: start;">
+          <div style="display: flex; flex-direction: column; gap: 18px;">
+            <div class="card" style="padding: 18px 20px; display: flex; flex-direction: column; gap: 12px;">
+              <div class="tiny" style="text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;">What you did — and what should change each time</div>
+              <div class="step"><div class="dot" style="background: var(--ctl2); color: var(--ink2); font-size: 10px; font-weight: 600;">1</div><div>Open WhatsApp</div></div>
+              <div class="step"><div class="dot" style="background: var(--ctl2); color: var(--ink2); font-size: 10px; font-weight: 600;">2</div><div>Open the chat with <span class="param">Rohan</span></div></div>
+              <div class="step"><div class="dot" style="background: var(--ctl2); color: var(--ink2); font-size: 10px; font-weight: 600;">3</div><div>Type <span class="param">“Numbers for the week: 41 signups, ₹1.2L MRR, 3 churned”</span></div></div>
+              <div class="step"><div class="dot" style="background: var(--warn);"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M6 18L18 6"></path></svg></div><div>Stop before Send <span class="tiny">· always yours</span></div></div>
+            </div>
+            <div class="card" style="padding: 18px 20px; display: flex; flex-direction: column; gap: 14px;">
+              <div class="row"><div><div style="font-weight: 600;"><span class="param">Rohan</span> <span class="tiny">the person</span></div></div><div class="seg"><div class="{{teach.p1a}}" onClick="{{teachP1a}}">Keep as Rohan</div><div class="{{teach.p1b}}" onClick="{{teachP1b}}">Ask me each time</div></div></div>
+              <div class="sep"></div>
+              <div class="row"><div><div style="font-weight: 600;"><span class="param">the message</span></div><div class="tiny">Brownie can write it from your notes: signups, MRR and churn come from the Linear and Stripe summaries each week.</div></div><div class="seg"><div class="{{teach.p2a}}" onClick="{{teachP2a}}">Write it from my notes</div><div class="{{teach.p2b}}" onClick="{{teachP2b}}">Ask me</div></div></div>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 14px;">
+            <div class="card" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 10px;">
+              <div class="tiny" style="text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;">Name and when</div>
+              <div class="field">Weekly numbers to Rohan</div>
+              <div class="seg"><div class="{{teach.w1}}" onClick="{{teachW1}}">Every Monday, 9 AM</div><div class="{{teach.w2}}" onClick="{{teachW2}}">When I ask</div></div>
+              <div class="tiny">Scheduled runs prepare everything and then wait for you at Send.</div>
+            </div>
+            <div class="card" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 8px;">
+              <div class="tiny" style="text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;">How Hands will do it</div>
+              <div class="ladder"><div class="rung pick"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"></path></svg><span>WhatsApp link</span></div><div class="rung off"><span>Screen, if that fails</span></div></div>
+              <div class="tiny">WhatsApp opens a chat with text already in the box from a link, so Hands never has to look at the screen for this one.</div>
+            </div>
+            <div class="btn p" onClick="{{teachSave}}"><span>Save recipe</span></div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{teach.s4}}" hint-placeholder-val="{{ false }}">
+        <div class="body" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; text-align: center;">
+          <div class="pill"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"></path></svg><span>Saved</span></div>
+          <div class="h1">“Weekly numbers to Rohan” is a recipe now.</div>
+          <div class="sub" style="max-width: 520px;">It runs every Monday at 9 AM and waits for you at Send. You can also say it: ⌘⇧Space, then “weekly numbers” — or “Hey Siri, run weekly numbers” once it’s in Shortcuts.</div>
+          <div style="display: flex; gap: 8px;"><div class="btn q" onClick="{{goEdit}}"><span>Edit the steps</span></div><div class="btn" onClick="{{goHands}}"><span>Add to Shortcuts</span></div><div class="btn p" onClick="{{goRecipes}}"><span>Done</span></div></div>
+        </div>
+      </sc-if>
+    </sc-if>
+
+
+    <!-- ===== RECIPE EDITOR ===== -->
+    <sc-if value="{{is.edit}}" hint-placeholder-val="{{ false }}">
+      <div class="bar">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div class="btn q" onClick="{{goRecipes}}"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"></path></svg><span>Recipes</span></div>
+          <span class="namefield">Weekly numbers to Rohan</span>
+          <div class="tiny">Hands does exactly these, in order, and stops before the last one</div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <div class="btn q"><svg viewBox="0 0 24 24"><path d="M5 3l14 9-14 9z"></path></svg><span>Try it</span></div>
+          <div class="btn p" onClick="{{goRecipes}}"><span>Save</span></div>
+        </div>
+      </div>
+      <div class="body ed">
+        <div style="display: flex; flex-direction: column; gap: 18px; min-width: 0;">
+          <div class="card">
+            <div class="row" style="padding: 12px 14px 8px 14px;"><div class="tiny" style="text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;">Steps · {{editCount}}</div><div class="tiny">Hover a step for its controls · drag the handle to reorder</div></div>
+            <sc-for list="{{editSteps}}" as="s" hint-placeholder-count="4">
+              <div class="srow">
+                <div class="n">{{s.n}}</div>
+                <div class="k">
+                  <sc-if value="{{s.isLaunch}}" hint-placeholder-val="{{ false }}"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"></rect><path d="M8 21h8"></path></svg></sc-if>
+                  <sc-if value="{{s.isClick}}" hint-placeholder-val="{{ true }}"><svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 2-3 6z"></path></svg></sc-if>
+                  <sc-if value="{{s.isType}}" hint-placeholder-val="{{ false }}"><svg viewBox="0 0 24 24"><path d="M4 7V4h16v3M9 20h6M12 4v16"></path></svg></sc-if>
+                  <sc-if value="{{s.isKey}}" hint-placeholder-val="{{ false }}"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"></rect><path d="M7 10h.01M11 10h.01M15 10h.01M8 14h8"></path></svg></sc-if>
+                </div>
+                <div style="min-width: 0;">
+                  <div class="verb">{{s.verb}} <span style="font-weight: 400; text-transform: none; letter-spacing: 0;">· {{s.app}}</span></div>
+                  <sc-if value="{{s.isType}}" hint-placeholder-val="{{ false }}">
+                    <div class="edit"><div class="tbox">{{s.text}}</div><div class="tiny" style="margin-top: 4px;">into “{{s.target}}” · checked after typing: focused, set, read back; typed key by key or pasted if it didn’t land</div></div>
+                  </sc-if>
+                  <sc-if value="{{s.isClick}}" hint-placeholder-val="{{ true }}"><div class="ml"><span>Press</span><span class="param">{{s.target}}</span><span class="tiny">{{s.role}}</span></div></sc-if>
+                  <sc-if value="{{s.isLaunch}}" hint-placeholder-val="{{ false }}"><div class="ml"><span>{{s.line}}</span></div></sc-if>
+                  <sc-if value="{{s.isKey}}" hint-placeholder-val="{{ false }}"><div class="ml"><span>Press</span><span class="chip">{{s.target}}</span></div></sc-if>
+                </div>
+                <div class="acts">
+                  <div class="ibtn" title="Re-record this step"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"></circle><circle cx="12" cy="12" r="3" fill="currentColor"></circle></svg></div>
+                  <div class="ibtn" onClick="{{s.up}}"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"></path></svg></div>
+                  <div class="ibtn" onClick="{{s.down}}"><svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"></path></svg></div>
+                  <div class="ibtn d" onClick="{{s.remove}}"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v5M14 11v5"></path></svg></div>
+                </div>
+              </div>
+            </sc-for>
+            <div class="srow" style="cursor: default;">
+              <div class="n" style="background: var(--warn); color: #fff;"><svg viewBox="0 0 24 24" style="width: 10px; height: 10px; stroke: #fff; fill: none; stroke-width: 2.6;"><path d="M6 6l12 12M6 18L18 6"></path></svg></div>
+              <div></div>
+              <div class="ml" style="color: var(--ink2);">Stop before Send · always yours</div>
+              <div></div>
+            </div>
+            <div class="addrow">
+              <div class="seg"><div class="{{add.t1}}" onClick="{{addT1}}">Type text</div><div class="{{add.t2}}" onClick="{{addT2}}">Press a button</div><div class="{{add.t3}}" onClick="{{addT3}}">Press a key</div><div class="{{add.t4}}" onClick="{{addT4}}">Open an app</div></div>
+              <div class="field grow" style="color: var(--ink3);">{{add.placeholder}}</div>
+              <div class="btn" onClick="{{addStep}}"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg><span>Add step</span></div>
+            </div>
+          </div>
+          <div class="card" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;">
+            <div class="tiny" style="text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;">What changes each time</div>
+            <div class="row"><div><span class="param">Rohan</span> <span class="tiny">the person · from step 2</span></div><div class="seg"><div class="on">Keep as Rohan</div><div>Ask me each time</div></div></div>
+            <div class="sep"></div>
+            <div class="row"><div><span class="param">the message</span> <span class="tiny">from step 3</span></div><div class="seg"><div>Keep as is</div><div class="on">Write from my notes</div><div>Ask me</div></div></div>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <div class="card" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 10px;">
+            <div class="tiny" style="text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;">When</div>
+            <div class="seg"><div>When I ask</div><div class="on">Every week</div></div>
+            <div style="display: flex; gap: 6px;"><div class="field">Monday</div><div class="field">09</div><div class="field">00</div></div>
+            <div class="tiny">Scheduled runs prepare everything and wait for you at the last step.</div>
+          </div>
+          <div class="card" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 8px;">
+            <div class="tiny" style="text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;">How Hands will do it</div>
+            <div class="ladder"><div class="rung pick"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"></path></svg><span>WhatsApp link</span></div><div class="rung off"><span>Screen, if that fails</span></div></div>
+            <div class="tiny">Ran 3 times · last Monday 9:02 · never needed the screen</div>
+          </div>
+          <div class="card" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 8px;">
+            <div class="tiny" style="text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;">From anywhere</div>
+            <div class="code" style="font-size: 11px; padding: 8px 10px;">brownie://run?recipe=Weekly%20numbers%20to%20Rohan</div>
+            <div class="btn q" style="align-self: flex-start;"><span>Copy link for Shortcuts</span></div>
+          </div>
+          <div class="btn q d" style="align-self: flex-start;"><span>Delete this recipe</span></div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ===== WHAT LEFT YOUR MAC ===== -->
+    <sc-if value="{{is.left}}" hint-placeholder-val="{{ false }}">
+      <div class="bar">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div class="title">What left your Mac</div>
+          <div class="tiny">Every request to the brain, byte for byte · kept 30 days</div>
+        </div>
+        <div class="seg"><div class="on">Last night</div><div>This week</div><div>All</div></div>
+      </div>
+      <div class="body" style="display: flex; flex-direction: column; gap: 18px;">
+        <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px;">
+          <div class="card" style="padding: 14px 16px;"><div class="tiny">Requests</div><div class="amt" style="font-size: 22px;">3</div><div class="tiny">to OpenAI · gpt-5.6-luna</div></div>
+          <div class="card" style="padding: 14px 16px;"><div class="tiny">Sent</div><div class="amt" style="font-size: 22px;">14.2 KB</div><div class="tiny">summaries and note titles</div></div>
+          <div class="card" style="padding: 14px 16px;"><div class="tiny">Raw messages, files, mail</div><div class="amt" style="font-size: 22px; color: var(--ok);">0 bytes</div><div class="tiny">never sent, by design</div></div>
+          <div class="card" style="padding: 14px 16px;"><div class="tiny">Names replaced</div><div class="amt" style="font-size: 22px;">0</div><div class="tiny">you chose to keep names</div></div>
+        </div>
+        <div class="card {{spot.log}}">
+          <div class="logrow" style="cursor: default;"><div class="tiny">When</div><div class="tiny">Purpose</div><div class="tiny">Size</div><div class="tiny">Came back</div><div></div></div>
+          <sc-for list="{{log}}" as="g" hint-placeholder-count="3">
+            <div class="logrow" onClick="{{g.toggle}}">
+              <div style="font-variant-numeric: tabular-nums;">{{g.when}}</div>
+              <div><div style="font-weight: 600;">{{g.purpose}}</div><div class="tiny">{{g.detail}}</div></div>
+              <div style="font-variant-numeric: tabular-nums;">{{g.size}}</div>
+              <div class="tiny">{{g.back}}</div>
+              <svg class="ico" viewBox="0 0 24 24" style="color: var(--ink3); transform: {{g.rot}};"><path d="M9 6l6 6-6 6"></path></svg>
+            </div>
+            <sc-if value="{{g.open}}" hint-placeholder-val="{{ false }}">
+              <div style="padding: 0 16px 14px 16px;"><div class="payload">{{g.payload}}</div><div class="tiny" style="margin-top: 6px;">This is the exact text, as sent. Anything that looks like a message here is a summary the reader wrote on this Mac — never the message itself.</div></div>
+            </sc-if>
+          </sc-for>
+        </div>
+        <div class="card" style="padding: 14px 18px; display: flex; align-items: center; gap: 14px;">
+          <div style="flex: 1;"><div style="font-weight: 600;">Want nothing to leave at all?</div><div class="tiny">Switch the brain to “This Mac only”. Cards get simpler and slower; this page reads 0 bytes, every night.</div></div>
+          <div class="btn" onClick="{{goBrain}}"><span>Brain settings</span></div>
+        </div>
+      </div>
+    </sc-if>
+
+
+    <!-- ===== ASK BROWNIE ===== -->
+    <sc-if value="{{is.ask}}" hint-placeholder-val="{{ false }}">
+      <div class="bar">
+        <div style="display: flex; align-items: center; gap: 12px;"><div class="title">Ask</div><div class="tiny">Answers from your notes · every claim links to where it came from · summaries only reach the brain</div></div>
+        <div class="seg"><div class="on">Today</div><div>Earlier</div></div>
+      </div>
+      <div class="body" style="display: flex; flex-direction: column; gap: 18px;">
+        <div class="msg me" style="align-self: flex-end;"><div class="bubble">What did I promise Meera?</div></div>
+        <div class="msg">
+          <div class="who" style="background: #1B2033; color: #F3E4C6;">B</div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div class="bubble">Two things, both still open. On Wednesday you said you’d send your notes on the mobile pricing layout <span class="cite" onClick="{{cite1}}"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"></path></svg>Slack · Meera · Wed</span> — she’s asked three times since <span class="cite" onClick="{{cite1}}"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"></path></svg>Slack · Fri</span>. And in Tuesday’s review you agreed to decide the free tier by the end of the month <span class="cite" onClick="{{cite2}}"><svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"></path></svg>Granola · Tue</span>.</div>
+            <div style="display: flex; gap: 6px;"><div class="btn" style="height: 24px;" onClick="{{goLoops}}"><span>Open the loop</span></div><div class="btn q" style="height: 24px;"><span>Draft the notes message</span></div></div>
+          </div>
+        </div>
+        <div class="msg me" style="align-self: flex-end;"><div class="bubble">Who is Karan?</div></div>
+        <div class="msg">
+          <div class="who" style="background: #1B2033; color: #F3E4C6;">B</div>
+          <div class="bubble">Priya’s brother; you met him on the 2024 Goa trip and he’s in the Goa group every year since. Runs a café in Indiranagar <span class="cite" onClick="{{cite3}}"><svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"></path></svg>People/Karan</span>. Last message from him: Friday, about his villa share <span class="cite" onClick="{{cite1}}"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"></path></svg>WhatsApp · Fri</span>. You haven’t replied.</div>
+        </div>
+        <div style="flex: 1;"></div>
+        <div class="ask">
+          <svg class="ico" viewBox="0 0 24 24" style="color: var(--accent);"><path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"></path><circle cx="12" cy="12" r="4"></circle></svg>
+          <div class="in">Ask about anyone, any promise, any plan…</div>
+          <div class="tiny">⌘⇧Space works too</div>
+          <div class="btn p"><span>Ask</span></div>
+        </div>
+        <div class="tiny" style="text-align: center;">The answer is built from your notes on this Mac; only the matching note excerpts go to the brain. Click any chip to open the original message or note.</div>
+      </div>
+    </sc-if>
+
+    <!-- ===== NOTES · wikilinks + Obsidian ===== -->
+    <sc-if value="{{is.knowledge}}" hint-placeholder-val="{{ false }}">
+      <div class="bar">
+        <div style="display: flex; align-items: center; gap: 12px;"><div class="title">Notes</div><div class="tiny">84 notes · plain Markdown on disk · an Obsidian vault</div></div>
+        <div style="display: flex; gap: 8px;"><div class="btn q" onClick="{{goKnowledgeSettings}}"><span>Vault settings</span></div><div class="btn"><svg viewBox="0 0 24 24"><path d="M12 3l7 4v10l-7 4-7-4V7z"></path></svg><span>Open in Obsidian</span></div></div>
+      </div>
+      <div class="body" style="display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 24px; align-content: start;">
+        <div class="rail" style="border: none; padding: 0;">
+          <div class="raili"><svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"></path></svg><span>README</span></div>
+          <div class="raili on"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg><span>People</span><span class="tiny" style="margin-left: auto;">14</span></div>
+          <div class="raili"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"></circle><circle cx="16" cy="8" r="3"></circle><path d="M2 21a6 6 0 0 1 12 0M10 21a6 6 0 0 1 12 0"></path></svg><span>Groups</span><span class="tiny" style="margin-left: auto;">6</span></div>
+          <div class="raili"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"></rect><path d="M8 7V5h8v2"></path></svg><span>Work</span><span class="tiny" style="margin-left: auto;">22</span></div>
+          <div class="raili"><svg viewBox="0 0 24 24"><path d="M3 12l9-9 9 9M5 10v10h14V10"></path></svg><span>Home</span><span class="tiny" style="margin-left: auto;">11</span></div>
+          <div class="raili"><svg viewBox="0 0 24 24"><path d="M3 21l18-9L3 3v7l12 2-12 2z"></path></svg><span>Trips</span><span class="tiny" style="margin-left: auto;">6</span></div>
+        </div>
+        <div class="card note" style="padding: 24px 28px; max-width: 720px;">
+          <div class="row" style="margin-bottom: 8px;"><div class="tiny">People/Karan.md · updated last night · <span style="color: var(--ok);">synced to iCloud Drive 3:41 AM</span></div><div class="chip"><span>7 backlinks</span></div></div>
+          <h3>Karan</h3>
+          <p><span class="wikilink">[[Priya]]</span>’s brother. Met on the <span class="wikilink">[[Goa 2024]]</span> trip; in the <span class="wikilink">[[Goa trip]]</span> group every year since. Runs a café in Indiranagar.</p>
+          <p><strong>Open:</strong> owes his villa share for <span class="wikilink">[[Goa October]]</span> — said “will send my share tonight” on Friday; nothing since. You haven’t reminded him.</p>
+          <p><strong>How he writes:</strong> short, late at night, voice notes when excited. Replies fast to jokes, slowly to logistics.</p>
+          <ul><li>Fri: “will send my share tonight” · WhatsApp</li><li>Thu: two messages about cricket tickets, unanswered</li><li>2 Sep: sent the villa link that Priya booked</li></ul>
+          <div class="tiny" style="margin-top: 10px;">Links in double brackets are Obsidian wikilinks — they work there and here. Edit this file anywhere; Brownie merges, never overwrites.</div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ===== SETTINGS ===== -->
+    <sc-if value="{{is.settings}}" hint-placeholder-val="{{ false }}">
+      <div class="bar">
+        <div class="title">Settings</div>
+        <div class="tabs">
+          <div class="tab {{tabs.knowledge}}" onClick="{{tabKnowledge}}">Knowledge</div>
+          <div class="tab {{tabs.brain}}" onClick="{{tabBrain}}">Brain</div>
+          <div class="tab {{tabs.hands}}" onClick="{{tabHands}}">Hands</div>
+          <div class="tab {{tabs.privacy}}" onClick="{{tabPrivacy}}">Privacy</div>
+          <div class="tab {{tabs.overnight}}" onClick="{{tabOvernight}}">Overnight</div>
+        </div>
+      </div>
+
+      <sc-if value="{{st.knowledge}}" hint-placeholder-val="{{ false }}">
+        <div class="body" style="display: flex; flex-direction: column; gap: 18px; max-width: 800px;">
+          <div class="h2">Your notes are a vault</div>
+          <div class="sub">Plain Markdown files with wikilinks. Open them in Obsidian, keep them on your phone, edit them anywhere — Brownie merges what it learns into what you wrote.</div>
+          <div class="card" style="padding: 4px 0;">
+            <div class="row" style="padding: 12px 16px;"><div><div style="font-weight: 600;">Where the vault lives</div><div class="tiny">~/Library/Application Support/Brownie/Knowledge Base · 84 notes · 1.2 MB</div></div><div style="display: flex; gap: 6px;"><div class="btn q"><span>Show in Finder</span></div><div class="btn q"><span>Move…</span></div></div></div>
+            <div class="row" style="padding: 12px 16px; border-top: 1px solid var(--sep);"><div><div style="font-weight: 600;">Open in Obsidian</div><div class="tiny">Adds the vault to Obsidian once; after that it’s just there. Backlinks, graph and search work on Brownie’s notes.</div></div><div class="btn"><span>Open in Obsidian</span></div></div>
+            <div class="row" style="padding: 12px 16px; border-top: 1px solid var(--sep);"><div><div style="font-weight: 600;">Keep a copy in iCloud Drive</div><div class="tiny">A mirror in iCloud Drive/Brownie, so Obsidian on your iPhone reads it. Apple’s sync, Apple’s encryption; nothing of Brownie’s online.</div></div><div class="tog {{kb.icloud}}" onClick="{{kbIcloud}}"></div></div>
+            <div class="row" style="padding: 12px 16px; border-top: 1px solid var(--sep);"><div><div style="font-weight: 600;">Wikilinks between notes</div><div class="tiny">[[Priya]] instead of plain text, so people, groups and trips connect. On by default.</div></div><div class="tog on"></div></div>
+          </div>
+
+          <div class="h2" style="margin-top: 6px;">Let your other AIs read your notes</div>
+          <div class="sub">Brownie can be a memory for Claude, ChatGPT, Cursor and Raycast on this Mac — through MCP, the standard they all speak. It runs <strong>on this Mac only</strong>: there is no server, no account, no address on the internet. Each app asks Brownie directly, and only the notes it asks for leave — to that app, on this machine.</div>
+          <div class="card" style="padding: 4px 0;">
+            <div class="row" style="padding: 12px 16px;"><div><div style="font-weight: 600;">Answer other apps</div><div class="tiny">Runs while Brownie is open. Off, and nothing can read a thing.</div></div><div class="tog {{kb.mcp}}" onClick="{{kbMcp}}"></div></div>
+          </div>
+          <sc-if value="{{kb.mcpOn}}" hint-placeholder-val="{{ true }}">
+            <div class="card">
+              <div class="approw" style="border-top: none; padding-bottom: 4px;"><div></div><div class="tiny" style="font-weight: 600;">App</div><div class="tiny" style="font-weight: 600;">What it may read</div><div class="tiny" style="font-weight: 600;">Status</div></div>
+              <div class="approw"><div class="appico" style="background: #D97757;">C</div><div><div style="font-weight: 600;">Claude Desktop</div><div class="tiny">Asked 14 times this week · last: “who is Karan”</div></div><div class="seg"><div class="on">Notes &amp; loops</div><div>Nothing</div></div><div class="st"><i style="background: var(--ok);"></i><span>Connected</span></div></div>
+              <div class="approw"><div class="appico" style="background: #10A37F;">G</div><div><div style="font-weight: 600;">ChatGPT</div><div class="tiny">Needs an address on the internet — Brownie won’t give it one. Use the ChatGPT app’s “Work with apps” on this Mac instead.</div></div><div class="seg"><div>Notes &amp; loops</div><div class="on">Nothing</div></div><div class="st"><i style="background: var(--ink3);"></i><span>Not possible</span></div></div>
+              <div class="approw"><div class="appico" style="background: #1d1d1f;">Cu</div><div><div style="font-weight: 600;">Cursor</div><div class="tiny">Not set up yet</div></div><div class="seg"><div>Notes &amp; loops</div><div class="on">Nothing</div></div><div class="btn q" style="height: 24px;"><span>Set up</span></div></div>
+              <div class="approw"><div class="appico" style="background: #FF6363;">R</div><div><div style="font-weight: 600;">Raycast</div><div class="tiny">Not set up yet</div></div><div class="seg"><div>Notes &amp; loops</div><div class="on">Nothing</div></div><div class="btn q" style="height: 24px;"><span>Set up</span></div></div>
+            </div>
+            <div class="card" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 8px;">
+              <div class="row"><div style="font-weight: 600;">What they asked</div><div class="btn q" style="height: 24px;"><span>Full log</span></div></div>
+              <div class="tiny">Every question another app asked and which notes it got, kept 30 days — the same honesty as “What left your Mac”.</div>
+              <div class="logrow" style="grid-template-columns: 70px minmax(0, 1fr) 160px; cursor: default;"><div class="tiny">11:52</div><div>Claude Desktop · search_notes “Karan villa”</div><div class="tiny">2 notes · People/Karan, Trips/Goa October</div></div>
+              <div class="logrow" style="grid-template-columns: 70px minmax(0, 1fr) 160px; cursor: default;"><div class="tiny">11:40</div><div>Claude Desktop · open_loops</div><div class="tiny">7 loops</div></div>
+              <div class="logrow" style="grid-template-columns: 70px minmax(0, 1fr) 160px; cursor: default;"><div class="tiny">Sun 9:15</div><div>Claude Desktop · who_is “Meera”</div><div class="tiny">1 note · People/Meera</div></div>
+            </div>
+            <div class="card" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 6px;">
+              <div style="font-weight: 600;">Set up an app by hand</div>
+              <div class="tiny">Any MCP-speaking app: add this to its config. It starts Brownie’s server on demand; nothing listens on a port.</div>
+              <div class="code" style="font-size: 11px; padding: 8px 10px;">{"mcpServers":{"brownie":{"command":"/Applications/Brownie.app/Contents/MacOS/Brownie","args":["mcp"]}}}</div>
+              <div class="tiny">Tools: search_notes · read_note · who_is · open_loops · recent_cards. Sensitive notes never answer, whatever the app asks.</div>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{st.overnight}}" hint-placeholder-val="{{ false }}">
+        <div class="body" style="display: flex; flex-direction: column; gap: 18px; max-width: 760px;">
+          <div class="h2">When Brownie reads</div>
+          <div class="card" style="padding: 4px 0;">
+            <div class="row" style="padding: 12px 16px;"><div><div style="font-weight: 600;">Every night</div><div class="tiny">Wakes the Mac, reads everything new, prepares the morning. Needs power.</div></div><div style="display: flex; gap: 6px; align-items: center;"><div class="field">3:00 AM</div><div class="tog on"></div></div></div>
+            <div class="row" style="padding: 12px 16px; border-top: 1px solid var(--sep);"><div><div style="font-weight: 600;">Also during the day</div><div class="tiny">Reads what’s new while you’re away from the Mac and it’s plugged in. Cards refresh; nothing is sent. Last check 12:40 · 4 new items.</div></div><div style="display: flex; gap: 6px; align-items: center;"><div class="seg"><div class="{{fresh.h1}}" onClick="{{freshH1}}">Every hour</div><div class="{{fresh.h3}}" onClick="{{freshH3}}">Every 3 hours</div><div class="{{fresh.off}}" onClick="{{freshOff}}">Only at night</div></div></div></div>
+            <div class="row" style="padding: 12px 16px; border-top: 1px solid var(--sep);"><div><div style="font-weight: 600;">Only when idle</div><div class="tiny">Waits until you haven’t touched the Mac for 10 minutes, so the reader never competes with you for the GPU.</div></div><div class="tog on"></div></div>
+            <div class="row" style="padding: 12px 16px; border-top: 1px solid var(--sep);"><div><div style="font-weight: 600;">Only on power</div><div class="tiny">Battery is never used for reading. Always on.</div></div><div class="tog on" style="opacity: 0.5;"></div></div>
+          </div>
+          <div class="card" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 8px;">
+            <div style="font-weight: 600;">What a daytime read costs</div>
+            <div class="tiny">The reader is on this Mac: free, about 4 minutes per hour of new messages. The brain is asked only when something new deserves a card — most hours, nothing leaves at all.</div>
+            <div class="row"><div class="tiny">Today so far</div><div class="tiny">5 checks · 23 items read · 1 card refreshed · 2 requests to the brain, 6 KB</div></div>
+          </div>
+          <div class="card" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 6px;">
+            <div style="font-weight: 600;">Missed a night?</div>
+            <div class="tiny">If the Mac was on battery or asleep at 3 AM, Brownie catches up the first time it’s idle and plugged in.</div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{st.brain}}" hint-placeholder-val="{{ true }}">
+        <div class="body" style="display: flex; flex-direction: column; gap: 18px; max-width: 760px;">
+          <div class="h2">Which model decides what matters</div>
+          <div class="sub">The reader on this Mac does all the reading. The brain sees only its summaries — or nothing at all.</div>
+          <div class="card">
+            <sc-for list="{{brains}}" as="b" hint-placeholder-count="4">
+              <div class="row" style="padding: 14px 16px; border-top: 1px solid var(--sep); cursor: pointer; background: {{b.bg}};" onClick="{{b.pick}}">
+                <div style="display: flex; gap: 12px; align-items: center;">
+                  <div class="dot" style="background: {{b.dotBg}}; border: 1px solid var(--cardb);"><sc-if value="{{b.on}}" hint-placeholder-val="{{ false }}"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"></path></svg></sc-if></div>
+                  <div><div style="font-weight: 600; display: flex; gap: 8px; align-items: center;"><span>{{b.name}}</span><sc-if value="{{b.local}}" hint-placeholder-val="{{ false }}"><span class="pill" style="height: 20px; font-size: 10.5px;"><svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg><span>Nothing leaves, ever</span></span></sc-if></div><div class="tiny">{{b.detail}}</div></div>
+                </div>
+                <div class="tiny">{{b.cost}}</div>
+              </div>
+            </sc-for>
+          </div>
+          <sc-if value="{{brainLocal}}" hint-placeholder-val="{{ false }}">
+            <div class="card" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; border-color: rgba(47,158,90,0.4);">
+              <div style="font-weight: 600;">This Mac only — what changes</div>
+              <div style="font-size: 12.5px;">Cards: fewer and plainer; drafts are shorter. Notes: same quality, since the reader was always local. Speed: the overnight run takes about twice as long. “What left your Mac” will read 0 bytes every night, and Gmail keeps working because it never went through the brain.</div>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{st.hands}}" hint-placeholder-val="{{ false }}">
+        <div class="body" style="display: flex; flex-direction: column; gap: 18px; max-width: 760px;">
+          <div class="h2">Hands, from anywhere</div>
+          <div class="card" style="padding: 4px 0;">
+            <div class="row" style="padding: 12px 16px;"><div><div style="font-weight: 600;">Apple Shortcuts</div><div class="tiny">Three actions: Ask Brownie, Run recipe, Open a loop. Use them in your own Shortcuts, from the menu bar, or with Siri.</div></div><div class="tog on"></div></div>
+            <div class="row" style="padding: 12px 16px; border-top: 1px solid var(--sep);"><div><div style="font-weight: 600;">Siri</div><div class="tiny">“Hey Siri, run weekly numbers” · “Hey Siri, ask Brownie what I promised Meera”</div></div><div class="tog on"></div></div>
+            <div class="row" style="padding: 12px 16px; border-top: 1px solid var(--sep);"><div><div style="font-weight: 600;">⌘⇧Space command bar</div><div class="tiny">Type a recipe’s name or a new goal. Hold right ⌘ to talk.</div></div><div class="tog on"></div></div>
+          </div>
+          <div class="h2" style="margin-top: 6px;">How Hands gets into each app</div>
+          <div class="sub">Most reliable way first; the screen is the last resort, and you can forbid it per app.</div>
+          <div class="card">
+            <sc-for list="{{apps}}" as="a" hint-placeholder-count="5">
+              <div class="row" style="padding: 11px 16px; border-top: 1px solid var(--sep);">
+                <div style="display: flex; align-items: center; gap: 10px; width: 160px;"><div class="avatar" style="border-radius: 7px; font-size: 10px;">{{a.ini}}</div><div style="font-weight: 600;">{{a.name}}</div></div>
+                <div class="ladder" style="flex: 1;"><div class="rung pick"><span>{{a.first}}</span></div><div class="rung {{a.secondCls}}"><span>{{a.second}}</span></div><div class="rung {{a.screenCls}}"><span>Screen</span></div></div>
+                <div class="tiny" style="width: 130px; text-align: right;">{{a.note}}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{st.privacy}}" hint-placeholder-val="{{ false }}">
+        <div class="body" style="display: flex; flex-direction: column; gap: 18px; max-width: 760px;">
+          <div class="h2">Privacy</div>
+          <div class="card" style="padding: 4px 0;">
+            <div class="row" style="padding: 12px 16px;"><div><div style="font-weight: 600;">Show me what left, every morning</div><div class="tiny">A line under the cards with last night’s bytes, and the full log one click away.</div></div><div class="tog on"></div></div>
+            <div class="row" style="padding: 12px 16px; border-top: 1px solid var(--sep);"><div><div style="font-weight: 600;">Replace names before sending</div><div class="tiny">People become “Person A” in what the brain sees; Brownie maps them back on this Mac. Cards read slightly stiffer.</div></div><div class="tog"></div></div>
+          </div>
+          <div class="card" style="padding: 16px 18px; display: flex; align-items: center; gap: 14px; border-color: rgba(217,79,69,0.35);">
+            <div style="flex: 1;"><div style="font-weight: 600;">Panic wipe</div><div class="tiny">Erase everything Brownie knows, right now. Also in the menu bar, always one click away. Hold to confirm; no undo, because there is no copy anywhere.</div></div>
+            <div class="btn d" onClick="{{panicOn}}"><span>Erase everything…</span></div>
+          </div>
+        </div>
+      </sc-if>
+    </sc-if>
+
+  </div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"route":{"editor":"enum","default":"teach-saved","options":["foryou","came-back","loops","ask","knowledge","brief","weekly","recipes","edit","teach","teach-watching","teach-tune","teach-saved","left","settings-knowledge","settings-brain","settings-brain-local","settings-hands","settings-privacy","settings-overnight","panic"],"section":"Screen"},"dark":{"editor":"boolean","default":false,"section":"Theme"},"compact":{"editor":"boolean","default":false,"section":"Window"},"walkthrough":{"editor":"enum","default":"off","options":["on","off"],"section":"First time"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  state = { route: null, tab: null, card: 0, loopTab: 'mine', teach: null, brainIx: null, panic: null, ftueDone: null, logOpen: null, teachOpts: null, editSteps: null, addKind: 1 };
+
+  renderVals() {
+    const p = this.props;
+    const initial = p.route ?? 'foryou';
+    let route = this.state.route ?? initial;
+    let cardIx = this.state.card;
+    if (route === 'came-back') { route = 'card'; cardIx = 0; }
+    let teach = this.state.teach ?? ({ 'teach': 1, 'teach-watching': 2, 'teach-tune': 3, 'teach-saved': 4 }[initial] ?? 1);
+    if (route.startsWith('teach')) route = 'teach';
+    const panic = this.state.panic ?? (initial === 'panic');
+    let tab = this.state.tab ?? (initial.startsWith('settings-') ? initial.split('-')[1] : 'brain');
+    if (route === 'panic') { route = 'settings'; tab = 'privacy'; }
+    if (route.startsWith('settings')) route = 'settings';
+    const brainIx = this.state.brainIx ?? (initial === 'settings-brain-local' ? 3 : 0);
+
+    const go = (r) => () => this.setState({ route: r, panic: false });
+    const is = {}; ['foryou','card','loops','ask','brief','weekly','recipes','edit','teach','left','knowledge','settings'].forEach(k => is[k] = (route === k));
+    const nav = { foryou: (is.foryou || is.card || is.brief || is.weekly) ? 'on' : '', loops: is.loops ? 'on' : '', ask: is.ask ? 'on' : '', knowledge: is.knowledge ? 'on' : '', recipes: (is.recipes || is.teach || is.edit) ? 'on' : '', settings: is.settings ? 'on' : '' };
+    const st = { knowledge: tab === 'knowledge', brain: tab === 'brain', hands: tab === 'hands', privacy: tab === 'privacy', overnight: tab === 'overnight' };
+    const tabs = {}; Object.keys(st).forEach(k => tabs[k] = st[k] ? 'on' : '');
+    const kbs = this.state.kb ?? { icloud: true, mcp: true };
+    const kb = { icloud: kbs.icloud ? 'on' : '', mcp: kbs.mcp ? 'on' : '', mcpOn: kbs.mcp };
+    const fr = this.state.fresh ?? 'h1';
+    const fresh = { h1: fr === 'h1' ? 'on' : '', h3: fr === 'h3' ? 'on' : '', off: fr === 'off' ? 'on' : '' };
+    const setTab = (t) => () => this.setState({ tab: t, route: 'settings', panic: false });
+
+    // First-time walkthrough: one keyed tip per new screen, completes only when the user does the action.
+    const done = this.state.ftueDone ?? {};
+    const mark = (k) => ({ ...done, [k]: true });
+    const ftueOn = (p.walkthrough ?? 'on') === 'on';
+    const order = ['loops', 'recipes', 'left'];
+    const tips = {
+      loops:   { title: 'Promises, both ways.', body: 'What you said you’d do and what others said they’d do for you, pulled from your chats. A loop closes by itself when the next read sees it done.', action: 'Switch to “Owed to you”', left: 'auto', top: '62px', right: '20px', ax: 'auto', ay: '-7px', ar: '60px' },
+      recipes: { title: 'Teach it once.', body: 'Do something the way you always do, and Hands turns it into a recipe it can repeat — on a schedule, or when you ask.', action: 'Press “Teach Hands something”', left: 'auto', top: '62px', right: '20px', ax: 'auto', ay: '-7px', ar: '60px' },
+      left:    { title: 'Nothing is hidden about what goes out.', body: 'Every request to the brain is here, byte for byte. Open one and read exactly what was sent.', action: 'Open any row', left: '28px', top: '200px', right: 'auto', ax: '24px', ay: '-7px', ar: 'auto' }
+    };
+    let ftueKey = null;
+    if (ftueOn) {
+      if (is.loops && !done.loops) ftueKey = 'loops';
+      else if (is.recipes && !done.recipes) ftueKey = 'recipes';
+      else if (is.left && !done.left) ftueKey = 'left';
+    }
+    const ftue = { active: !!ftueKey, n: order.indexOf(ftueKey) + 1, skip: () => this.setState({ ftueDone: mark(ftueKey) }), ...(tips[ftueKey] ?? {}) };
+    const spot = { looptabs: ftueKey === 'loops' ? 'spot' : '', teach: ftueKey === 'recipes' ? 'spot' : '', log: ftueKey === 'left' ? 'spot' : '' };
+
+    const urg = { high: '#d94f45', medium: '#c9853a', low: '#8e8e93' };
+    const allCards = [
+      { title: 'Priya still hasn’t replied about the villa deposit', source: 'WhatsApp', urgency: 'high', back: true, why: 'You asked on Thursday whether she wants the deposit split three ways. Two reads later there is no answer, and the booking holds until Tuesday.', actionLabel: 'Send a nudge', due: 'Came back · fired 3 days ago', fireLabel: 'Send to Priya', draftLabel: 'Draft nudge', method: 'WhatsApp link', draft: 'Hey — no rush, but the villa holds only till Tuesday. Split three ways still ok with you?', recipe: ['Open WhatsApp on the chat with Priya, from a link', 'Put the nudge in the box', 'Stop. You press Send'], evidence: [{ src: 'WhatsApp · Priya', when: 'Thu 9:14 PM', text: 'You asked about splitting the deposit. No reply since.' }, { src: 'Gmail · villa booking', when: 'Wed', text: 'Confirmation says the hold expires Tuesday 23 Sep.' }] },
+      { title: 'Prep for 4 PM with Rohan and Meera', source: 'Calendar', urgency: 'high', back: false, why: 'Pricing review at 4. You have two open loops with Rohan and one with Meera, and Tuesday’s notes list what he expects.', actionLabel: 'Open the brief', due: 'Today, 4:00 PM', fireLabel: 'Open the brief', draftLabel: 'One-page brief', method: 'Built on this Mac', draft: '', recipe: [], evidence: [] , brief: true },
+      { title: 'Karan still hasn’t sent his villa share', source: 'WhatsApp', urgency: 'medium', back: false, why: 'You paid the full deposit on Friday; Karan wrote “will send my share tonight” and hasn’t. He is online most evenings.', actionLabel: 'Remind him', due: 'Since Friday', fireLabel: 'Send to Karan', draftLabel: 'Draft reminder', method: 'WhatsApp link', draft: 'Hey — whenever you get a sec, the villa share. UPI’s fine.', recipe: ['Open WhatsApp on the chat with Karan, from a link', 'Put the reminder in the box', 'Stop. You press Send'], evidence: [{ src: 'WhatsApp · Karan', when: 'Fri 11:02 PM', text: 'Said he’d send his share tonight.' }, { src: 'WhatsApp · Goa trip', when: 'Fri', text: 'You confirmed you’d paid the full deposit.' }] },
+      { title: 'Meera is waiting on the mobile notes', source: 'Slack', urgency: 'medium', back: false, why: 'She asked three times; your last “tomorrow” was Wednesday. The desktop mocks she sent are in Drive.', actionLabel: 'Send your notes', due: 'Promised 4 days ago', fireLabel: 'Send to Meera', draftLabel: 'Draft message', method: 'Slack API', draft: 'Sorry for the wait — notes on the mobile layout are in the doc, five points, nothing structural. Happy to talk through them before 4.', recipe: ['Open Slack DM with Meera through its API', 'Put the message in the box', 'Stop. You press Send'], evidence: [{ src: 'Slack · Meera', when: 'Fri', text: 'Third ask for the mobile notes.' }, { src: 'Slack · you', when: 'Wed', text: 'You said “tomorrow”.' }] }
+    ];
+    const cards = allCards.map((c, i) => ({ ...c, urgColor: urg[c.urgency], open: () => this.setState({ route: c.brief ? 'brief' : 'card', card: i }) }));
+    const card = allCards[cardIx] ?? allCards[0];
+    const recipe = card.recipe.map((text, i) => ({ n: i + 1, text }));
+
+    const lt = this.state.loopTab;
+    const loopTabs = { mine: lt === 'mine' ? 'on' : '', theirs: lt === 'theirs' ? 'on' : '', closed: lt === 'closed' ? 'on' : '' };
+    const setLoop = (t) => () => this.setState({ loopTab: t, ftueDone: mark('loops') });
+    const loopData = {
+      mine: [
+        ['M', 'Meera', 'notes on the mobile layout', '“tomorrow” — Wednesday', 'Slack DM · Wed', 'Overdue 4 days', 'bad', 'Open', 'Send now', 3],
+        ['R', 'Rohan', 'pricing page live before the review', 'agreed Tuesday, late evening', 'WhatsApp · Tue', 'Today 4 PM', 'warn', 'Open · 3 tickets', 'Brief', 1],
+        ['A', 'Amma', 'call on Sunday', '“I’ll call Sunday, promise”', 'iMessage · Thu', 'Today', 'warn', 'Open', 'Call', null],
+        ['L', 'Landlord', 'answer about the lease', 'he asked whether you’re renewing', 'WhatsApp · 9 Sep', 'No date', 'ink3', 'Open', 'Reply', null]
+      ],
+      theirs: [
+        ['K', 'Karan', 'his villa share', '“will send my share tonight”', 'WhatsApp · Fri', 'Since Friday', 'warn', 'Open', 'Remind', 2],
+        ['P', 'Priya', 'answer on splitting the deposit', 'you asked Thursday', 'WhatsApp · Thu', 'Booking holds till Tue', 'bad', 'Came back', 'Nudge', 0],
+        ['S', 'Sunil', 'the filing confirmation', '“will confirm once uploaded”', 'Gmail · Mon', 'By 30 Sep', 'ink3', 'Open', 'Ask', null]
+      ],
+      closed: [
+        ['A', 'Amma', 'the scan report', 'sent Tuesday · she replied with a heart', 'iMessage', 'Closed Tue', 'ok', 'Done', 'View', null],
+        ['P', 'Priya', 'Goa dates', '3–6 Oct, villa booked', 'WhatsApp', 'Closed Thu', 'ok', 'Done', 'View', null],
+        ['S', 'Sunil', 'Form 16', 'emailed Monday', 'Gmail', 'Closed Mon', 'ok', 'Done', 'View', null],
+        ['R', 'Rohan', 'weekly numbers', 'sent by the recipe, Mon 9:02', 'WhatsApp', 'Closed Mon', 'ok', 'Done', 'View', null],
+        ['M', 'Meera', 'desktop mocks', 'she sent them Friday', 'Drive', 'Closed Fri', 'ok', 'Done', 'View', null]
+      ]
+    };
+    const col = { bad: '#d94f45', warn: '#c9853a', ok: '#2f9e5a', ink3: 'var(--ink3)' };
+    const loops = loopData[lt].map(([ini, who, what, quote, where, due, c, status, actLabel, cardI]) => ({ ini, who, what, quote, where, due, dueColor: c === 'ink3' ? 'var(--ink2)' : col[c], stColor: col[c], status, actLabel, act: () => this.setState(cardI === null ? { route: 'loops' } : cardI === 1 ? { route: 'brief' } : { route: 'card', card: cardI }) }));
+
+
+    const recipes = [
+      { name: 'Weekly numbers to Rohan', what: 'Signups, MRR and churn from last week’s notes, as a WhatsApp message. Waits for you at Send.', when: 'Every Monday, 9 AM', method: 'WhatsApp link', runs: 'Ran 3 times · last Mon 9:02' },
+      { name: 'File the invoice', what: 'When a PDF invoice lands in Downloads: rename it, move it to Finance, draft the email to Sunil.', when: 'When a file arrives', method: 'Finder + Mail', runs: 'Ran 11 times · last Thu' },
+      { name: 'Book the usual cab', what: 'Airport cab for the time in the calendar event, your usual pickup, pay-on-arrival. Stops at Confirm.', when: 'When you ask', method: 'Screen', runs: 'Ran once · needs the screen' }
+    ];
+
+    const teachSt = { s1: teach === 1, s2: teach === 2, s3: teach === 3, s4: teach === 4, t1: teach === 1 ? 'on' : '', t2: teach === 2 ? 'on' : '', t3: teach === 3 ? 'on' : '', t4: teach === 4 ? 'on' : '', stepLabel: ['', 'Step 1 of 3 · show it once', 'Step 2 of 3 · Hands is watching', 'Step 3 of 3 · what changes each time', 'Done'][teach] };
+    const to = this.state.teachOpts ?? { p1: 'a', p2: 'a', w: '1' };
+    const seg = (k, v) => ({ ['' + k + v]: to[k] === v ? 'on' : '' });
+    Object.assign(teachSt, seg('p1', 'a'), seg('p1', 'b'), seg('p2', 'a'), seg('p2', 'b'), seg('w', '1'), seg('w', '2'));
+    const setOpt = (k, v) => () => this.setState({ teachOpts: { ...to, [k]: v } });
+    const captured = [
+      { text: 'Opened WhatsApp', how: 'app launch' },
+      { text: 'Opened the chat “Rohan”', how: 'clicked row “Rohan” in the chat list' },
+      { text: 'Typed “Numbers for the week: 41 signups, ₹1.2L MRR, 3 churned”', how: 'text field “Type a message”' }
+    ];
+
+    // Recipe editor: a live list the user can reorder and trim.
+    const defaultSteps = [
+      { kind: 'launch', app: 'WhatsApp', target: 'WhatsApp', role: '' },
+      { kind: 'click', app: 'WhatsApp', target: 'Rohan', role: 'row in the chat list' },
+      { kind: 'type', app: 'WhatsApp', target: 'Type a message', role: '', text: 'Numbers for the week: 41 signups, ₹1.2L MRR, 3 churned' }
+    ];
+    const es = this.state.editSteps ?? defaultSteps;
+    const setSteps = (xs) => this.setState({ editSteps: xs });
+    const editSteps = es.map((x, i) => ({ ...x, n: i + 1, isLaunch: x.kind === 'launch', isClick: x.kind === 'click', isType: x.kind === 'type', isKey: x.kind === 'key',
+      verb: { launch: 'Open', click: 'Press', type: 'Type', key: 'Key' }[x.kind], line: 'Open ' + x.app,
+      up: () => { if (i > 0) { const a = es.slice(); [a[i - 1], a[i]] = [a[i], a[i - 1]]; setSteps(a); } },
+      down: () => { if (i < es.length - 1) { const a = es.slice(); [a[i + 1], a[i]] = [a[i], a[i + 1]]; setSteps(a); } },
+      remove: () => setSteps(es.filter((_, j) => j !== i)) }));
+    const ak = this.state.addKind;
+    const add = { t1: ak === 1 ? 'on' : '', t2: ak === 2 ? 'on' : '', t3: ak === 3 ? 'on' : '', t4: ak === 4 ? 'on' : '', placeholder: ['', 'the text to type', 'the button’s title', 'e.g. cmd+n', 'app name'][ak] };
+    const addStep = () => setSteps(es.concat([[null, { kind: 'type', app: 'WhatsApp', target: 'Type a message', role: '', text: '…' }, { kind: 'click', app: 'WhatsApp', target: 'Attach', role: 'button' }, { kind: 'key', app: 'WhatsApp', target: 'cmd+n', role: '' }, { kind: 'launch', app: 'Mail', target: 'Mail', role: '' }][ak]]));
+
+    const brainList = [
+      ['ChatGPT / OpenAI', 'gpt-5.6-luna · your own key', 'Your key · ~₹35 a night', false],
+      ['Claude', 'claude-opus-5 · your own key', 'Your key · ~₹40 a night', false],
+      ['OpenRouter', 'Any model, your key', 'Your key', false],
+      ['This Mac only', 'Apple’s on-device model for judging, Gemma 4 for drafts. Slower, plainer cards, nothing sent.', 'Free', true],
+      ['No brain', 'Notes only. No cards, no drafts, no Hands.', 'Free', false]
+    ];
+    const brains = brainList.map(([name, detail, cost, local], i) => ({ name, detail, cost, local, on: i === brainIx, bg: i === brainIx ? 'var(--accent-soft)' : 'transparent', dotBg: i === brainIx ? 'var(--ok)' : 'var(--card)', pick: () => this.setState({ brainIx: i }) }));
+    const brain = brainIx === 3 ? 'This Mac only' : brainList[brainIx][0];
+
+    const apps = [
+      ['W', 'WhatsApp', 'App link', 'Screen', 'off', 'pick', 'link opens the chat'],
+      ['iM', 'Messages', 'AppleScript', '—', 'off', 'off', 'never needs the screen'],
+      ['M', 'Mail', 'AppleScript', '—', 'off', 'off', 'never needs the screen'],
+      ['S', 'Slack', 'API (MCP)', 'Screen', 'off', 'pick', 'if the API is down'],
+      ['L', 'Linear', 'API (MCP)', '—', 'off', 'off', 'never needs the screen'],
+      ['Sf', 'Safari', 'AppleScript', 'Screen', 'off', 'pick', 'forms need the screen'],
+      ['U', 'Uber', 'Screen', '—', 'off', 'pick', 'screen only · you can forbid']
+    ].map(([ini, name, first, second, secondCls, screenCls, note]) => ({ ini, name, first, second, secondCls: second === '—' ? 'off' : secondCls, screenCls: screenCls === 'pick' ? '' : 'off', note }));
+
+    const lo = this.state.logOpen ?? (ftueOn && !done.left ? {} : { 0: true });
+    const logData = [
+      ['3:08 AM', 'Judge what matters', '24 summaries from last night, the calendar for 2 days, titles of 9 notes', '6.1 KB', '8 candidates', 'PURPOSE: judge\nCALENDAR (next 48h): Mon 16:00 Pricing review (Rohan, Meera) · Wed 11:30 Dr. Menon\nNOTE TITLES: People/Rohan, People/Meera, People/Karan, People/Priya, Trips/Goa October, Money/Subscriptions, Work/Pricing page, Home/Lease, Admin/Taxes\n\nSUMMARIES (written on this Mac by the reader):\n[whatsapp · Priya · Thu] The user asked whether to split the villa deposit three ways. No reply yet. Booking hold ends Tuesday.\n[whatsapp · Karan · Fri] Karan said he would send his share of the villa tonight. Amount withheld.\n[slack · Meera · Fri] Meera asked for the mobile layout notes again (third time). The user previously said “tomorrow” on Wednesday.\n[imessage · Amma · Thu] The user promised to call on Sunday.\n[gmail · Adobe · Thu] Renewal notice; renews Friday. Amount withheld.\n[whatsapp · Founders BLR · Fri] 14 messages about a fundraising event; the user was not mentioned.\n…18 more'],
+      ['3:14 AM', 'Prepare the cards', '4 chosen items, the People notes they touch, your writing samples (12 short messages you sent)', '5.4 KB', '4 cards, 3 drafts'],
+      ['3:19 AM', 'Update your notes', 'Diffs for 6 notes · new facts only', '2.7 KB', '6 notes updated']
+    ];
+    const log = logData.map(([when, purpose, detail, size, back, payload], i) => ({ when, purpose, detail, size, back, payload: payload ?? 'PURPOSE: ' + purpose.toLowerCase() + '\n' + detail + '\n(full text as sent — 5 KB)', open: !!lo[i], rot: lo[i] ? 'rotate(90deg)' : 'none', toggle: () => this.setState({ logOpen: { ...lo, [i]: !lo[i] }, ftueDone: mark('left') }) }));
+
+    return {
+      themeClass: p.dark ? 'dark' : '', compactClass: p.compact ? 'compact' : '', route, is, nav,
+      editSteps, editCount: es.length, add, addStep, addT1: () => this.setState({ addKind: 1 }), addT2: () => this.setState({ addKind: 2 }), addT3: () => this.setState({ addKind: 3 }), addT4: () => this.setState({ addKind: 4 }), goEdit: go('edit'), st, tabs, brain, panic, ftue, spot,
+      cardCount: cards.length, loopCount: 7, cards, card, recipe,
+      goForYou: go('foryou'), goLoops: go('loops'), goWeekly: go('weekly'), goRecipes: go('recipes'), goTeach: () => this.setState({ route: 'teach', teach: 1, ftueDone: mark('recipes') }), goLeft: go('left'), goKnowledge: go('knowledge'), goSettings: go('settings'),
+      goBrain: setTab('brain'), goHands: setTab('hands'), tabBrain: setTab('brain'), tabKnowledge: setTab('knowledge'), tabOvernight: setTab('overnight'), goKnowledgeSettings: setTab('knowledge'), goAsk: go('ask'),
+      kb, kbIcloud: () => this.setState({ kb: { ...kbs, icloud: !kbs.icloud } }), kbMcp: () => this.setState({ kb: { ...kbs, mcp: !kbs.mcp } }),
+      fresh, freshH1: () => this.setState({ fresh: 'h1' }), freshH3: () => this.setState({ fresh: 'h3' }), freshOff: () => this.setState({ fresh: 'off' }),
+      cite1: go('loops'), cite2: go('knowledge'), cite3: go('knowledge'), tabHands: setTab('hands'), tabPrivacy: setTab('privacy'),
+      loopTabs, loopMine: setLoop('mine'), loopTheirs: setLoop('theirs'), loopClosed: setLoop('closed'), loops,
+      recipes,
+      teach: teachSt, teachRecord: () => this.setState({ teach: 2 }), teachStop: () => this.setState({ teach: 3 }), teachSave: () => this.setState({ teach: 4 }),
+      teachP1a: setOpt('p1', 'a'), teachP1b: setOpt('p1', 'b'), teachP2a: setOpt('p2', 'a'), teachP2b: setOpt('p2', 'b'), teachW1: setOpt('w', '1'), teachW2: setOpt('w', '2'),
+      captured, brains, brainLocal: brainIx === 3, apps, log,
+      panicOn: () => this.setState({ panic: true }), panicOff: () => this.setState({ panic: false }), panicDone: () => this.setState({ panic: false, route: 'foryou' })
+    };
+  }
+}
+</script>
+</body>
+</html>

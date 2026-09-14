@@ -18,6 +18,11 @@ public enum SettingKey {
     public static let overnightEnabled = "overnight.enabled"
     public static let overnightTime = "overnight.time"            // "03:00"
     public static let catchUp = "overnight.catchUp"
+    public static let daytime = "overnight.daytime"
+    public static let icloudMirror = "knowledge.icloudMirror"    // mirror the vault into iCloud Drive/Brownie after each run
+    public static let mcpEnabled = "knowledge.mcp"               // answer other apps over MCP
+    public static let mcpLog = "knowledge.mcpLog"
+    public static let askHistory = "proactive.ask"                // JSON [Asker.Answer], newest last, capped                // JSON [MCPAsk], newest first, capped              // h1 | h3 | off — reads during the day while idle and on power
     public static let appearance = "app.appearance"               // system | light | dark
     public static let menuBarIcon = "app.menuBarIcon"
     public static let onboardingDone = "app.onboardingDone"
@@ -29,5 +34,14 @@ public enum SettingKey {
     public static let localModel = "reader.model"                 // E4B | E2B
     public static let diagnosticsCrash = "diag.crash"
     public static let diagnosticsUsage = "diag.usage"
+    public static let loops = "proactive.loops"                   // JSON [Loop]
+    public static let recipesTaught = "hands.recipes"             // JSON [TaughtRecipe]
+    public static let briefs = "proactive.briefs"                 // JSON [Brief]
+    public static let briefsEnabled = "proactive.briefs.enabled"
+    public static func weekly(_ isoWeek: String) -> String { "proactive.weekly.\(isoWeek)" }
+    public static let weeklyLatest = "proactive.weekly.latest"    // the iso week of the newest letter
+    public static let showSendLine = "privacy.showSendLine"
+    public static let replaceNames = "privacy.replaceNames"
+    public static let screenForbidden = "hands.screenForbidden"   // JSON [String] app names Hands may not drive by screen
     public static func walkthrough(_ key: String) -> String { "walkthrough.\(key)" }
 }

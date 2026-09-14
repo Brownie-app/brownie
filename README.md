@@ -29,7 +29,7 @@ swift run browniectl read files ~/Downloads   # judge a folder with the reader f
 | Path | What |
 |---|---|
 | `docs/spec/` | The behavioural spec — start with `00-overview.md` |
-| `design/` | The design canvas source (`*.dc.html`) and the published prototype |
+| `design/` | The design canvas source (`*.dc.html`); `design/v2/` is the second prototype |
 | `Sources/Domain` | Value types and protocols; depends on nothing |
 | `Sources/Ingest` | The reading pipeline + the reader's prompts (`Prompts/*.md`) |
 | `Sources/Inference` | LiteRT-LM reader, model download |
@@ -57,6 +57,10 @@ swift run browniectl read files ~/Downloads   # judge a folder with the reader f
 6. Run numbers are honest: read · kept · not worth keeping · sensitive erased.
 7. No account; the Mac's copy is the truth; deletion is total.
 8. Walkthroughs play once.
+
+## Beyond the morning cards
+
+**Loops** — promises in both directions, found in your chats; a card you fired comes back if the next read sees no reply. **Pre-meeting briefs** ten minutes before a meeting, from your People notes. **A Sunday letter** about the week. **Recipes** — teach Hands something by doing it once; it replays it by app link, accessibility tree, or (only where you allow) the screen, and stops before Send; runnable from ⌘⇧Space, Shortcuts and Siri (`brownie://run?recipe=…`). **What left your Mac** — every request to the brain, byte for byte. **This Mac only** — the reader doubles as the brain, nothing sent. **Panic wipe** — hold to erase everything. **Ask** — questions answered from your notes with citations that open the original. **The vault** — the knowledge base is an Obsidian vault with `[[wikilinks]]`, Open in Obsidian, and an iCloud Drive mirror for the phone. **Brownie as an MCP server** — `Brownie mcp` lets Claude Desktop, Cursor and any MCP app read your notes, on this Mac only, with a log of what they asked. **Daytime reads** — every hour or three while idle and on power. See `docs/spec/12-loops-briefs-recipes-trust.md`.
 
 ## Sources
 

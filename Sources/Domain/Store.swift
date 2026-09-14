@@ -33,7 +33,7 @@ public struct BucketCursor: Sendable, Equatable {
     public var isComplete: Bool { mark != nil && floor == nil }
 }
 
-public enum RunTrigger: String, Codable, Sendable { case overnight, manual, catchUp, firstRun, test }
+public enum RunTrigger: String, Codable, Sendable { case overnight, manual, catchUp, firstRun, test, daytime }
 
 public enum RunOutcome: Codable, Sendable, Equatable {
     case ran(cards: Int)
@@ -100,6 +100,10 @@ public protocol RunStore: Sendable {
     func wipeSummaries() async throws
     // drop log
     func drops(since: Date) async throws -> [DropRecord]
+    // what left the Mac
+    func logSend(purpose: String, model: String, bytes: Int, detail: String, cameBack: String, payload: String, at: Date) async throws -> Int64
+    func setSendResult(_ id: Int64, cameBack: String) async throws
+    func sendLog(since: Date) async throws -> [SendRecord]
     // key/value
     func value(_ key: String) async throws -> String?
     func setValue(_ key: String, _ value: String?) async throws

@@ -11,7 +11,11 @@ public actor OvernightScheduler {
         public var hour: Int
         public var minute: Int
         public var catchUp: Bool
-        public init(enabled: Bool = true, hour: Int = 3, minute: Int = 0, catchUp: Bool = true) { self.enabled = enabled; self.hour = hour; self.minute = minute; self.catchUp = catchUp }
+        /// Daytime reads: every hour (h1), every three (h3), or only at night (off). Idle + AC only.
+        public var daytime: String
+        public init(enabled: Bool = true, hour: Int = 3, minute: Int = 0, catchUp: Bool = true, daytime: String = "h1") { self.enabled = enabled; self.hour = hour; self.minute = minute; self.catchUp = catchUp; self.daytime = daytime }
+        public var daytimeInterval: TimeInterval? { daytime == "h1" ? 3600 : (daytime == "h3" ? 3 * 3600 : nil) }
+        public static let idleMinutesForDaytime = 10
         public static func parse(_ s: String?) -> (Int, Int) {
             let p = (s ?? "03:00").split(separator: ":").compactMap { Int($0) }
             return p.count == 2 ? (p[0], p[1]) : (3, 0)
@@ -25,19 +29,40 @@ public actor OvernightScheduler {
     private let run: RunBlock
     private let store: any RunStore
     private var loop: Task<Void, Never>?
+    private var dayLoop: Task<Void, Never>?
     private var config = Config()
+    /// The app tells the scheduler when any run happens, so daytime reads count from the last one.
+    public private(set) var lastRunAt: Date?
+    public func noteRun(at d: Date) { lastRunAt = d }
     private var lastFiredNight: String?
 
     public init(store: any RunStore, run: @escaping RunBlock) { self.store = store; self.run = run }
 
     public func start(_ c: Config) {
         config = c
-        loop?.cancel()
+        loop?.cancel(); dayLoop?.cancel()
+        if c.daytimeInterval != nil { dayLoop = Task { await self.daytimeLoop() } }
         guard c.enabled else { try? helper.cancelWakes(); log.info("disabled"); return }
         loop = Task { await self.mainLoop() }
     }
 
-    public func stop() { loop?.cancel(); try? helper.cancelWakes() }
+    public func stop() { loop?.cancel(); dayLoop?.cancel(); try? helper.cancelWakes() }
+
+    /// Between 7 AM and midnight: when the last run is older than the interval, the Mac is on power and
+    /// nobody has touched it for ten minutes, read what's new. Checked once a minute.
+    private func daytimeLoop() async {
+        while !Task.isCancelled {
+            try? await Task.sleep(nanoseconds: 60_000_000_000)
+            guard let interval = config.daytimeInterval else { return }
+            let hour = Calendar.current.component(.hour, from: Date())
+            guard hour >= 7, hour < 24, PowerState.isOnAC, PowerState.idleSeconds >= Double(Config.idleMinutesForDaytime * 60) else { continue }
+            guard Date().timeIntervalSince(lastRunAt ?? .distantPast) >= interval else { continue }
+            log.info("daytime read (idle \(Int(PowerState.idleSeconds / 60)) min)")
+            lastRunAt = Date()
+            let outcome = await run(.daytime)
+            log.info("daytime outcome: \(outcome)")
+        }
+    }
 
     public func nextFire(from now: Date = Date()) -> Date {
         var comps = Calendar.current.dateComponents([.year, .month, .day], from: now)

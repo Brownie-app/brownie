@@ -37,14 +37,16 @@ final class AppModel: ObservableObject {
     let download: ModelDownload
 
     // ── state the views read ───────────────────────────────────────────────────────
-    enum Screen: Hashable { case forYou, notes, graph, excluded, settings }
-    enum Overlay: Hashable { case none, card(String), firing(String), processing, letter }
+    enum Screen: Hashable { case forYou, ask, loops, recipes, sendLog, notes, graph, excluded, settings }
+    enum Overlay: Hashable { case none, card(String), firing(String), processing, letter, weekly, brief(String), teach, recipeRun(String), editRecipe(String) }
     @Published var screen: Screen = .forYou
     /// A note the Knowledge screen should open on arrival (set by Graph → Open note, card evidence, etc.).
     @Published var pendingNote: String?
     func openNote(_ relativePath: String) { pendingNote = relativePath; overlay = .none; screen = .notes }
     @Published var overlay: Overlay = .none
     @Published var settingsTab = 0
+    enum SettingsTab: Int { case sources = 0, knowledge, brain, hands, privacy, overnight, about }
+    func openSettings(_ t: SettingsTab) { overlay = .none; screen = .settings; settingsTab = t.rawValue }
     @Published var appearance: String = "system"
 
     @Published var cards: [Card] = []
@@ -90,8 +92,37 @@ final class AppModel: ObservableObject {
     let allSources: [any Source]
     @Published var mcpManifests: [MCPManifest] = []
 
+    // ── v2: loops, what left, briefs, the Sunday letter, taught recipes ─────────────
+    @Published var loops: [Loop] = []
+    @Published var sendLog: [SendRecord] = []
+    @Published var weekly: String?
+    @Published var weeklyWeek: String?
+    @Published var weeklySeen = true
+    @Published var briefs: [Brief] = []
+    @Published var briefsEnabled = true
+    @Published var recipes: [TaughtRecipe] = []
+    @Published var teach = TeachState()
+    @Published var recipeRun = RecipeRunState()
+    @Published var showSendLine = true
+    @Published var screenForbidden: Set<String> = []
+    @Published var nudging: String?
+    @Published var icloudMirror = false
+    @Published var mcpEnabled = false
+    @Published var mcpAsks: [MCPAsk] = []
+    @Published var asks: [Asker.Answer] = []
+    @Published var asking = false
+    @Published var panicAsked = false
+    let sendLogger: SendLogger
+    let recorder = Recorder()
+    var briefTimer: Timer?
+    var recipeTimer: Timer?
+    var recipeTask: Task<Void, Never>?
+
     init() {
         store = try! SQLiteRunStore(path: Paths.store.path)
+        let st = store
+        sendLogger = SendLogger(sink: { p, model, bytes, detail, payload in try? await st.logSend(purpose: p, model: model, bytes: bytes, detail: detail, cameBack: "…", payload: payload, at: Date()) },
+                                result: { id, back in try? await st.setSendResult(id, cameBack: back) })
         knowledge = try! FileKnowledgeStore(root: Paths.knowledgeBase, indexPath: Paths.applicationSupport.appendingPathComponent("knowledge-index.sqlite").path)
         allSources = [FilesSource(roots: FilesSource.defaultRoots), NotesSource(), iMessageSource(), WhatsAppSource(), CalendarSource(), GmailSource(), TelegramSource()]
         download = ModelDownload(info: ModelCatalog.info(for: UserDefaults.standard.string(forKey: "reader.model")))
@@ -104,16 +135,17 @@ final class AppModel: ObservableObject {
         try? await store.prune()
         await loadSettings()
         await refreshPermissions()
-        await refreshSources()
         await reload()
         rebuildBrain()
         rebuildReader()
+        Task { await refreshSources() }   // discovery can be slow (Telegram, 300+ chats); the UI must not wait for it
         let mp = modelPath
         _ = await download.observe { [weak self] s in Task { @MainActor in self?.modelState = s; if case .done(let u) = s { self?.modelPath = u; self?.rebuildReader() } } }
         if mp == nil, case .idle = modelState { /* onboarding prompts the download */ }
         helperInstalled = WakeHelper.Client().isInstalled
         loginItem = OvernightScheduler.isLoginItem
         startScheduler()
+        startBriefs(); startRecipeSchedule()
         if TelegramSource.isConfigured { watchTelegram() }
         if CommandLine.arguments.contains("--request-permissions") { await requestAllPermissions() }
     }
@@ -156,7 +188,7 @@ final class AppModel: ObservableObject {
         handsHotkey = await v(SettingKey.handsHotkey) ?? "rightCommand"
         handsSpeed = await v(SettingKey.handsSpeed) ?? "balanced"
         let (h, m) = OvernightScheduler.Config.parse(await v(SettingKey.overnightTime))
-        overnight = OvernightScheduler.Config(enabled: (await v(SettingKey.overnightEnabled) ?? "true") == "true", hour: h, minute: m, catchUp: (await v(SettingKey.catchUp) ?? "true") == "true")
+        overnight = OvernightScheduler.Config(enabled: (await v(SettingKey.overnightEnabled) ?? "true") == "true", hour: h, minute: m, catchUp: (await v(SettingKey.catchUp) ?? "true") == "true", daytime: await v(SettingKey.daytime) ?? "h1")
         appearance = await v(SettingKey.appearance) ?? "system"
         onboardingDone = (await v(SettingKey.onboardingDone) ?? "false") == "true"
         letter = await v(SettingKey.letter); letterOpened = (await v(SettingKey.letterOpened) ?? "false") == "true"
@@ -167,6 +199,12 @@ final class AppModel: ObservableObject {
         readerChoice = await v(SettingKey.localModel) ?? (ModelCatalog.physicalMemoryGB < 12 ? "E2B" : "E4B")
         modelPath = ModelCatalog.locate(ModelCatalog.info(for: readerChoice))
         if let j = await v("sources.mcp"), let d = j.data(using: .utf8), let ms = try? JSONDecoder().decode([MCPManifest].self, from: d) { mcpManifests = ms }
+        showSendLine = (await v(SettingKey.showSendLine) ?? "true") == "true"
+        icloudMirror = (await v(SettingKey.icloudMirror) ?? "false") == "true"
+        mcpEnabled = (await v(SettingKey.mcpEnabled) ?? "false") == "true"
+        if let j = await v(SettingKey.mcpLog), let d = j.data(using: .utf8) { mcpAsks = (try? JSONDecoder().decode([MCPAsk].self, from: d)) ?? [] }
+        briefsEnabled = (await v(SettingKey.briefsEnabled) ?? "true") == "true"
+        if let j = await v(SettingKey.screenForbidden), let d = j.data(using: .utf8), let a = try? JSONDecoder().decode([String].self, from: d) { screenForbidden = Set(a) }
     }
 
     func set(_ key: String, _ value: String?) { Task { try? await store.setValue(key, value) } }
@@ -200,8 +238,15 @@ final class AppModel: ObservableObject {
         for s in allSources + workSources {
             let a = await s.availability(); availability[s.id] = a
             if s.descriptor.supportsPerBucketOptIn, a == .available, s.id != "files" {
-                do { let b = try await s.discoverBuckets(); discovered[s.id] = b; log.info("\(s.id): \(b.count) chats discovered") }
-                catch { discovered[s.id] = []; log.warn("\(s.id): discovery failed: \(error)") }
+                do {
+                    // A source that never answers (a wedged Telegram client) must not hold the others hostage.
+                    let b = try await withThrowingTaskGroup(of: [BucketInfo].self) { g -> [BucketInfo] in
+                        g.addTask { try await s.discoverBuckets() }
+                        g.addTask { try await Task.sleep(nanoseconds: 25_000_000_000); throw SourceError.cannotRead("discovery timed out") }
+                        let r = try await g.next()!; g.cancelAll(); return r
+                    }
+                    discovered[s.id] = b; log.info("\(s.id): \(b.count) chats discovered")
+                } catch { discovered[s.id] = []; log.warn("\(s.id): discovery failed: \(error)") }
             } else if s.descriptor.supportsPerBucketOptIn { log.info("\(s.id): \(a)") }
         }
         discovered["files"] = fileRoots.map { BucketInfo(id: BucketID("files:" + $0.standardizedFileURL.path), name: $0.lastPathComponent, detail: $0.path, isGroup: false, count: 0) }
@@ -255,8 +300,29 @@ final class AppModel: ObservableObject {
     // MARK: brain + reader
 
     func rebuildBrain() {
-        brain = BrainFactory.make(brainConfig)
-        brainStatus = brain == nil ? "No brain — notes only" : (BrainFactory.hasKey(brainConfig.engine) ? "Key present · not checked" : "No key for \(brainConfig.engine.displayName)")
+        if brainConfig.engine == .local {
+            brain = reader.map { LocalBrain(reader: $0) }    // nothing leaves, so nothing to log
+            brainStatus = brain == nil ? "The reader isn't downloaded yet" : "This Mac only · nothing leaves"
+        } else {
+            // The key read can put up a Keychain dialog; never block the UI on it.
+            let cfg = brainConfig, logger = sendLogger
+            brainStatus = "Checking the Keychain…"
+            Task.detached(priority: .userInitiated) {
+                let made = BrainFactory.make(cfg)
+                let hasKey = BrainFactory.hasKey(cfg.engine)
+                if hasKey, let k = cfg.engine.keyName { Keychain.reown(k) }
+                await MainActor.run { [weak self] in
+                    guard let self, self.brainConfig == cfg else { return }
+                    self.brain = made.map { SendLogger.wrap($0, model: cfg.model, logger: logger) }
+                    self.brainStatus = self.brain == nil ? "No brain — notes only" : (hasKey ? "Key present · not checked" : "No key for \(cfg.engine.displayName)")
+                    self.finishBrain()
+                }
+            }
+            return
+        }
+        finishBrain()
+    }
+    private func finishBrain() {
         if let b = brain as? AgenticBrain { hands = Hands(brain: b, knowledge: knowledge, effort: handsSpeed == "fast" ? .low : (handsSpeed == "careful" ? .high : .medium)) } else { hands = nil }
         rebuildCoordinator()
     }
@@ -283,13 +349,15 @@ final class AppModel: ObservableObject {
 
     func rebuildReader() {
         reader = modelPath.map { Reader(modelPath: $0, jsonSchema: Triage.jsonSchema) }
-        rebuildCoordinator()
+        if brainConfig.engine == .local { rebuildBrain() } else { rebuildCoordinator() }
     }
 
     private func rebuildCoordinator() {
+        let logger = sendLogger
         coordinator = RunCoordinator(.init(store: store, knowledge: knowledge, sources: sourcesForRun, reader: reader, brain: brain, policy: policy,
-                                            calendarText: { CalendarSource.judgeContext() }))
+                                            calendarText: { CalendarSource.judgeContext() }, stage: { p, d in logger.setPurpose(p, detail: d) }))
     }
+    var runCoordinator: RunCoordinator? { rebuildCoordinator(); return coordinator }
 
     // MARK: runs
 
@@ -314,6 +382,7 @@ final class AppModel: ObservableObject {
                 self.isRunning = false; self.runOutcome = outcome
                 if self.overlay == .processing { self.overlay = .none }
             }
+            await scheduler?.noteRun(at: Date())
             await reload()
             Notifier.runFinished(outcome, stats: progress.stats)
         }
@@ -340,6 +409,7 @@ final class AppModel: ObservableObject {
         drops = (try? await store.drops(since: Date().addingTimeInterval(-7 * 86400))) ?? []
         letter = try? await store.value(SettingKey.letter)
         lastSkipped = try? await store.value("run.lastSkipped")
+        await reloadV2()
     }
 
     // MARK: cards
@@ -407,6 +477,11 @@ final class AppModel: ObservableObject {
             var all = (try? await RunCoordinator.loadCards(store: store)) ?? []
             if let i = all.firstIndex(where: { $0.id == id }) { all[i].state = s; all[i].resolvedAt = Date() }
             try? await RunCoordinator.saveCards(all, store: store)
+            // A fired card about a loop: remember it, so the loop comes back if nothing changes.
+            if s == .fired, let loopID = all.first(where: { $0.id == id })?.loopID {
+                var ls = await LoopLedger.load(store)
+                if let j = ls.firstIndex(where: { $0.id == loopID }) { ls[j].firedCardIDs.append(id); await LoopLedger.save(ls, store) }
+            }
             await reload()
         }
     }
@@ -425,19 +500,23 @@ final class AppModel: ObservableObject {
                     self.isRunning = true
                     let o = await c.run(trigger: trigger) { _ in }
                     self.isRunning = false; await self.reload()
-                    Notifier.runFinished(o, stats: self.progress.stats)
+                    // Daytime reads are quiet unless something new deserves a card.
+                    if trigger != .daytime { Notifier.runFinished(o, stats: self.progress.stats) }
+                    else if case .ran(let n) = o, n > 0 { Notifier.post("\(n) new thing\(n == 1 ? "" : "s") while you were away", body: "Refreshed on your Mac. Nothing has been sent.", id: "cards.daytime", category: "cards") }
                     cont.resume(returning: o)
                 }
             }
         }
         scheduler = s
-        Task { await s.start(overnight); await s.catchUpIfNeeded(lastRun: lastRun) }
+        let last = lastRun?.startedAt
+        Task { if let last { await s.noteRun(at: last) }; await s.start(overnight); await s.catchUpIfNeeded(lastRun: lastRun) }
     }
 
     func saveOvernight() {
         set(SettingKey.overnightEnabled, overnight.enabled ? "true" : "false")
         set(SettingKey.overnightTime, String(format: "%02d:%02d", overnight.hour, overnight.minute))
         set(SettingKey.catchUp, overnight.catchUp ? "true" : "false")
+        set(SettingKey.daytime, overnight.daytime)
         Task { await scheduler?.start(overnight) }
     }
 
@@ -480,10 +559,10 @@ final class AppModel: ObservableObject {
 
     func json<T: Encodable>(_ v: T) -> String { (try? String(data: JSONEncoder().encode(v), encoding: .utf8)) ?? "[]" }
 
-    var brainName: String { brain?.descriptor.name ?? "No brain" }
+    var brainName: String { brain?.descriptor.name ?? (brainStatus.hasPrefix("Checking") ? "checking the Keychain…" : "No brain") }
     var sidebarStatus: (String, String) {
         guard let r = lastRun else { return ("No run yet", "Press Analyze now to read for the first time") }
         let f = DateFormatter(); f.dateFormat = "h:mm a"
-        return ("Last run \(f.string(from: r.startedAt))", "\(r.stats.read) items read · \(r.stats.kept) kept · 0 left your Mac")
+        return ("Last run \(f.string(from: r.startedAt))", "\(r.stats.read) items read · \(r.stats.kept) kept")
     }
 }

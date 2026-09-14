@@ -13,7 +13,7 @@ public struct CalendarSource: Source {
     private let log = Log("source.calendar")
     public init() {}
 
-    static let store = EKEventStore()
+    public static let store = EKEventStore()
 
     public static var isAuthorized: Bool {
         let s = EKEventStore.authorizationStatus(for: .event)
@@ -53,7 +53,7 @@ public struct CalendarSource: Source {
 
     static let df: DateFormatter = { let f = DateFormatter(); f.dateFormat = "EEE d MMM HH:mm"; return f }()
 
-    static func render(_ e: EKEvent, detailed: Bool) -> String {
+    public static func render(_ e: EKEvent, detailed: Bool) -> String {
         var s = "\(df.string(from: e.startDate))–\(DateFormatter.localizedString(from: e.endDate, dateStyle: .none, timeStyle: .short)) · \(e.title ?? "Event")"
         if let loc = e.location, !loc.isEmpty { s += " · \(loc)" }
         if let att = e.attendees, !att.isEmpty { s += " · with \(att.compactMap(\.name).prefix(6).joined(separator: ", "))" }

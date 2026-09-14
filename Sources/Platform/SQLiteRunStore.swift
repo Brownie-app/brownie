@@ -29,6 +29,9 @@ public actor SQLiteRunStore: RunStore {
             bucket_name TEXT NOT NULL, reason TEXT NOT NULL, at REAL NOT NULL);
         CREATE INDEX IF NOT EXISTS drop_at ON drop_log(at);
         CREATE TABLE IF NOT EXISTS setting(key TEXT PRIMARY KEY, value TEXT);
+        CREATE TABLE IF NOT EXISTS send_log(id INTEGER PRIMARY KEY, at REAL NOT NULL, purpose TEXT NOT NULL, model TEXT NOT NULL,
+            bytes INTEGER NOT NULL, detail TEXT NOT NULL, came_back TEXT NOT NULL DEFAULT '', payload TEXT NOT NULL);
+        CREATE INDEX IF NOT EXISTS send_at ON send_log(at);
         """)
     }
 
@@ -130,6 +133,22 @@ public actor SQLiteRunStore: RunStore {
         }
     }
 
+    // MARK: what left the Mac
+
+    public func logSend(purpose: String, model: String, bytes: Int, detail: String, cameBack: String, payload: String, at: Date) throws -> Int64 {
+        try db.run("INSERT INTO send_log(at,purpose,model,bytes,detail,came_back,payload) VALUES(?,?,?,?,?,?,?)",
+                   [.init(at), .text(purpose), .text(model), .init(bytes), .text(detail), .text(cameBack), .text(payload)])
+    }
+    public func setSendResult(_ id: Int64, cameBack: String) throws {
+        try db.run("UPDATE send_log SET came_back=? WHERE id=?", [.text(cameBack), .int(id)])
+    }
+    public func sendLog(since: Date) throws -> [SendRecord] {
+        try db.query("SELECT * FROM send_log WHERE at >= ? ORDER BY at DESC LIMIT 500", [.init(since)]).map { r in
+            SendRecord(id: r["id"].int ?? 0, at: r["at"].date ?? Date(), purpose: r["purpose"].text ?? "", model: r["model"].text ?? "",
+                       bytes: Int(r["bytes"].int ?? 0), detail: r["detail"].text ?? "", cameBack: r["came_back"].text ?? "", payload: r["payload"].text ?? "")
+        }
+    }
+
     // MARK: settings
 
     public func value(_ key: String) throws -> String? {
@@ -148,12 +167,13 @@ public actor SQLiteRunStore: RunStore {
         let cutoff = Date().addingTimeInterval(-Double(days) * 86400).timeIntervalSince1970
         try db.run("DELETE FROM drop_log WHERE at < ?", [.real(cutoff)])
         try db.run("DELETE FROM run WHERE started_at < ?", [.real(cutoff)])
+        try db.run("DELETE FROM send_log WHERE at < ?", [.real(Date().addingTimeInterval(-30 * 86400).timeIntervalSince1970)])
     }
 
     public func factoryReset() throws {
         try db.transaction {
-            try db.exec("DELETE FROM summary; DELETE FROM bucket_cursor; DELETE FROM drop_log; DELETE FROM run;")
-            try db.exec("DELETE FROM setting WHERE key LIKE 'walkthrough.%' OR key LIKE 'proactive.%' OR key LIKE 'knowledge.%' OR key='app.onboardingDone'")
+            try db.exec("DELETE FROM summary; DELETE FROM bucket_cursor; DELETE FROM drop_log; DELETE FROM run; DELETE FROM send_log;")
+            try db.exec("DELETE FROM setting WHERE key LIKE 'walkthrough.%' OR key LIKE 'proactive.%' OR key LIKE 'knowledge.%' OR key LIKE 'hands.recipes%' OR key='app.onboardingDone'")
         }
         log.info("factory reset")
     }

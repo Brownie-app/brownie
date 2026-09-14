@@ -22,6 +22,13 @@ public enum Keychain {
         SecItemAdd(add as CFDictionary, nil)
     }
 
+    /// After the app moves or is re-signed, an old item asks for permission on every launch. Once the
+    /// user has allowed one read, rewriting the item makes this build its owner — no more prompts.
+    public static func reown(_ key: String) {
+        guard let v = get(key) else { return }
+        set(key, v)
+    }
+
     public static func wipeAll() {
         let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service]
         SecItemDelete(q as CFDictionary)
