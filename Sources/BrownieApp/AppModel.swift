@@ -110,6 +110,9 @@ final class AppModel: ObservableObject {
     @Published var screenForbidden: Set<String> = []
     @Published var nudging: String?
     @Published var icloudMirror = false
+    @Published var icloudMode = "off"
+    @Published var lastSync: SyncReport?
+    var syncTimer: Timer?
     @Published var mcpEnabled = false
     @Published var mcpAsks: [MCPAsk] = []
     @Published var asks: [Asker.Answer] = []
@@ -150,7 +153,7 @@ final class AppModel: ObservableObject {
         helperInstalled = WakeHelper.Client().isInstalled
         loginItem = OvernightScheduler.isLoginItem
         startScheduler()
-        startBriefs(); startRecipeSchedule(); startTriggers()
+        startBriefs(); startRecipeSchedule(); startTriggers(); startSyncTimer()
         if TelegramSource.isConfigured { watchTelegram() }
         if CommandLine.arguments.contains("--request-permissions") { await requestAllPermissions() }
     }
@@ -207,6 +210,8 @@ final class AppModel: ObservableObject {
         showSendLine = (await v(SettingKey.showSendLine) ?? "true") == "true"
         nudgeDays = Int(await v(SettingKey.nudgeDays) ?? "1") ?? 1
         icloudMirror = (await v(SettingKey.icloudMirror) ?? "false") == "true"
+        icloudMode = await v(SettingKey.icloudMode) ?? (icloudMirror ? "mirror" : "off")
+        if let j = await v(SettingKey.lastSync), let d = j.data(using: .utf8) { lastSync = try? JSONDecoder().decode(SyncReport.self, from: d) }
         mcpEnabled = (await v(SettingKey.mcpEnabled) ?? "false") == "true"
         if let j = await v(SettingKey.mcpLog), let d = j.data(using: .utf8) { mcpAsks = (try? JSONDecoder().decode([MCPAsk].self, from: d)) ?? [] }
         briefsEnabled = (await v(SettingKey.briefsEnabled) ?? "true") == "true"

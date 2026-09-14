@@ -154,8 +154,13 @@ public actor RunCoordinator {
 
                 // 5. FINISH — summaries are disposable only after a fully successful chain
                 try await store.wipeSummaries()
-                if (try await store.value(SettingKey.icloudMirror) ?? "false") == "true", let root = (deps.knowledge as? FileKnowledgeStore)?.rootURL {
-                    do { _ = try Vault.mirror(root) } catch { log.warn("iCloud mirror: \(error)") }
+                let legacyMirror = try await store.value(SettingKey.icloudMirror) ?? "false"
+                let mode = try await store.value(SettingKey.icloudMode) ?? (legacyMirror == "true" ? "mirror" : "off")
+                if mode != "off", let root = (deps.knowledge as? FileKnowledgeStore)?.rootURL, let dest = Vault.icloudFolder {
+                    do {
+                        if mode == "twoway" { let r = try Vault.sync(root, to: dest); try await store.setValue(SettingKey.lastSync, String(data: JSONEncoder().encode(r), encoding: .utf8)) }
+                        else { _ = try Vault.mirror(root, to: dest) }
+                    } catch { log.warn("iCloud \(mode): \(error)") }
                 }
                 outcome = .ran(cards: cards.count + dueCards.count)
             } else if deps.brain == nil {

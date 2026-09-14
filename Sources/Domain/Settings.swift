@@ -19,7 +19,9 @@ public enum SettingKey {
     public static let overnightTime = "overnight.time"            // "03:00"
     public static let catchUp = "overnight.catchUp"
     public static let daytime = "overnight.daytime"
-    public static let icloudMirror = "knowledge.icloudMirror"    // mirror the vault into iCloud Drive/Brownie after each run
+    public static let icloudMirror = "knowledge.icloudMirror"    // legacy: "true" meant mirror
+    public static let icloudMode = "knowledge.icloudMode"        // off | mirror | twoway
+    public static let lastSync = "knowledge.lastSync"            // JSON SyncReport
     public static let mcpEnabled = "knowledge.mcp"               // answer other apps over MCP
     public static let mcpLog = "knowledge.mcpLog"
     public static let askHistory = "proactive.ask"

@@ -144,9 +144,13 @@ struct KnowledgePane: View {
             SettingRow(title: "Open in Obsidian", detail: Vault.obsidianInstalled ? "Adds the vault to Obsidian once; after that it's just there. Backlinks, graph and search work on Brownie's notes." : "Obsidian isn't installed. It's free — obsidian.md.") {
                 if Vault.obsidianInstalled { BButton(title: "Open in Obsidian") { Vault.openInObsidian(m.knowledge.rootURL) } } else { BButton(title: "Get Obsidian", kind: .quiet) { NSWorkspace.shared.open(URL(string: "https://obsidian.md")!) } }
             }.padding(.horizontal, 16); Divider()
-            SettingRow(title: "Keep a copy in iCloud Drive", detail: Vault.icloudFolder == nil ? "iCloud Drive is off on this Mac." : "A mirror in iCloud Drive/Brownie after every run, so Obsidian on your iPhone reads it. Apple's sync, Apple's encryption; nothing of Brownie's online. One way for now — edits on the phone don't come back yet.") {
-                Toggle2(on: Binding(get: { m.icloudMirror }, set: { m.setICloudMirror($0) })).disabled(Vault.icloudFolder == nil)
+            SettingRow(title: "iCloud Drive", detail: Vault.icloudFolder == nil ? "iCloud Drive is off on this Mac." : "A copy in iCloud Drive/Brownie so Obsidian on your iPhone has it. Two-way: what you edit on the phone comes back here and Brownie merges it. Apple's sync, Apple's encryption; nothing of Brownie's online.") {
+                Segmented(options: ["Off", "To the phone", "Two-way"], selection: Binding(get: { m.icloudMode == "twoway" ? "Two-way" : (m.icloudMode == "mirror" ? "To the phone" : "Off") }, set: { m.setICloudMode($0 == "Two-way" ? "twoway" : ($0 == "To the phone" ? "mirror" : "off")) })).disabled(Vault.icloudFolder == nil)
             }.padding(.horizontal, 16); Divider()
+            if m.icloudMode == "twoway" {
+                SettingRow(title: m.lastSync.map { "Last sync · \(DateFormatter.localizedString(from: $0.at, dateStyle: .none, timeStyle: .short))" } ?? "Not synced yet", detail: m.lastSync?.line ?? "Runs after every read and every 15 minutes while Brownie is open.") { HStack(spacing: 8) { if m.lastSync != nil { HStack(spacing: 6) { Circle().fill(t.ok).frame(width: 7, height: 7); Text("In sync").font(.system(size: 12, weight: .medium)) } }; BButton(title: "Sync now", kind: .quiet) { m.syncNow() } } }.padding(.horizontal, 16); Divider()
+                SettingRow(title: "When both sides changed the same note", detail: "Brownie keeps both: what you wrote on the phone stays as the note; its own version goes under a “Brownie's version” heading for you to pick from. Your words are never overwritten.") { EmptyView() }.padding(.horizontal, 16); Divider()
+            }
             SettingRow(title: "Wikilinks between notes", detail: "[[Priya]] instead of plain text, so people, groups and trips connect — here and in Obsidian. Always on.") { Toggle2(on: .constant(true)).disabled(true) }.padding(.horizontal, 16)
         } }
         MCPSection()

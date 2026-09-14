@@ -353,6 +353,30 @@ extension AppModel {
 
     // MARK: vault
 
+    func setICloudMode(_ mode: String) {
+        icloudMode = mode; set(SettingKey.icloudMode, mode); set(SettingKey.icloudMirror, mode == "off" ? "false" : "true")
+        if mode != "off" { syncNow() }
+    }
+    /// Two-way sync every 15 minutes while the app is open, so a note edited on the phone comes back the same afternoon.
+    func startSyncTimer() {
+        syncTimer?.invalidate()
+        syncTimer = Timer.scheduledTimer(withTimeInterval: 15 * 60, repeats: true) { [weak self] _ in Task { @MainActor in if self?.icloudMode == "twoway" { self?.syncNow(quiet: true) } } }
+    }
+    func syncNow(quiet: Bool = false) {
+        guard icloudMode != "off", let dest = Vault.icloudFolder else { return }
+        let root = knowledge.rootURL, mode = icloudMode
+        Task.detached { [weak self] in
+            do {
+                if mode == "twoway" {
+                    let r = try Vault.sync(root, to: dest)
+                    await MainActor.run { self?.lastSync = r; self?.set(SettingKey.lastSync, self?.json(r) ?? ""); if !quiet { self?.announcement = "Synced with iCloud Drive: \(r.line)." }; Task { await self?.reload() } }
+                } else {
+                    let n = try Vault.mirror(root, to: dest)
+                    await MainActor.run { if !quiet { self?.announcement = "Mirrored to iCloud Drive/Brownie (\(n) notes copied)." } }
+                }
+            } catch { await MainActor.run { if !quiet { self?.announcement = "Couldn't sync: \(error.localizedDescription)" } } }
+        }
+    }
     func setICloudMirror(_ on: Bool) {
         icloudMirror = on; set(SettingKey.icloudMirror, on ? "true" : "false")
         if on { let root = knowledge.rootURL; Task.detached { do { let n = try Vault.mirror(root); await MainActor.run { self.announcement = "Mirrored to iCloud Drive/Brownie (\(n) notes copied)." } } catch { await MainActor.run { self.announcement = "Couldn't mirror: \(error.localizedDescription)" } } } }
