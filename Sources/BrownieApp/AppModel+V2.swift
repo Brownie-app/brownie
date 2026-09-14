@@ -12,6 +12,7 @@ import CloudSources
 import Scheduling
 import Support
 import Knowledge
+import Inference
 
 /// Teach Hands: the three-step flow's state.
 struct TeachState: Equatable {
@@ -353,6 +354,43 @@ extension AppModel {
         catch { announcement = "Couldn't write \(f.lastPathComponent): \(error.localizedDescription)" }
     }
     func reloadMCPAsks() async { if let j = try? await store.value(SettingKey.mcpLog), let d = j.data(using: .utf8) { mcpAsks = (try? JSONDecoder().decode([MCPAsk].self, from: d)) ?? [] } }
+
+    // MARK: diagnostics
+
+    /// Logs (never content) plus a summary of this Mac, zipped to the Desktop for a bug report.
+    func exportDiagnostics() {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd-HHmm"
+        let stamp = f.string(from: Date())
+        let work = FileManager.default.temporaryDirectory.appendingPathComponent("brownie-diagnostics-\(stamp)")
+        let out = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop/Brownie-diagnostics-\(stamp).zip")
+        do {
+            try? FileManager.default.removeItem(at: work)
+            try FileManager.default.createDirectory(at: work.appendingPathComponent("logs"), withIntermediateDirectories: true)
+            for u in (try? FileManager.default.contentsOfDirectory(at: Paths.logs, includingPropertiesForKeys: nil)) ?? [] where u.pathExtension == "log" {
+                try? FileManager.default.copyItem(at: u, to: work.appendingPathComponent("logs/\(u.lastPathComponent)"))
+            }
+            let v = ProcessInfo.processInfo.operatingSystemVersion
+            var summary = """
+            Brownie \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev") · macOS \(v.majorVersion).\(v.minorVersion).\(v.patchVersion) · \(ModelCatalog.physicalMemoryGB) GB · \(String(format: "%.0f", freeGB)) GB free
+            Reader: \(readerChoice) \(modelPath == nil ? "(not downloaded)" : "(present)")
+            Brain: \(brainConfig.engine.rawValue) · \(brainConfig.model) · \(brainStatus)   (no key included)
+            Sources on: \(enabledSources.map(\.rawValue).sorted().joined(separator: ", "))
+            Permissions: \(permissions.map { "\($0.key.rawValue)=\($0.value)" }.sorted().joined(separator: " "))
+            Overnight: \(overnight.enabled ? "on" : "off") \(String(format: "%02d:%02d", overnight.hour, overnight.minute)) · daytime \(overnight.daytime) · helper \(helperInstalled) · login item \(loginItem)
+            Last run: \(lastRun.map { "\($0.trigger.rawValue) \($0.startedAt) → \(String(describing: $0.outcome)) · \($0.stats)" } ?? "none")
+            Last skipped: \(lastSkipped ?? "—")   Last error: \(lastError ?? "—")
+            Cards: \(cards.count) ready · \(pastCards.count) past · loops \(openLoopCount) open · recipes \(recipes.count) · MCP \(mcpEnabled ? "on" : "off")
+
+            """
+            summary += "Runs:\n" + runs.map { "  \($0.startedAt) \($0.trigger.rawValue) \(String(describing: $0.outcome)) read=\($0.stats.read) kept=\($0.stats.kept)" }.joined(separator: "\n")
+            try summary.write(to: work.appendingPathComponent("summary.txt"), atomically: true, encoding: String.Encoding.utf8)
+            try? FileManager.default.removeItem(at: out)
+            let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/bin/ditto"); p.arguments = ["-c", "-k", "--sequesterRsrc", "--keepParent", work.path, out.path]
+            try p.run(); p.waitUntilExit()
+            NSWorkspace.shared.activateFileViewerSelecting([out])
+            announcement = "Diagnostics saved to your Desktop: \(out.lastPathComponent). Logs and a summary only — no messages, notes or keys."
+        } catch { announcement = "Couldn't export diagnostics: \(error.localizedDescription)" }
+    }
 
     // MARK: privacy
 

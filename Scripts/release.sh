@@ -5,7 +5,8 @@
 set -e
 cd "$(dirname "$0")/.."
 set -a; source .secrets/brownie.env; set +a
-VERSION=${1:-0.1}
+VERSION=${1:-0.2}
+export BROWNIE_VERSION=$VERSION
 [ -n "$APPLE_SIGNING_IDENTITY" ] || { echo "APPLE_SIGNING_IDENTITY missing"; exit 1; }
 ./Scripts/bundle.sh release
 APP=dist/Brownie.app

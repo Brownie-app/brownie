@@ -2,7 +2,7 @@
 
 Brownie reads private data — messages, mail, files — on the user's Mac. Bugs that could leak that data are the ones we care about most.
 
-**Report privately** by email to security@brownie.app (until that address is live, open a GitHub issue titled only "security — please contact me" with no details and we will reach out). Expect an acknowledgement within 3 days.
+**Report privately** through GitHub's private vulnerability reporting: https://github.com/Brownie-app/brownie/security/advisories/new — only the maintainers see it. Please don't open a public issue. Expect an acknowledgement within 3 days.
 
 In scope: anything that lets raw data leave the Mac, lets a sensitive item leave a trace, lets Hands act without the user's tap, weakens the root wake helper (socket permissions, deadman), or exposes stored keys.
 

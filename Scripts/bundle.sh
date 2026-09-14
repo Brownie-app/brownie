@@ -4,6 +4,8 @@
 set -e
 cd "$(dirname "$0")/.."
 CONFIG=${1:-debug}
+VERSION=${BROWNIE_VERSION:-0.2}
+BUILD=$(git -C "$(dirname "$0")/.." rev-list --count HEAD 2>/dev/null || echo 1)
 [ -f .secrets/brownie.env ] && { set -a; source .secrets/brownie.env; set +a; }
 swift build -c $CONFIG --product Brownie
 BIN=$(swift build -c $CONFIG --show-bin-path)
@@ -25,8 +27,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleName</key><string>Brownie</string>
   <key>CFBundleDisplayName</key><string>Brownie</string>
   <key>CFBundleIdentifier</key><string>app.brownie.mac</string>
-  <key>CFBundleVersion</key><string>1</string>
-  <key>CFBundleShortVersionString</key><string>0.1</string>
+  <key>CFBundleVersion</key><string>$BUILD</string>
+  <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleExecutable</key><string>Brownie</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
@@ -41,6 +43,16 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>NSCalendarsFullAccessUsageDescription</key><string>To read your events for the last week and the next day, on this Mac, so morning cards know what is coming up.</string>
 </dict></plist>
 PLIST
+# Release builds carry the app's own credentials (Telegram api_id/hash, Google desktop client) in Info.plist.
+# They identify the app, not a user; a user's own tokens live only in their Keychain. Debug builds read .secrets/brownie.env instead.
+if [ "$CONFIG" = "release" ]; then
+  /usr/libexec/PlistBuddy -c "Add :BrownieCredentials dict" "$APP/Contents/Info.plist"
+  for k in GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET TELEGRAM_API_ID TELEGRAM_API_HASH; do
+    v="${(P)k}"
+    [ -n "$v" ] && /usr/libexec/PlistBuddy -c "Add :BrownieCredentials:$k string $v" "$APP/Contents/Info.plist"
+  done
+  echo "release: bundled $(/usr/libexec/PlistBuddy -c 'Print :BrownieCredentials' "$APP/Contents/Info.plist" | grep -c '=') app credentials"
+fi
 # rpath so the binary finds frameworks in Contents/Frameworks
 install_name_tool -add_rpath @executable_path/../Frameworks "$APP/Contents/MacOS/Brownie" 2>/dev/null || true
 IDENTITY="${APPLE_SIGNING_IDENTITY:-Brownie Dev Signing}"

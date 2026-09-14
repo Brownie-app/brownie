@@ -86,6 +86,9 @@ final class AppModel: ObservableObject {
     @Published var handsState: HandsPanelState = .idle
     @Published var announcement: String?
     @Published var lastSkipped: String?
+    @Published var lastError: String?
+    /// Free space on the volume that holds the model and the store, in GB.
+    var freeGB: Double { ((try? Paths.applicationSupport.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]).volumeAvailableCapacityForImportantUsage).map { Double($0) } ?? 0) / 1e9 }
 
     enum HandsPanelState: Equatable { case idle, listening(String), running([String]), paused(String), finished(String) }
 
@@ -331,6 +334,11 @@ final class AppModel: ObservableObject {
         set(SettingKey.brainEngine, brainConfig.engine.rawValue); set(SettingKey.brainModel, brainConfig.model); set(SettingKey.customBaseURL, brainConfig.customBaseURL)
         rebuildBrain()
     }
+    /// After a key is saved: rebuild, then check it against the provider so a typo is caught now, not at 3 AM.
+    func saveKeyAndCheck(_ key: String, _ value: String) {
+        Keychain.set(key, value); rebuildBrain()
+        Task { var waited = 0; while brain == nil, brainStatus.hasPrefix("Checking"), waited < 40 { try? await Task.sleep(nanoseconds: 250_000_000); waited += 1 }; await validateBrain() }
+    }
 
     func validateBrain() async {
         guard let brain else { brainStatus = "No brain configured"; return }
@@ -364,6 +372,8 @@ final class AppModel: ObservableObject {
     func analyzeNow(trigger: RunTrigger = .manual) {
         guard !isRunning else { overlay = .processing; return }
         guard modelPath != nil else { announcement = "The reader isn't downloaded yet — Settings → Brain → On this Mac."; return }
+        guard freeGB > 1 else { announcement = String(format: "Only %.1f GB free on this Mac. Brownie needs about 1 GB to run — free some space first.", freeGB); return }
+        guard !sourcesForRun.isEmpty else { announcement = "No sources are turned on, so there is nothing to read. Pick some in Settings → Sources."; openSettings(.sources); return }
         rebuildCoordinator()
         guard let coordinator else { return }
         isRunning = true; overlay = .processing; thoughts = []; progress = RunProgress()
@@ -409,6 +419,7 @@ final class AppModel: ObservableObject {
         drops = (try? await store.drops(since: Date().addingTimeInterval(-7 * 86400))) ?? []
         letter = try? await store.value(SettingKey.letter)
         lastSkipped = try? await store.value("run.lastSkipped")
+        lastError = try? await store.value("run.lastError")
         await reloadV2()
     }
 

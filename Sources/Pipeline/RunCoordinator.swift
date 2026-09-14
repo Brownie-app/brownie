@@ -60,6 +60,7 @@ public actor RunCoordinator {
         var outcome: RunOutcome = .cancelled
         let runID: Int64
         do { runID = try await store.beginRun(trigger: trigger, at: started) } catch { log.error("beginRun: \(error)"); return .failedReader("store") }
+        try? await store.setValue("run.lastError", nil)
         log.info("run #\(runID) \(trigger.rawValue) started")
 
         do {
@@ -166,7 +167,10 @@ public actor RunCoordinator {
         catch BrainError.unauthorized { outcome = .failedBrain(.unauthorized) }
         catch BrainError.notConfigured { outcome = .failedBrain(.notConfigured) }
         catch KnowledgeBuilder.Failure.staleSwapAverted { outcome = .partial(stage: "you edited a note during the run; notes will merge next run") }
-        catch { log.error("run failed: \(error)"); outcome = .failedBrain(.other) }
+        catch {
+            log.error("run failed: \(error)"); outcome = .failedBrain(.other)
+            try? await store.setValue("run.lastError", Self.short(error))   // shown in plain words on For You
+        }
 
         try? await store.endRun(runID, outcome: outcome, stats: stats, at: deps.clock.now())
         log.info("run #\(runID) ended: \(outcome) · \(stats)")

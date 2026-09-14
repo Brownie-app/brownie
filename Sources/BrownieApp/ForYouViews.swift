@@ -65,6 +65,7 @@ struct ForYouView: View {
         case .failedBrain(.usageLimit): return "The brain hit its usage limit part-way. Notes were kept; it will finish next run."
         case .failedBrain(.unauthorized): return "The brain rejected your key. Fix it in Settings → Brain."
         case .failedBrain(.notConfigured): return "No brain is set up, so nothing was synthesised. Add one in Settings → Brain."
+        case .failedBrain(.other): return "The brain call failed" + (m.lastError.map { ": \($0)" } ?? "") + ". Your notes are safe; the summaries were kept and it will try again next run."
         case .partial(let stage): return "The run stopped part-way: \(stage)."
         case .cancelled: return "The last run was stopped before it finished."
         default: return nil

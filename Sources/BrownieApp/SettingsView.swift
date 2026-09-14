@@ -232,7 +232,7 @@ struct BrainPane: View {
                     kv("Model") { TextField("model id", text: $m.brainConfig.model).textFieldStyle(.roundedBorder).frame(width: 260).onSubmit { m.saveBrain() } }
                     if m.brainConfig.engine == .custom { kv("Endpoint") { TextField("http://127.0.0.1:1234/v1", text: $m.brainConfig.customBaseURL).textFieldStyle(.roundedBorder).frame(width: 300).onSubmit { m.saveBrain() } } }
                     if let k = m.brainConfig.engine.keyName, m.brainConfig.engine != .custom {
-                        kv("API key") { HStack { SecureField(BrainFactory.hasKey(m.brainConfig.engine) ? "•••••••• (saved)" : "paste your key", text: $key).textFieldStyle(.roundedBorder).frame(width: 300); BButton(title: "Save to Keychain") { Keychain.set(k, key); key = ""; m.rebuildBrain() } } }
+                        kv("API key") { HStack { SecureField(BrainFactory.hasKey(m.brainConfig.engine) ? "•••••••• (saved)" : "paste your key", text: $key).textFieldStyle(.roundedBorder).frame(width: 300); BButton(title: "Save to Keychain") { m.saveKeyAndCheck(k, key); key = "" } } }
                     }
                     kv("What it costs you") { Text(m.lastUsage.map { u in "Last run: \(u.inputTokens / 1000)K in · \(u.outputTokens / 1000)K out on your own key" + (m.brainConfig.engine == .openai ? String(format: " ≈ $%.2f", Double(u.inputTokens) * 1.25e-6 + Double(u.outputTokens) * 10e-6) : "") } ?? "Billed per token on your own key. Shown here after the first run.") }
                 }
@@ -457,7 +457,7 @@ struct AboutPane: View {
     var body: some View {
         HStack(spacing: 16) {
             DawnMark(size: 64)
-            VStack(alignment: .leading) { Text("Brownie").font(.system(size: 22, weight: .bold)); Text("Version 0.1 · Apple silicon · macOS 14 or later").font(.system(size: 11)).foregroundStyle(t.ink2) }
+            VStack(alignment: .leading) { Text("Brownie").font(.system(size: 22, weight: .bold)); Text("Version \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev") · Apple silicon · macOS 14 or later").font(.system(size: 11)).foregroundStyle(t.ink2) }
         }
         CardBox { VStack(alignment: .leading, spacing: 10) {
             kv("Source code", "[your-repo-url]"); kv("Licence", "[LICENCE] · inspired by the architecture of Sentient OS"); kv("Acknowledgements", "Gemma 4 · LiteRT-LM")
@@ -468,6 +468,11 @@ struct AboutPane: View {
         } }
         H2(text: "Walkthroughs").padding(.top, 6)
         CardBox(padding: 0) { SettingRow(title: "First-time tips", detail: "Each screen's tip plays once and is gone. Bring them back here.") { BButton(title: "Replay") { m.replayWalkthroughs() } }.padding(.horizontal, 16) }
+        H2(text: "Help").padding(.top, 6)
+        CardBox(padding: 0) { VStack(spacing: 0) {
+            SettingRow(title: "Export diagnostics", detail: "A zip on your Desktop with Brownie's logs and a summary of this Mac — no messages, notes or keys, ever. Attach it to a bug report.") { BButton(title: "Export") { m.exportDiagnostics() } }.padding(.horizontal, 16); Divider()
+            SettingRow(title: "Report a bug", detail: "Issues live on GitHub. Security problems go through a private advisory instead.") { BButton(title: "Open GitHub", kind: .quiet) { NSWorkspace.shared.open(URL(string: "https://github.com/Brownie-app/brownie/issues/new/choose")!) } }.padding(.horizontal, 16)
+        } }
         H2(text: "Leave").padding(.top, 6)
         CardBox(padding: 0) { VStack(spacing: 0) {
             SettingRow(title: "Reset and start over", detail: "Keeps your settings and keys, forgets everything it learned") { BButton(title: "Reset") { m.factoryReset() } }.padding(.horizontal, 16); Divider()
