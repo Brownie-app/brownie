@@ -40,7 +40,7 @@ public final class MCPServer {
         ["name": "recent_cards", "description": "The morning cards Brownie prepared recently — things waiting on the user.", "inputSchema": ["type": "object", "properties": [:]]],
     ]
 
-    private func handle(_ req: [String: Any]) async -> [String: Any]? {
+    func handle(_ req: [String: Any]) async -> [String: Any]? {
         let id = req["id"]
         let method = req["method"] as? String ?? ""
         func ok(_ result: Any) -> [String: Any]? { id == nil ? nil : ["jsonrpc": "2.0", "id": id!, "result": result] }

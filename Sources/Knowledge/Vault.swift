@@ -25,8 +25,8 @@ public enum Vault {
 
     /// One-way mirror Mac → iCloud: copy changed Markdown, remove what no longer exists. The vault on
     /// the Mac stays the truth; edits made on the phone are not merged back (yet).
-    public static func mirror(_ root: URL) throws -> Int {
-        guard let dest = icloudFolder else { throw NSError(domain: "Vault", code: 1, userInfo: [NSLocalizedDescriptionKey: "iCloud Drive is off on this Mac"]) }
+    public static func mirror(_ root: URL, to destination: URL? = nil) throws -> Int {
+        guard let dest = destination ?? icloudFolder else { throw NSError(domain: "Vault", code: 1, userInfo: [NSLocalizedDescriptionKey: "iCloud Drive is off on this Mac"]) }
         let fm = FileManager.default
         try fm.createDirectory(at: dest, withIntermediateDirectories: true)
         var copied = 0

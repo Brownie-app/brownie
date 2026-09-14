@@ -23,4 +23,8 @@ jobs:
       - name: Build
         run: swift build
       - name: Test
-        run: swift test --skip EvalTests
+        run: swift test --skip EvalTests --enable-code-coverage
+      - name: Coverage summary
+        run: |
+          PROF=$(find .build -name "*.profdata" | head -1); BIN=$(find .build -name "*.xctest" -maxdepth 4 | head -1)
+          [ -n "$PROF" ] && xcrun llvm-cov report -instr-profile "$PROF" "$BIN/Contents/MacOS/$(basename "$BIN" .xctest)" -ignore-filename-regex="Tests|Vendor|\.build" 2>/dev/null | tail -3 || echo "no coverage data"

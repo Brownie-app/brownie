@@ -51,7 +51,7 @@ public final class Recorder {
         return (Self.clean(a.localizedName ?? "App"), a.processIdentifier)
     }
     /// WhatsApp and friends pad accessibility titles with direction marks and zero-width characters.
-    public static func clean(_ s: String) -> String {
+    nonisolated public static func clean(_ s: String) -> String {
         String(s.unicodeScalars.filter { !["\u{200E}", "\u{200F}", "\u{200B}", "\u{2060}", "\u{FEFF}"].contains(String($0)) }).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
@@ -188,7 +188,7 @@ public final class Recorder {
 
     /// Guesses the parts that should change each run: the person (what was typed into a search box, else
     /// the row that was picked), and the message (the last thing typed anywhere else).
-    public static func suggestParameters(_ steps: [TaughtRecipe.Step]) -> [TaughtRecipe.Parameter] {
+    nonisolated public static func suggestParameters(_ steps: [TaughtRecipe.Step]) -> [TaughtRecipe.Parameter] {
         var out: [TaughtRecipe.Parameter] = []
         let isSearch = { (s: TaughtRecipe.Step) in s.kind == .type && (s.target.lowercased().contains("search") || s.target.lowercased().contains("find") || s.target.lowercased().contains("to:")) }
         let chrome: Set<String> = ["search", "compose", "new", "new chat", "back", "send", "attach", "menu"]
@@ -202,7 +202,7 @@ public final class Recorder {
         }
         return out
     }
-    public static func suggestName(_ steps: [TaughtRecipe.Step], parameters: [TaughtRecipe.Parameter]) -> String {
+    nonisolated public static func suggestName(_ steps: [TaughtRecipe.Step], parameters: [TaughtRecipe.Parameter]) -> String {
         let app = steps.first(where: { $0.kind == .launch })?.app ?? "an app"
         if let p = parameters.first(where: { $0.name == "person" }) { return "Message \(p.original) in \(app)" }
         return "Do the \(app) thing"

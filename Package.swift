@@ -84,6 +84,11 @@ let package = Package(
         .testTarget(name: "PrivacyTests", dependencies: ["Privacy"]),
         .testTarget(name: "IngestTests", dependencies: ["Ingest", "Domain", "Platform"]),
         .testTarget(name: "LocalSourcesTests", dependencies: ["LocalSources", "Platform"]),
+        .testTarget(name: "ProactiveTests", dependencies: ["Proactive", "Domain"]),
+        .testTarget(name: "AgentTests", dependencies: ["Agent", "Domain"]),
+        .testTarget(name: "KnowledgeTests", dependencies: ["Knowledge", "Domain", "Platform"]),
+        .testTarget(name: "BrainTests", dependencies: ["Brain", "Domain"]),
+        .testTarget(name: "SchedulingTests", dependencies: ["Scheduling"]),
         .testTarget(name: "Eval", dependencies: ["Domain", "Inference", "Ingest", "Privacy"], path: "Tests/Eval", resources: [.copy("Corpus")]),
     ]
 )

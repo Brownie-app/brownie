@@ -39,6 +39,18 @@ Match the style of the file you are in. No new dependencies without a reason in 
 
 Brownie's architecture was inspired by Sentient OS (AGPL). The implementation, prompts and docs were written from scratch — see `docs/spec/provenance.md`. Do not copy code, prompts or documentation from that project or any other incompatible source into a PR.
 
+## Tests — what "covered" means here
+
+Nothing merges without tests for what it changes. The tiers:
+
+1. **Logic** — unit tests, on every PR (`swift test --skip EvalTests`, a few seconds). Cursors, the ledger of loops, card merging, every parser of brain output (they fail closed on garbage), the MCP server's protocol and off-switch, recipe recording and replay rules, the send log, scheduling decisions.
+2. **Brain-facing code** — tested against recorded responses, never live API calls in CI.
+3. **Prompts** — the eval corpus (`Tests/Eval/Corpus/corpus.json`). Needs the 3.7 GB reader, so it runs locally (`swift test --filter EvalTests`) and must be run before a release; the score must not drop. Add a case for every miss you see on real data.
+4. **Integration** — the SQLite store, the knowledge base index, the MCP server end to end, all in-process.
+5. **Not automatable** — Hands driving real apps, Telegram sign-in, Calendar, the 3 AM wake, notarisation. These are on the release checklist (`docs/release-checklist.md`) and are run by hand.
+
+A PR that changes behaviour without a test in tiers 1, 2 or 4 will be sent back. Coverage is reported by CI; there is no percentage gate, because gates get gamed and punish honest refactors.
+
 ## Pull requests
 
 - One change per PR, with a sentence on *why*.
