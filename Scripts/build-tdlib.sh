@@ -12,7 +12,9 @@ cmake -S "$SRC" -B "$SRC/build" -DCMAKE_BUILD_TYPE=Release -DOPENSSL_ROOT_DIR="$
 cmake --build "$SRC/build" --target tdjson -j "$(sysctl -n hw.ncpu)"
 mkdir -p Vendor/tdlib/lib Vendor/tdlib/include/td/telegram
 cp "$SRC/build/libtdjson.dylib" Vendor/tdlib/lib/
-cp "$SRC/td/telegram/td_json_client.h" "$SRC/td/telegram/tdjson_export.h" Vendor/tdlib/include/td/telegram/
+cp "$SRC/td/telegram/td_json_client.h" Vendor/tdlib/include/td/telegram/
+# tdjson_export.h is generated into the build tree
+cp "$SRC/build/td/telegram/tdjson_export.h" Vendor/tdlib/include/td/telegram/ 2>/dev/null || cp "$SRC/td/telegram/tdjson_export.h" Vendor/tdlib/include/td/telegram/ 2>/dev/null || echo "tdjson_export.h not regenerated; keeping the vendored copy"
 cp "$OPENSSL/lib/libssl.3.dylib" "$OPENSSL/lib/libcrypto.3.dylib" Vendor/tdlib/lib/
 chmod u+w Vendor/tdlib/lib/*.dylib
 # @rpath install names so the dylibs can live in Brownie.app/Contents/Frameworks
