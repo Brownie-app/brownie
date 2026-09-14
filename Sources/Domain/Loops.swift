@@ -87,14 +87,18 @@ public struct TaughtRecipe: Codable, Sendable, Identifiable, Equatable {
     public enum Schedule: Codable, Sendable, Equatable {
         case onDemand
         case weekly(weekday: Int, hour: Int, minute: Int)   // weekday 1 = Sunday
+        /// When a file matching `pattern` (glob, case-insensitive) appears in `folder`. The path fills the `file` parameter.
+        case folder(path: String, pattern: String)
         public var line: String {
             switch self {
             case .onDemand: return "When you ask"
             case .weekly(let d, let h, let m):
                 let day = Calendar.current.weekdaySymbols[max(0, min(6, d - 1))]
                 return "Every " + day + ", " + String(h) + ":" + String(format: "%02d", m)
+            case .folder(let p, let pat): return "When " + pat + " arrives in " + (p as NSString).abbreviatingWithTildeInPath
             }
         }
+        public var isTrigger: Bool { if case .folder = self { return true }; return false }
     }
     public let id: String
     public var name: String

@@ -121,6 +121,7 @@ final class AppModel: ObservableObject {
     var briefTimer: Timer?
     var recipeTimer: Timer?
     var recipeTask: Task<Void, Never>?
+    var watchers: [String: FolderWatcher] = [:]
 
     init() {
         store = try! SQLiteRunStore(path: Paths.store.path)
@@ -149,7 +150,7 @@ final class AppModel: ObservableObject {
         helperInstalled = WakeHelper.Client().isInstalled
         loginItem = OvernightScheduler.isLoginItem
         startScheduler()
-        startBriefs(); startRecipeSchedule()
+        startBriefs(); startRecipeSchedule(); startTriggers()
         if TelegramSource.isConfigured { watchTelegram() }
         if CommandLine.arguments.contains("--request-permissions") { await requestAllPermissions() }
     }

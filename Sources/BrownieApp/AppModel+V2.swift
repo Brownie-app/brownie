@@ -181,7 +181,28 @@ extension AppModel {
                              schedule: teach.weekly ? .weekly(weekday: teach.weekday, hour: teach.hour, minute: teach.minute) : .onDemand, createdAt: Date())
         recipes.append(r); saveRecipes(); teach.savedID = r.id; teach.step = .saved
     }
-    func saveRecipes() { set(SettingKey.recipesTaught, json(recipes)) }
+    func saveRecipes() { set(SettingKey.recipesTaught, json(recipes)); startTriggers() }
+
+    /// One watcher per trigger recipe. A matching file runs the recipe with `file` filled in — and, like every run, waits for you at the last step.
+    func startTriggers() {
+        let wanted = recipes.filter { $0.schedule.isTrigger }
+        for id in watchers.keys where !wanted.contains(where: { $0.id == id }) { watchers[id]?.stop(); watchers[id] = nil }
+        for r in wanted {
+            guard case .folder(let path, let pattern) = r.schedule else { continue }
+            if watchers[r.id] != nil { continue }
+            let w = FolderWatcher()
+            let folder = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
+            w.start(folder, pattern: pattern) { [weak self] seen in
+                Task { @MainActor in
+                    guard let self, !self.recipeRun.running else { return }
+                    Notifier.post("“\((seen.path as NSString).lastPathComponent)” arrived", body: "Running “\(r.name)”. Hands stops before the last step.", id: "trigger.\(r.id)")
+                    NSApp.activate(ignoringOtherApps: true)
+                    self.runRecipe(r.id, answers: ["file": seen.path])
+                }
+            }
+            watchers[r.id] = w
+        }
+    }
     func updateRecipe(_ r: TaughtRecipe) { if let i = recipes.firstIndex(where: { $0.id == r.id }) { recipes[i] = r; saveRecipes() } }
     /// Re-record just one step: the next thing the user does in the other app replaces it.
     func rerecordStep(_ recipeID: String, at index: Int) {
@@ -200,7 +221,7 @@ extension AppModel {
     func runRecipe(_ id: String, answers: [String: String] = [:]) {
         guard let r = recipes.first(where: { $0.id == id }) else { return }
         guard Hands.hasAccessibility else { announcement = "Hands needs Accessibility to run recipes."; return }
-        let toAsk = r.parameters.filter { $0.fill == .ask && answers[$0.name] == nil }
+        let toAsk = r.parameters.filter { $0.fill == .ask && answers[$0.name] == nil && $0.name != "file" }
         recipeRun = RecipeRunState(recipeID: id, asking: toAsk, answers: answers)
         overlay = .recipeRun(id)
         guard toAsk.isEmpty else { return }

@@ -640,7 +640,7 @@ struct RecipeEditorView: View {
                         CardBox(padding: 16) {
                             VStack(alignment: .leading, spacing: 10) {
                                 Eyebrow(text: "When")
-                                Segmented(options: ["When I ask", "Every week"], selection: Binding(get: { if case .weekly = rec.wrappedValue.schedule { return "Every week" } else { return "When I ask" } }, set: { rec.wrappedValue.schedule = $0 == "Every week" ? .weekly(weekday: 2, hour: 9, minute: 0) : .onDemand }))
+                                Segmented(options: ["When I ask", "Every week", "When a file arrives"], selection: Binding(get: { switch rec.wrappedValue.schedule { case .weekly: return "Every week"; case .folder: return "When a file arrives"; default: return "When I ask" } }, set: { v in rec.wrappedValue.schedule = v == "Every week" ? .weekly(weekday: 2, hour: 9, minute: 0) : (v == "When a file arrives" ? .folder(path: "~/Downloads", pattern: "*.pdf") : .onDemand) }))
                                 if case .weekly(let d, let h, let mi) = rec.wrappedValue.schedule {
                                     HStack(spacing: 6) {
                                         Picker("", selection: Binding(get: { d }, set: { rec.wrappedValue.schedule = .weekly(weekday: $0, hour: h, minute: mi) })) { ForEach(1...7, id: \.self) { x in Text(Calendar.current.weekdaySymbols[x - 1]).tag(x) } }.labelsHidden().frame(width: 118)
@@ -648,7 +648,14 @@ struct RecipeEditorView: View {
                                         Picker("", selection: Binding(get: { mi }, set: { rec.wrappedValue.schedule = .weekly(weekday: d, hour: h, minute: $0) })) { ForEach([0, 15, 30, 45], id: \.self) { x in Text(String(format: "%02d", x)).tag(x) } }.labelsHidden().frame(width: 58)
                                     }
                                 }
-                                Text("Scheduled runs prepare everything and wait for you at the last step.").font(.system(size: 11)).foregroundStyle(t.ink2)
+                                if case .folder(let path, let pattern) = rec.wrappedValue.schedule {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        HStack(spacing: 6) { Text("Folder").font(.system(size: 11)).foregroundStyle(t.ink2).frame(width: 56, alignment: .leading); TextField("~/Downloads", text: Binding(get: { path }, set: { rec.wrappedValue.schedule = .folder(path: $0, pattern: pattern) })).textFieldStyle(.roundedBorder); BButton(title: "Choose…", kind: .quiet) { let p = NSOpenPanel(); p.canChooseDirectories = true; p.canChooseFiles = false; if p.runModal() == .OK, let u = p.url { rec.wrappedValue.schedule = .folder(path: (u.path as NSString).abbreviatingWithTildeInPath, pattern: pattern) } } }
+                                        HStack(spacing: 6) { Text("Matching").font(.system(size: 11)).foregroundStyle(t.ink2).frame(width: 56, alignment: .leading); TextField("*invoice*.pdf", text: Binding(get: { pattern }, set: { rec.wrappedValue.schedule = .folder(path: path, pattern: $0) })).textFieldStyle(.roundedBorder) }
+                                        Text("Brownie watches the folder while it's open. A match runs the recipe with {file} filled in — type {file} or {filename} in a step to use it — and waits for you at the last step. Files already there don't count.").font(.system(size: 11)).foregroundStyle(t.ink2)
+                                    }
+                                }
+                                if case .weekly = rec.wrappedValue.schedule { Text("Scheduled runs prepare everything and wait for you at the last step.").font(.system(size: 11)).foregroundStyle(t.ink2) }
                             }.frame(maxWidth: .infinity, alignment: .leading)
                         }
                         CardBox(padding: 16) {

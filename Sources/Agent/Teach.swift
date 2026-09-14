@@ -221,9 +221,16 @@ public struct RecipeRunner: Sendable {
     public init(screenFallback: ScreenFallback?, screenForbidden: Set<String>) { self.screen = screenFallback; self.screenForbidden = screenForbidden }
 
     /// `values`: parameter name → value for this run.
-    public func run(_ recipe: TaughtRecipe, values: [String: String], onStep: @escaping @Sendable (String) -> Void) async -> Outcome {
-        let steps = recipe.steps.map { s -> TaughtRecipe.Step in
+    /// The recipe's steps with this run's values filled in — the file, the person, the message.
+    public static func substituted(_ recipe: TaughtRecipe, values: [String: String]) -> [TaughtRecipe.Step] {
+        recipe.steps.map { s -> TaughtRecipe.Step in
             var s = s
+            // A trigger recipe's file: `{file}` anywhere in typed text or a target becomes the path; `{filename}` its name.
+            if let file = values["file"] {
+                let name = (file as NSString).lastPathComponent
+                s.text = s.text.replacingOccurrences(of: "{file}", with: file).replacingOccurrences(of: "{filename}", with: name)
+                if s.target.contains("{file") { s = .init(kind: s.kind, app: s.app, target: s.target.replacingOccurrences(of: "{file}", with: file).replacingOccurrences(of: "{filename}", with: name), role: s.role, text: s.text) }
+            }
             for p in recipe.parameters {
                 guard let v = values[p.name], v != p.original, !p.original.isEmpty else { continue }
                 if s.kind == .type, s.text == p.original { s.text = v }
@@ -231,8 +238,12 @@ public struct RecipeRunner: Sendable {
             }
             return s
         }
-        // Rung 1: an app link does the whole thing without touching the screen.
+    }
+
+    public func run(_ recipe: TaughtRecipe, values: [String: String], onStep: @escaping @Sendable (String) -> Void) async -> Outcome {
+        let steps = Self.substituted(recipe, values: values)
         log.info("run “\(recipe.name)”: \(steps.count) steps, values \(values)")
+        // Rung 1: an app link does the whole thing without touching the screen.
         if recipe.method == "WhatsApp link", let msg = steps.last(where: { $0.kind == .type && !$0.target.lowercased().contains("search") })?.text {
             let person = recipe.parameters.first(where: { $0.name == "person" }).flatMap { values[$0.name] ?? $0.original } ?? steps.first(where: { $0.kind == .click && ($0.role == "Row" || $0.role == "Cell" || $0.role == "StaticText") })?.target
             // Only when Contacts knows the number does the link land in the right chat; otherwise replay the steps as recorded.
