@@ -297,6 +297,9 @@ extension AppModel {
             else { announcement = "No recipe called “\(q("recipe"))”." }
         case "ask": NotificationCenter.default.post(name: .brownieAsk, object: q("text"))
         case "loops": overlay = .none; screen = .loops; NSApp.activate(ignoringOtherApps: true)
+        case "oauth":
+            // The Slack callback, bounced off the website: brownie://oauth/slack?code=…&state=…
+            if c.path == "/slack" { var p: [String: String] = [:]; for i in c.queryItems ?? [] { p[i.name] = i.value ?? "" }; Task { await SlackAuth.shared.receive(p) }; NSApp.activate(ignoringOtherApps: true) }
         default: break
         }
     }

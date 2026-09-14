@@ -40,7 +40,7 @@ let package = Package(
         // ── Capabilities (each implements Domain protocols; none import each other) ─────
         .target(name: "Privacy", dependencies: ["Domain", "Support"], swiftSettings: strict),
         .target(name: "LocalSources", dependencies: ["Domain", "Platform", "Support"], swiftSettings: strict),
-        .target(name: "CloudSources", dependencies: ["Domain", "Platform", "Support"], swiftSettings: strict),
+        .target(name: "CloudSources", dependencies: ["Domain", "Platform", "LocalSources", "Support"], swiftSettings: strict),
         .target(name: "TelegramSource", dependencies: ["Domain", "Platform", "LocalSources", "Support", "CTDJson"],
                 swiftSettings: strict + [.unsafeFlags(["-I", "Vendor/tdlib/include"])],
                 linkerSettings: [.unsafeFlags(["-L", "Vendor/tdlib/lib", "-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks", "-Xlinker", "-rpath", "-Xlinker", "Vendor/tdlib/lib"])]),
@@ -84,6 +84,7 @@ let package = Package(
         .testTarget(name: "PrivacyTests", dependencies: ["Privacy"]),
         .testTarget(name: "IngestTests", dependencies: ["Ingest", "Domain", "Platform"]),
         .testTarget(name: "LocalSourcesTests", dependencies: ["LocalSources", "Platform"]),
+        .testTarget(name: "CloudSourcesTests", dependencies: ["CloudSources", "LocalSources", "Domain", "Platform"]),
         .testTarget(name: "ProactiveTests", dependencies: ["Proactive", "Domain"]),
         .testTarget(name: "AgentTests", dependencies: ["Agent", "Domain"]),
         .testTarget(name: "KnowledgeTests", dependencies: ["Knowledge", "Domain", "Platform"]),

@@ -49,7 +49,7 @@ PLIST
 # They identify the app, not a user; a user's own tokens live only in their Keychain. Debug builds read .secrets/brownie.env instead.
 if [ "$CONFIG" = "release" ]; then
   /usr/libexec/PlistBuddy -c "Add :BrownieCredentials dict" "$APP/Contents/Info.plist"
-  for k in GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET TELEGRAM_API_ID TELEGRAM_API_HASH; do
+  for k in GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET TELEGRAM_API_ID TELEGRAM_API_HASH SLACK_CLIENT_ID SLACK_CLIENT_SECRET MICROSOFT_CLIENT_ID; do
     v="${(P)k}"
     [ -n "$v" ] && /usr/libexec/PlistBuddy -c "Add :BrownieCredentials:$k string $v" "$APP/Contents/Info.plist"
   done

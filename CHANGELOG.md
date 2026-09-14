@@ -7,7 +7,11 @@ All notable changes. Brownie follows semantic versioning once 1.0 ships; before 
 The first public build.
 
 - Overnight read on-device (Gemma 4 via LiteRT-LM), knowledge base built by your own brain, morning cards, Hands that stop before Send.
-- Sources: Files, Apple Notes, iMessage, WhatsApp, Telegram, Calendar, Gmail, work apps over MCP.
+- Sources: Files, Apple Notes, iMessage, WhatsApp, Telegram, Calendar, Gmail, Slack, Microsoft Teams, work apps over MCP.
+- Things you said out loud: Voice Memos and a folder of meeting recordings, transcribed on this Mac with Apple's speech engine; a promise keeps its timestamp.
+- Two-way vault sync with iCloud Drive: edits on the phone come back, Brownie's work goes out, a conflict keeps both under a heading.
+- Ask from ⌘⇧Space: a question is answered inline with citations; anything else is a goal for Hands.
+- Due-aware nudges the morning before a deadline; recipes that run when a file arrives in a folder.
 - Loops — promises both ways, came-back cards, nudges. Pre-meeting briefs. The Sunday letter.
 - Teach Hands: recipes by demonstration with an editor; replay verifies the right chat before typing.
 - Ask, with citations that open the original. The knowledge base as an Obsidian vault, with an iCloud Drive mirror.

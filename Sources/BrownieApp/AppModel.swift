@@ -135,7 +135,7 @@ final class AppModel: ObservableObject {
         sendLogger = SendLogger(sink: { p, model, bytes, detail, payload in try? await st.logSend(purpose: p, model: model, bytes: bytes, detail: detail, cameBack: "…", payload: payload, at: Date()) },
                                 result: { id, back in try? await st.setSendResult(id, cameBack: back) })
         knowledge = try! FileKnowledgeStore(root: Paths.knowledgeBase, indexPath: Paths.applicationSupport.appendingPathComponent("knowledge-index.sqlite").path)
-        allSources = [FilesSource(roots: FilesSource.defaultRoots), NotesSource(), iMessageSource(), WhatsAppSource(), CalendarSource(), GmailSource(), TelegramSource(), VoiceMemosSource(), RecordingsSource()]
+        allSources = [FilesSource(roots: FilesSource.defaultRoots), NotesSource(), iMessageSource(), WhatsAppSource(), CalendarSource(), GmailSource(), TelegramSource(), VoiceMemosSource(), RecordingsSource(), SlackSource(), TeamsSource()]
         download = ModelDownload(info: ModelCatalog.info(for: UserDefaults.standard.string(forKey: "reader.model")))
         Task { await bootstrap() }
     }
@@ -310,6 +310,24 @@ final class AppModel: ObservableObject {
     func telegramSignOut() { Task { try? await TelegramSource.shared?.logOut(); await refreshSources() } }
 
     func signOutGoogle() { Task { await GoogleAuth.shared.signOut(); await refreshSources() } }
+
+    func signInSlack() {
+        guard SlackAuth.isConfigured else { announcement = "Slack sign-in isn't set up in this build — paste a user token instead."; return }
+        Task {
+            do { try await SlackAuth.shared.signIn(); enabledSources.insert("slack"); set(SettingKey.enabledSources, json(enabledSources.map(\.rawValue))); await refreshSources() }
+            catch { announcement = "Slack sign-in didn't complete: \(error)" }
+        }
+    }
+    func useSlackToken(_ t: String) { SlackAuth.useToken(t); enabledSources.insert("slack"); set(SettingKey.enabledSources, json(enabledSources.map(\.rawValue))); Task { await refreshSources() } }
+    func signOutSlack() { SlackAuth.signOut(); Task { await refreshSources() } }
+    func signInMicrosoft() {
+        guard MicrosoftAuth.isConfigured else { announcement = "Microsoft sign-in isn't set up in this build."; return }
+        Task {
+            do { try await MicrosoftAuth.shared.signIn(); enabledSources.insert("teams"); set(SettingKey.enabledSources, json(enabledSources.map(\.rawValue))); await refreshSources() }
+            catch { announcement = "Microsoft sign-in didn't complete: \(error)" }
+        }
+    }
+    func signOutMicrosoft() { MicrosoftAuth.signOut(); Task { await refreshSources() } }
 
     func addFileRoot(_ url: URL) {
         guard !fileRoots.contains(url) else { return }

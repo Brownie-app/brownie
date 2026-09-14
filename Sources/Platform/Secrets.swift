@@ -7,7 +7,7 @@ import Foundation
 public enum Secrets {
     /// The Info.plist key that holds the shipped app credentials as a dictionary.
     public static let bundledKey = "BrownieCredentials"
-    static let bundleable: Set<String> = ["GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET", "TELEGRAM_API_ID", "TELEGRAM_API_HASH"]
+    static let bundleable: Set<String> = ["GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET", "TELEGRAM_API_ID", "TELEGRAM_API_HASH", "SLACK_CLIENT_ID", "SLACK_CLIENT_SECRET", "MICROSOFT_CLIENT_ID"]
 
     public static func value(_ key: String) -> String? {
         if let v = Keychain.get(key), !v.isEmpty { return v }

@@ -105,8 +105,29 @@ struct SourcesPane: View {
                 }
             }
         }
-        Text("Work").font(.system(size: 14, weight: .semibold)).padding(.top, 10)
-        Sub(text: "Work apps connect through an MCP server — your org's, or the vendor's. They're read exactly the same way: on this Mac, summaries only.")
+        Text("Work chat").font(.system(size: 14, weight: .semibold)).padding(.top, 10)
+        Sub(text: "Signed in as you, read on this Mac, summaries only. Channels are off until you pick them. Brownie keeps only what concerns you — a request of you, a promise you made, a decision you were part of.")
+        CardBox(padding: 0) {
+            VStack(spacing: 0) {
+                ForEach(workChat, id: \.id) { s in
+                    SettingRow(title: s.descriptor.name, detail: detail(s)) {
+                        if s.id == "slack" {
+                            if case .needsSignIn = m.availability[s.id] { BButton(title: "Paste a token", kind: .quiet) { showSlackToken = true }; BButton(title: "Sign in with Slack") { m.signInSlack() } }
+                            else if m.availability[s.id] == .available { BButton(title: "Sign out", kind: .quiet) { m.signOutSlack() } }
+                        }
+                        if s.id == "teams" {
+                            if case .needsSignIn = m.availability[s.id] { BButton(title: "Sign in with Microsoft") { m.signInMicrosoft() } }
+                            else if m.availability[s.id] == .available { BButton(title: "Sign out", kind: .quiet) { m.signOutMicrosoft() } }
+                        }
+                        Toggle2(on: Binding(get: { m.enabledSources.contains(s.id) }, set: { _ in m.toggleSource(s.id) }))
+                    }.padding(.horizontal, 16)
+                    if s.id != workChat.last?.id { Divider() }
+                }
+            }
+        }
+        .sheet(isPresented: $showSlackToken) { SlackTokenSheet().environmentObject(m).environment(\.theme, t) }
+        Text("Work apps").font(.system(size: 14, weight: .semibold)).padding(.top, 10)
+        Sub(text: "Other work apps connect through an MCP server — your org's, or the vendor's. They're read exactly the same way: on this Mac, summaries only.")
         CardBox(padding: 0) {
             VStack(spacing: 0) {
                 ForEach(m.mcpManifests) { mf in
@@ -128,7 +149,10 @@ struct SourcesPane: View {
     func mcpDetail(_ sid: SourceID, _ mf: MCPManifest) -> String {
         switch m.availability[sid] { case .available: return "Connected · \(mf.url)"; case .needsSignIn: return "Token rejected — remove and add again with a valid token"; case .unavailable(let w): return w; default: return mf.url }
     }
-    var personal: [any Source] { m.allSources.filter { $0.id != "voicememos" && $0.id != "recordings" } }
+    static let spokenIDs: Set<SourceID> = ["voicememos", "recordings"], workChatIDs: Set<SourceID> = ["slack", "teams"]
+    var personal: [any Source] { m.allSources.filter { !Self.spokenIDs.contains($0.id) && !Self.workChatIDs.contains($0.id) } }
+    var workChat: [any Source] { m.allSources.filter { Self.workChatIDs.contains($0.id) } }
+    @State private var showSlackToken = false
     var spoken: [any Source] { m.allSources.filter { $0.id == "voicememos" || $0.id == "recordings" } }
     func chooseRecordingsFolder() {
         let p = NSOpenPanel(); p.canChooseDirectories = true; p.canChooseFiles = false; p.allowsMultipleSelection = false; p.directoryURL = m.recordingsFolder
@@ -144,10 +168,13 @@ struct SourcesPane: View {
         case .notInstalled: return "\(s.descriptor.name) isn't on this Mac"
         case .needsPermission(let p): return p == .speech ? "Needs Speech Recognition — turn it on and allow when asked" : "Needs \(p == .fullDiskAccess ? "Full Disk Access" : p.rawValue) — grant it in Settings → Privacy"
         case .unavailable(let why): return why
-        case .needsSignIn: return s.id == "telegram" ? "Sign in with your own phone number" : "Sign in with your own Google account · read-only"
+        case .needsSignIn:
+            if s.id == "slack" { return "Sign in as you · DMs and channels you choose · last 7 days at first read" }
+            if s.id == "teams" { return "Sign in with your work account · chats and channels you choose · needs your admin's consent once" }
+            return s.id == "telegram" ? "Sign in with your own phone number" : "Sign in with your own Google account · read-only"
         default:
             if s.id == "files" { return m.fileRoots.map(\.lastPathComponent).joined(separator: ", ") }
-            if s.descriptor.supportsPerBucketOptIn { return "\(m.enabledBuckets[s.id]?.count ?? 0) chats chosen" }
+            if s.descriptor.supportsPerBucketOptIn { return "\(m.enabledBuckets[s.id]?.count ?? 0) \(Self.workChatIDs.contains(s.id) ? "conversations" : "chats") chosen" }
             return s.descriptor.detail
         }
     }
@@ -622,5 +649,22 @@ struct TelegramSignIn: View {
         if e.contains("UPDATE_APP_TO_LOGIN") { return "Telegram needs a newer client library. Rebuild Brownie." }
         if e.contains("timeout") { return "No answer from Telegram. Check your connection and try again." }
         return e.replacingOccurrences(of: "tdlib(\"", with: "").replacingOccurrences(of: "\")", with: "")
+    }
+}
+
+
+/// For workspaces where the Brownie Slack app isn't approved: a user token from the user's own Slack app.
+struct SlackTokenSheet: View {
+    @EnvironmentObject var m: AppModel
+    @Environment(\.theme) var t
+    @Environment(\.dismiss) var dismiss
+    @State private var token = ""
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Paste a Slack user token").font(.system(size: 17, weight: .semibold))
+            Text("Create a Slack app at api.slack.com/apps, add the user scopes channels:history, channels:read, groups:history, groups:read, im:history, im:read, mpim:history, mpim:read, users:read, install it to your workspace, and paste the token that starts with xoxp-. It goes to your Keychain; nothing else sees it.").font(.system(size: 12)).foregroundStyle(t.ink2)
+            SecureField("xoxp-…", text: $token).textFieldStyle(.roundedBorder)
+            HStack { Spacer(); BButton(title: "Cancel", kind: .quiet) { dismiss() }; BButton(title: "Use token", kind: .primary) { m.useSlackToken(token); dismiss() }.disabled(!token.hasPrefix("xoxp-")) }
+        }.padding(20).frame(width: 460)
     }
 }
