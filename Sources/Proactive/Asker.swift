@@ -66,3 +66,28 @@ public struct Asker: Sendable {
         return (Answer(question: question, answer: text, citations: cites, actions: actions, at: clock.now()), usage)
     }
 }
+
+/// What the ⌘⇧Space bar does with a line of text: a question is answered from the notes; anything else is a goal for Hands (or a recipe's name).
+public enum CommandIntent: Sendable, Equatable {
+    case question(String), goal(String)
+
+    /// A question ends with `?` or starts with a question word (what / who / when / did / where / how / why / which / is / are / do / does / have / has / am / was / were / will / should / can / could / any).
+    public static func classify(_ text: String) -> CommandIntent {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return isQuestion(t) ? .question(t) : .goal(t)
+    }
+
+    public static func isQuestion(_ text: String) -> Bool {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return false }
+        if t.hasSuffix("?") || t.hasSuffix("？") { return true }
+        let first = t.lowercased().split(whereSeparator: { !$0.isLetter && $0 != "'" && $0 != "’" }).first.map(String.init) ?? ""
+        return questionWords.contains(first) || first.hasPrefix("what'") || first.hasPrefix("who'") || first.hasPrefix("when'") || first.hasPrefix("where'") || first.hasPrefix("how'")
+    }
+
+    static let questionWords: Set<String> = [
+        "what", "who", "whom", "whose", "when", "where", "why", "how", "which",
+        "did", "do", "does", "is", "are", "am", "was", "were", "have", "has", "had",
+        "will", "would", "should", "can", "could", "any", "anything", "anyone",
+    ]
+}

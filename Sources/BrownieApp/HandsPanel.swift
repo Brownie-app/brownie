@@ -1,4 +1,5 @@
 import SwiftUI
+import Proactive
 import AppKit
 import Speech
 import AVFoundation
@@ -158,19 +159,57 @@ struct CommandBar: View {
     @EnvironmentObject var m: AppModel
     @ObservedObject var controller: HandsController
     @Environment(\.theme) var t
+    /// The question being answered inline, if the last submitted line was one.
+    @State private var asked: String?
+    @FocusState private var focused: Bool
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 Image(systemName: "sun.max").foregroundStyle(t.accent)
-                TextField("Tell Hands what to do…", text: $controller.commandText).textFieldStyle(.plain).font(.system(size: 14)).onSubmit { go() }
-                BButton(title: "Do it", kind: .primary) { go() }
+                TextField("Ask a question, or tell Hands what to do…", text: $controller.commandText).textFieldStyle(.plain).font(.system(size: 14)).focused($focused).onSubmit { go() }
+                BButton(title: isQuestion ? "Ask" : "Do it", kind: .primary) { go() }.disabled(m.asking)
             }
-            let suggestions = Array((controller.recentGoals + m.cards.prefix(3).map { $0.actionLabel + ": " + $0.title }).prefix(5))
-            if !suggestions.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 8) { ForEach(suggestions, id: \.self) { g in Button(g) { controller.commandText = g }.buttonStyle(.plain).font(.system(size: 12)).lineLimit(1).padding(.horizontal, 10).frame(height: 24).background(Capsule().fill(t.chip)) } } }
+            if let asked { answerBlock(for: asked) }
+            else {
+                let suggestions = Array((controller.recentGoals + m.cards.prefix(3).map { $0.actionLabel + ": " + $0.title }).prefix(5))
+                if !suggestions.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 8) { ForEach(suggestions, id: \.self) { g in Button(g) { controller.commandText = g }.buttonStyle(.plain).font(.system(size: 12)).lineLimit(1).padding(.horizontal, 10).frame(height: 24).background(Capsule().fill(t.chip)) } } }
+                }
             }
-            Text("⌘⇧Space · knows your notes · asks before anything irreversible").font(.system(size: 11)).foregroundStyle(t.ink2)
-        }.padding(16).frame(width: 620)
+            Text(isQuestion ? "A question — ends with ? or starts with what / who / when / did — is answered here from your notes" : "⌘⇧Space · a question is answered from your notes · anything else is a goal for Hands or a recipe's name · esc to close").font(.system(size: 11)).foregroundStyle(t.ink2)
+        }.padding(16).frame(width: 620).onAppear { focused = true }
     }
-    func go() { let g = controller.commandText.trimmingCharacters(in: .whitespaces); guard !g.isEmpty else { return }; controller.showCommandBar = false; controller.run(g) }
+    var isQuestion: Bool { CommandIntent.isQuestion(controller.commandText) }
+
+    @ViewBuilder func answerBlock(for q: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Text("Question · answered from your notes").font(.system(size: 11, weight: .semibold)).foregroundStyle(t.accentInk)
+                Spacer()
+                Text(q).font(.system(size: 11)).foregroundStyle(t.ink2).lineLimit(1)
+            }
+            if m.asking {
+                HStack(spacing: 10) { DawnMark(size: 22); ProgressView().controlSize(.small); Text("Reading your notes…").font(.system(size: 12)).foregroundStyle(t.ink2) }
+            } else if let a = m.asks.last, a.question == q {
+                AnswerText(answer: a).frame(maxWidth: .infinity, alignment: .leading)
+                if !a.citations.isEmpty { ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 6) { ForEach(a.citations) { c in CiteChip(c: c) { close(); m.open(c) } } } } }
+                HStack(spacing: 6) {
+                    ForEach(Array(a.actions.enumerated()), id: \.offset) { _, x in BButton(title: x.label) { close(); m.run(x) } }
+                    BButton(title: "Open in Brownie", kind: .quiet) { close(); m.overlay = .none; m.screen = .ask }
+                }
+            } else {
+                Text(m.announcement ?? "No answer came back.").font(.system(size: 12)).foregroundStyle(t.ink2)
+            }
+        }
+        .padding(12).background(RoundedRectangle(cornerRadius: 12).fill(t.card)).overlay(RoundedRectangle(cornerRadius: 12).stroke(t.cardBorder))
+    }
+
+    func go() {
+        let line = controller.commandText.trimmingCharacters(in: .whitespaces); guard !line.isEmpty else { return }
+        switch CommandIntent.classify(line) {
+        case .question(let q): asked = q; controller.commandText = ""; m.ask(q)
+        case .goal(let g): close(); controller.run(g)
+        }
+    }
+    func close() { controller.showCommandBar = false; asked = nil }
 }

@@ -1,4 +1,5 @@
 import SwiftUI
+import Proactive
 import AppKit
 import Sparkle
 import Support
@@ -24,7 +25,7 @@ struct BrownieApp: App {
             .environmentObject(model)
             .sheet(isPresented: $hands.showCommandBar) { Themed { CommandBar(controller: hands) }.environmentObject(model) }
             .onOpenURL { url in model.handle(url: url) }
-            .onReceive(NotificationCenter.default.publisher(for: .brownieAsk)) { n in if let g = n.object as? String, !g.isEmpty { NSApp.activate(ignoringOtherApps: true); hands.run(g) } else { hands.showCommandBar = true } }
+            .onReceive(NotificationCenter.default.publisher(for: .brownieAsk)) { n in if let g = n.object as? String, !g.isEmpty { NSApp.activate(ignoringOtherApps: true); if CommandIntent.isQuestion(g) { model.overlay = .none; model.screen = .ask; model.ask(g) } else { hands.run(g) } } else { hands.showCommandBar = true } }
             .onAppear {
                 hands.start(); Notifier.requestPermission(); NSApp.setActivationPolicy(.regular); NSApp.activate(ignoringOtherApps: true)
                 Notifier.install(model: model)
