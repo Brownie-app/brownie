@@ -4,7 +4,7 @@ import Support
 
 /// Part 1: hermetic, no tools. Summaries (+ calendar text + clock + standing instructions) → ranked candidates.
 public struct Judge: Sendable {
-    public static let schema = #"{"type":"object","properties":{"action_items":{"type":"array","items":{"type":"object","properties":{"title":{"type":"string"},"action":{"type":"string"},"importance":{"type":"string"},"dueDate":{"type":["string","null"]},"sources":{"type":"array","items":{"type":"string"}},"urgency":{"type":"string","enum":["high","medium","low"]},"loopID":{"type":["string","null"]},"cameBack":{"type":"boolean"}},"required":["title","action","importance","dueDate","sources","urgency","loopID","cameBack"]}},"loops":{"type":"array","items":{"type":"object","properties":{"person":{"type":"string"},"direction":{"type":"string","enum":["mine","theirs"]},"what":{"type":"string"},"quote":{"type":"string"},"source":{"type":"string"},"due":{"type":["string","null"]}},"required":["person","direction","what","quote","source","due"]}},"loop_updates":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},"status":{"type":"string","enum":["open","closed"]},"how":{"type":"string"}},"required":["id","status","how"]}}},"required":["action_items","loops","loop_updates"]}"#
+    public static let schema = #"{"type":"object","properties":{"action_items":{"type":"array","items":{"type":"object","properties":{"title":{"type":"string"},"action":{"type":"string"},"importance":{"type":"string"},"dueDate":{"type":["string","null"]},"sources":{"type":"array","items":{"type":"string"}},"urgency":{"type":"string","enum":["high","medium","low"]},"loopID":{"type":["string","null"]},"cameBack":{"type":"boolean"}},"required":["title","action","importance","dueDate","sources","urgency","loopID","cameBack"]}},"loops":{"type":"array","items":{"type":"object","properties":{"person":{"type":"string"},"direction":{"type":"string","enum":["mine","theirs"]},"what":{"type":"string"},"quote":{"type":"string"},"source":{"type":"string"},"due":{"type":["string","null"]},"dueISO":{"type":["string","null"]}},"required":["person","direction","what","quote","source","due","dueISO"]}},"loop_updates":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},"status":{"type":"string","enum":["open","closed"]},"how":{"type":"string"}},"required":["id","status","how"]}}},"required":["action_items","loops","loop_updates"]}"#
 
     /// What the judge found besides the items: new loops and closures of tracked ones.
     public struct Findings: Sendable {
@@ -44,7 +44,7 @@ public struct Judge: Sendable {
         let now = clock.now()
         let loops = (obj.loops ?? []).compactMap { l -> Loop? in
             guard !l.person.isEmpty, !l.what.isEmpty else { return nil }
-            return Loop(direction: l.direction == "mine" ? .mine : .theirs, person: l.person, what: l.what, quote: l.quote, sourceLabel: l.source, due: l.due, openedAt: now)
+            return Loop(direction: l.direction == "mine" ? .mine : .theirs, person: l.person, what: l.what, quote: l.quote, sourceLabel: l.source, due: l.due, dueDate: Self.date(l.dueISO, clock: clock), openedAt: now)
         }
         let updates = (obj.loop_updates ?? []).map { (idPrefix: $0.id, closed: $0.status == "closed", how: $0.how) }
         log.info("judge: \(obj.action_items.count) candidates, \(loops.count) new loops, \(updates.count) loop updates from \(summaries.count) summaries")
@@ -55,13 +55,22 @@ public struct Judge: Sendable {
         let action_items: [ActionItem]
         let loops: [RawLoop]?
         let loop_updates: [RawUpdate]?
-        struct RawLoop: Decodable { let person: String; let direction: String; let what: String; let quote: String; let source: String; let due: String? }
+        struct RawLoop: Decodable { let person: String; let direction: String; let what: String; let quote: String; let source: String; let due: String?; let dueISO: String? }
         struct RawUpdate: Decodable { let id: String; let status: String; let how: String }
     }
 
     static func line(_ s: SummaryRecord, _ i: Int) -> String {
         let date = s.itemDate.map { DateFormatter.localizedString(from: $0, dateStyle: .medium, timeStyle: .none) } ?? "undated"
         return "#\(i) · [\(s.source.rawValue)] \(s.bucketName) · \(date)\n\(s.title) — \(s.text)"
+    }
+
+    /// "2026-09-23" → that day at 9 AM local, so "due Tuesday" sorts before the day is over. Anything else → nil.
+    static func date(_ iso: String?, clock: Clock) -> Date? {
+        guard let iso, iso.count == 10 else { return nil }
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = clock.timeZone
+        let p = iso.split(separator: "-").compactMap { Int($0) }
+        guard p.count == 3 else { return nil }
+        return cal.date(from: DateComponents(year: p[0], month: p[1], day: p[2], hour: 9))
     }
 
     static func now(_ clock: Clock) -> String {

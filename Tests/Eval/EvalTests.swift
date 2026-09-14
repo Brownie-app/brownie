@@ -1,4 +1,5 @@
-import XCTest
+import Testing
+import Foundation
 import Domain
 import Inference
 import Ingest
@@ -6,11 +7,11 @@ import Privacy
 
 /// Scores the reader's prompts against a labelled corpus. Skips when the model isn't downloaded
 /// (CI); run locally with `swift test --filter EvalTests` after the first launch.
-final class EvalTests: XCTestCase {
+@Suite struct EvalTests {
     struct Case: Decodable { let id: String; let kind: SourceKind; let name: String?; let chat: String?; let isGroup: Bool?; let text: String; let expect: String; let mustOmit: [String]?; let mustContain: [String]?; let mustNotSay: [String]? }
 
-    func testReaderCorpus() async throws {
-        guard let path = ModelCatalog.locate(ModelCatalog.gemma4E4B) else { throw XCTSkip("reader model not downloaded") }
+    @Test func testReaderCorpus() async throws {
+        guard let path = ModelCatalog.locate(ModelCatalog.gemma4E4B) else { print("eval skipped: reader model not downloaded"); return }
         let url = Bundle.module.url(forResource: "corpus", withExtension: "json", subdirectory: "Corpus") ?? Bundle.module.url(forResource: "corpus", withExtension: "json")!
         let cases = try JSONDecoder().decode([Case].self, from: Data(contentsOf: url))
         let reader = Reader(modelPath: path, jsonSchema: Triage.jsonSchema)
@@ -35,7 +36,7 @@ final class EvalTests: XCTestCase {
         let accuracy = Double(verdictHits) / Double(cases.count)
         print("[eval] verdict accuracy \(verdictHits)/\(cases.count) = \(Int(accuracy * 100))%; rule failures: \(ruleFails.count)")
         for f in ruleFails { print("[eval]   - \(f)") }
-        XCTAssertGreaterThanOrEqual(accuracy, 0.8, "reader verdict accuracy below 80%")
-        XCTAssertTrue(ruleFails.filter { $0.contains("leaked") }.isEmpty, "a summary leaked a private specific: \(ruleFails)")
+        #expect(accuracy >= 0.8, "reader verdict accuracy below 80%")
+        #expect(ruleFails.filter { $0.contains("leaked") }.isEmpty, "a summary leaked a private specific: \(ruleFails)")
     }
 }

@@ -43,6 +43,16 @@ struct LoopsView: View {
                         }
                     }
                     CardBox(padding: 14) {
+                        HStack(spacing: 14) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Nudge before a deadline").fontWeight(.semibold)
+                                Text("When a loop has a date, a card appears ahead of it — even if nothing new was said. “Villa hold ends Tuesday” becomes a card on Monday morning.").font(.system(size: 11)).foregroundStyle(t.ink2)
+                            }
+                            Spacer()
+                            Segmented(options: ["The morning before", "2 days before", "Only when asked"], selection: Binding(get: { m.nudgeDays == 1 ? "The morning before" : (m.nudgeDays == 2 ? "2 days before" : "Only when asked") }, set: { m.setNudgeDays($0.hasPrefix("The") ? 1 : ($0.hasPrefix("2") ? 2 : 0)) }))
+                        }
+                    }
+                    CardBox(padding: 14) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("How a loop closes").fontWeight(.semibold)
                             Text("A loop opens when someone — you included — says they’ll do something. It closes when the next overnight read sees it done: a reply, a file sent, a “done”. If you fired a card and nothing changed by the next read, the card comes back with a gentler nudge.").font(.system(size: 11)).foregroundStyle(t.ink2)
@@ -82,7 +92,10 @@ struct LoopRow: View {
                 Text("“\(loop.quote)” · \(loop.sourceLabel)").font(.system(size: 11)).foregroundStyle(t.ink2).lineLimit(1)
             }
             Spacer()
-            if let d = loop.due { Text(d).font(.system(size: 12)).foregroundStyle(t.warn) }
+            VStack(alignment: .trailing, spacing: 2) {
+                if let d = loop.due { Text(d).font(.system(size: 12)).foregroundStyle(t.warn) }
+                if let n = DueNudger.nudgeLine(for: loop, days: m.nudgeDays, now: Date()) { HStack(spacing: 4) { Image(systemName: "clock").font(.system(size: 9)); Text(n) }.font(.system(size: 10.5, weight: .medium)).foregroundStyle(t.accentInk).padding(.horizontal, 7).frame(height: 18).background(Capsule().fill(t.accentSoft)) }
+            }
             HStack(spacing: 6) {
                 Circle().fill(loop.status == .open ? (loop.cameBackCount > 0 ? t.bad : t.warn) : t.ok).frame(width: 7, height: 7)
                 Text(loop.status == .open ? (loop.cameBackCount > 0 ? "Came back" : "Open") : (loop.status == .closed ? "Done" : "Not a loop")).font(.system(size: 12, weight: .medium))

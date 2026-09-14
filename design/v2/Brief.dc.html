@@ -138,6 +138,16 @@
     .approw { display: grid; grid-template-columns: 36px minmax(0, 1fr) 150px 120px; gap: 12px; align-items: center; padding: 11px 16px; border-top: 1px solid var(--sep); }
     .appico { width: 36px; height: 36px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; color: #fff; }
     .wikilink { color: var(--accent-ink); font-weight: 500; border-bottom: 1px dotted var(--accent); }
+    .cmd { width: 640px; background: var(--card); border: 1px solid var(--cardb); border-radius: 14px; box-shadow: 0 30px 80px rgba(0,0,0,0.35); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+    .cmd .in { display: flex; align-items: center; gap: 10px; font-size: 15px; }
+    .cmd .in .q { flex: 1; }
+    .cmd .ans { font-size: 13.5px; line-height: 1.55; padding: 10px 12px; border-radius: 10px; background: var(--code); }
+    .cmd .hint { display: flex; gap: 12px; font-size: 11px; color: var(--ink2); }
+    .cmd .hint b { color: var(--ink); font-weight: 500; }
+    .duebadge { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 8px; border-radius: 10px; font-size: 11px; font-weight: 500; background: rgba(217,79,69,0.12); color: var(--bad); }
+    .duebadge.soon { background: rgba(201,133,58,0.16); color: var(--warn); }
+    .wave { display: flex; align-items: center; gap: 2px; height: 22px; }
+    .wave i { width: 3px; border-radius: 2px; background: var(--accent); display: block; }
     .win.compact { width: 1100px; height: 700px; }
     .win.compact .side { width: 200px; }
     .ed { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 22px; align-content: start; }
@@ -303,6 +313,7 @@
                   <div class="urg" style="background: {{c.urgColor}};"></div>
                   <div style="font-weight: 600; font-size: 14px; flex: 1;">{{c.title}}</div>
                   <sc-if value="{{c.back}}" hint-placeholder-val="{{ false }}"><div class="chip" style="background: rgba(217,79,69,0.12); color: var(--bad);"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path></svg><span>Came back</span></div></sc-if>
+                  <sc-if value="{{c.isDue}}" hint-placeholder-val="{{ false }}"><span class="duebadge">Due tomorrow</span></sc-if>
                   <div class="chip"><span>{{c.source}}</span></div>
                 </div>
                 <div class="sub" style="font-size: 12.5px;">{{c.why}}</div>
@@ -373,6 +384,9 @@
         <div style="display: flex; flex-direction: column; gap: 14px;">
           <div class="card" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 10px;">
             <div class="tiny" style="text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;">Evidence</div>
+            <sc-if value="{{card.voice}}" hint-placeholder-val="{{ false }}">
+              <div style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; background: var(--code);"><div class="btn" style="height: 26px; padding: 0 8px;"><svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"></path></svg></div><div class="wave"><i style="height: 6px;"></i><i style="height: 14px;"></i><i style="height: 20px;"></i><i style="height: 10px;"></i><i style="height: 16px;"></i><i style="height: 8px;"></i><i style="height: 18px;"></i><i style="height: 12px;"></i><i style="height: 6px;"></i><i style="height: 14px;"></i><i style="height: 9px;"></i></div><div class="tiny">04:12 · 12 s around the promise</div></div>
+            </sc-if>
             <sc-for list="{{card.evidence}}" as="e" hint-placeholder-count="3">
               <div style="display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-top: 1px solid var(--sep);">
                 <div style="display: flex; gap: 8px; align-items: center;"><div class="chip"><span>{{e.src}}</span></div><div class="tiny">{{e.when}}</div></div>
@@ -401,7 +415,7 @@
       </div>
       <div class="body" style="display: flex; flex-direction: column; gap: 18px;">
         <div class="card">
-          <div class="ledg h"><div></div><div>Who · what</div><div>Said where</div><div>Due</div><div>Status</div></div>
+          <div class="ledg h"><div></div><div>Who · what</div><div>Said where</div><div>Due · nudge</div><div>Status</div></div>
           <sc-for list="{{loops}}" as="l" hint-placeholder-count="4">
             <div class="ledg">
               <div class="avatar">{{l.ini}}</div>
@@ -410,13 +424,20 @@
                 <div class="tiny" style="margin-top: 2px;">{{l.quote}}</div>
               </div>
               <div class="tiny">{{l.where}}</div>
-              <div style="font-size: 12.5px; color: {{l.dueColor}};">{{l.due}}</div>
+              <div style="display: flex; flex-direction: column; gap: 3px;"><div style="font-size: 12.5px; color: {{l.dueColor}};">{{l.due}}</div><sc-if value="{{l.hasNudge}}" hint-placeholder-val="{{ false }}"><span class="duebadge soon"><svg viewBox="0 0 24 24" style="width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 2;"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v4l2.5 2.5"></path></svg>{{l.nudge}}</span></sc-if></div>
               <div style="display: flex; align-items: center; gap: 8px;">
                 <div class="st"><i style="background: {{l.stColor}};"></i><span>{{l.status}}</span></div>
                 <div class="btn q" style="height: 22px; padding: 0 6px; margin-left: auto;" onClick="{{l.act}}"><span>{{l.actLabel}}</span></div>
               </div>
             </div>
           </sc-for>
+        </div>
+        <div class="card" style="padding: 14px 18px; display: flex; gap: 14px; align-items: center;">
+          <div style="flex: 1;">
+            <div style="font-weight: 600;">Nudge before a deadline</div>
+            <div class="tiny">When a loop has a date, a card appears ahead of it — even if nothing new was said. “Villa hold ends Tuesday” becomes a card on Monday morning.</div>
+          </div>
+          <div class="seg"><div class="{{nd.a}}" onClick="{{ndA}}">The morning before</div><div class="{{nd.b}}" onClick="{{ndB}}">2 days before</div><div class="{{nd.c}}" onClick="{{ndC}}">Only when asked</div></div>
         </div>
         <div class="card" style="padding: 14px 18px; display: flex; gap: 14px; align-items: center;">
           <div style="flex: 1;">
@@ -704,9 +725,16 @@
         <div style="display: flex; flex-direction: column; gap: 14px;">
           <div class="card" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 10px;">
             <div class="tiny" style="text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;">When</div>
-            <div class="seg"><div>When I ask</div><div class="on">Every week</div></div>
-            <div style="display: flex; gap: 6px;"><div class="field">Monday</div><div class="field">09</div><div class="field">00</div></div>
-            <div class="tiny">Scheduled runs prepare everything and wait for you at the last step.</div>
+            <div class="seg"><div class="{{tr.a}}" onClick="{{trA}}">When I ask</div><div class="{{tr.b}}" onClick="{{trB}}">Every week</div><div class="{{tr.c}}" onClick="{{trC}}">When a file arrives</div></div>
+            <sc-if value="{{tr.weekly}}" hint-placeholder-val="{{ true }}"><div style="display: flex; gap: 6px;"><div class="field">Monday</div><div class="field">09</div><div class="field">00</div></div></sc-if>
+            <sc-if value="{{tr.trigger}}" hint-placeholder-val="{{ false }}">
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                <div style="display: flex; gap: 6px; align-items: center;"><span class="tiny" style="width: 60px;">Folder</span><div class="field grow">~/Downloads</div></div>
+                <div style="display: flex; gap: 6px; align-items: center;"><span class="tiny" style="width: 60px;">Matching</span><div class="field grow">*invoice*.pdf</div></div>
+                <div class="tiny">Brownie watches the folder while it’s open. A match runs the recipe with <span class="param">the file</span> filled in, and waits for you at the last step. Ran 11 times · last: Zoho invoice, Thursday.</div>
+              </div>
+            </sc-if>
+            <sc-if value="{{tr.weekly}}" hint-placeholder-val="{{ true }}"><div class="tiny">Scheduled runs prepare everything and wait for you at the last step.</div></sc-if>
           </div>
           <div class="card" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 8px;">
             <div class="tiny" style="text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;">How Hands will do it</div>
@@ -809,11 +837,12 @@
           <div class="raili"><svg viewBox="0 0 24 24"><path d="M3 21l18-9L3 3v7l12 2-12 2z"></path></svg><span>Trips</span><span class="tiny" style="margin-left: auto;">6</span></div>
         </div>
         <div class="card note" style="padding: 24px 28px; max-width: 720px;">
-          <div class="row" style="margin-bottom: 8px;"><div class="tiny">People/Karan.md · updated last night · <span style="color: var(--ok);">synced to iCloud Drive 3:41 AM</span></div><div class="chip"><span>7 backlinks</span></div></div>
+          <div class="row" style="margin-bottom: 8px;"><div class="tiny">People/Karan.md · updated last night · <span style="color: var(--ok);">edited on your iPhone 9:12 AM · merged</span></div><div style="display: flex; gap: 6px;"><div class="chip" style="background: var(--accent-soft); color: var(--accent-ink);"><span>1 line from your phone</span></div><div class="chip"><span>7 backlinks</span></div></div></div>
           <h3>Karan</h3>
           <p><span class="wikilink">[[Priya]]</span>’s brother. Met on the <span class="wikilink">[[Goa 2024]]</span> trip; in the <span class="wikilink">[[Goa trip]]</span> group every year since. Runs a café in Indiranagar.</p>
           <p><strong>Open:</strong> owes his villa share for <span class="wikilink">[[Goa October]]</span> — said “will send my share tonight” on Friday; nothing since. You haven’t reminded him.</p>
           <p><strong>How he writes:</strong> short, late at night, voice notes when excited. Replies fast to jokes, slowly to logistics.</p>
+          <p style="border-left: 3px solid var(--accent); padding-left: 10px; margin-left: -13px;">Prefers UPI over bank transfer — <span class="tiny">you added this on your iPhone this morning</span></p>
           <ul><li>Fri: “will send my share tonight” · WhatsApp</li><li>Thu: two messages about cricket tickets, unanswered</li><li>2 Sep: sent the villa link that Priya booked</li></ul>
           <div class="tiny" style="margin-top: 10px;">Links in double brackets are Obsidian wikilinks — they work there and here. Edit this file anywhere; Brownie merges, never overwrites.</div>
         </div>
@@ -825,6 +854,7 @@
       <div class="bar">
         <div class="title">Settings</div>
         <div class="tabs">
+          <div class="tab {{tabs.sources}}" onClick="{{tabSources}}">Sources</div>
           <div class="tab {{tabs.knowledge}}" onClick="{{tabKnowledge}}">Knowledge</div>
           <div class="tab {{tabs.brain}}" onClick="{{tabBrain}}">Brain</div>
           <div class="tab {{tabs.hands}}" onClick="{{tabHands}}">Hands</div>
@@ -833,6 +863,37 @@
         </div>
       </div>
 
+      <sc-if value="{{st.sources}}" hint-placeholder-val="{{ false }}">
+        <div class="body" style="display: flex; flex-direction: column; gap: 18px; max-width: 800px;">
+          <div class="h2">What Brownie reads</div>
+          <div class="sub">On this Mac: Files, Apple Notes, iMessage, WhatsApp, Telegram, Calendar, Gmail. Everything below is new.</div>
+          <div class="tiny" style="text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;">Things you said out loud</div>
+          <div class="card" style="padding: 4px 0;">
+            <div class="row" style="padding: 12px 16px;"><div style="display: flex; gap: 12px; align-items: center;"><div class="appico" style="background: #D94F45;"><svg viewBox="0 0 24 24" style="width: 16px; height: 16px; stroke: #fff; fill: none; stroke-width: 2; stroke-linecap: round;"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path></svg></div><div><div style="font-weight: 600;">Voice Memos</div><div class="tiny">Transcribed on this Mac with Apple’s speech engine · 14 memos, 9 with something you promised · audio never leaves</div></div></div><div class="tog {{src.vm}}" onClick="{{srcVm}}"></div></div>
+            <div class="row" style="padding: 12px 16px; border-top: 1px solid var(--sep);"><div style="display: flex; gap: 12px; align-items: center;"><div class="appico" style="background: #A78BFA;"><svg viewBox="0 0 24 24" style="width: 16px; height: 16px; stroke: #fff; fill: none; stroke-width: 2; stroke-linecap: round;"><path d="M3 12h3l3-8 4 16 3-8h5"></path></svg></div><div><div style="font-weight: 600;">Meeting audio</div><div class="tiny">A folder of recordings (Zoom, QuickTime, your phone). Speakers are told apart; “I’ll send it by Thursday” becomes a loop with a 12-second clip as evidence.</div></div></div><div style="display: flex; gap: 8px; align-items: center;"><div class="field">~/Recordings</div><div class="tog {{src.ma}}" onClick="{{srcMa}}"></div></div></div>
+            <div class="row" style="padding: 12px 16px; border-top: 1px solid var(--sep);"><div><div style="font-weight: 600;">Transcription runs at night, on the GPU</div><div class="tiny">About 1 minute per 10 minutes of audio. A 1-hour call is read in 6 minutes. Transcripts are kept as notes; the audio is never copied.</div></div></div>
+          </div>
+          <div class="tiny" style="text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;">Work chat</div>
+          <div class="card" style="padding: 4px 0;">
+            <div class="row" style="padding: 12px 16px;"><div style="display: flex; gap: 12px; align-items: center;"><div class="appico" style="background: #4A154B;">S</div><div><div style="font-weight: 600;">Slack</div><div class="tiny">Signed in as you · DMs and 3 channels chosen · last 7 days at first read</div></div></div><div style="display: flex; gap: 8px; align-items: center;"><div class="btn q" style="height: 24px;" onClick="{{pickSlack}}"><span>Choose channels</span></div><div class="tog on"></div></div></div>
+            <sc-if value="{{src.slackOpen}}" hint-placeholder-val="{{ false }}">
+              <div style="padding: 4px 16px 12px 64px; display: flex; flex-direction: column; gap: 6px;">
+                <div class="row"><span>Direct messages</span><div class="tog on"></div></div>
+                <div class="row"><span>#founders</span><div class="tog on"></div></div>
+                <div class="row"><span>#design</span><div class="tog on"></div></div>
+                <div class="row"><span>#random · 1,204 members</span><div class="tog"></div></div>
+                <div class="tiny">Channels are off until you pick them. Turn one off and its notes stay; nothing new is read.</div>
+              </div>
+            </sc-if>
+            <div class="row" style="padding: 12px 16px; border-top: 1px solid var(--sep);"><div style="display: flex; gap: 12px; align-items: center;"><div class="appico" style="background: #5B5FC7;">T</div><div><div style="font-weight: 600;">Microsoft Teams</div><div class="tiny">Sign in with your work account · chats and channels you choose · needs your admin’s consent once</div></div></div><div class="btn"><span>Sign in with Microsoft</span></div></div>
+          </div>
+          <div class="card" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 6px;">
+            <div style="font-weight: 600;">Same rules as everything else</div>
+            <div class="tiny">Read on this Mac, summaries only to the brain, sensitive things erased on sight. Work chat often carries other people’s confidential material: Brownie keeps only what concerns you — a request of you, a promise you made, a decision you were part of.</div>
+          </div>
+        </div>
+      </sc-if>
+
       <sc-if value="{{st.knowledge}}" hint-placeholder-val="{{ false }}">
         <div class="body" style="display: flex; flex-direction: column; gap: 18px; max-width: 800px;">
           <div class="h2">Your notes are a vault</div>
@@ -840,7 +901,11 @@
           <div class="card" style="padding: 4px 0;">
             <div class="row" style="padding: 12px 16px;"><div><div style="font-weight: 600;">Where the vault lives</div><div class="tiny">~/Library/Application Support/Brownie/Knowledge Base · 84 notes · 1.2 MB</div></div><div style="display: flex; gap: 6px;"><div class="btn q"><span>Show in Finder</span></div><div class="btn q"><span>Move…</span></div></div></div>
             <div class="row" style="padding: 12px 16px; border-top: 1px solid var(--sep);"><div><div style="font-weight: 600;">Open in Obsidian</div><div class="tiny">Adds the vault to Obsidian once; after that it’s just there. Backlinks, graph and search work on Brownie’s notes.</div></div><div class="btn"><span>Open in Obsidian</span></div></div>
-            <div class="row" style="padding: 12px 16px; border-top: 1px solid var(--sep);"><div><div style="font-weight: 600;">Keep a copy in iCloud Drive</div><div class="tiny">A mirror in iCloud Drive/Brownie, so Obsidian on your iPhone reads it. Apple’s sync, Apple’s encryption; nothing of Brownie’s online.</div></div><div class="tog {{kb.icloud}}" onClick="{{kbIcloud}}"></div></div>
+            <div class="row" style="padding: 12px 16px; border-top: 1px solid var(--sep);"><div><div style="font-weight: 600;">iCloud Drive</div><div class="tiny">A copy in iCloud Drive/Brownie so Obsidian on your iPhone has it. Two-way: what you edit on the phone comes back here and Brownie merges it. Apple’s sync, Apple’s encryption; nothing of Brownie’s online.</div></div><div class="seg"><div class="{{kb.s0}}" onClick="{{kbS0}}">Off</div><div class="{{kb.s1}}" onClick="{{kbS1}}">To the phone</div><div class="{{kb.s2}}" onClick="{{kbS2}}">Two-way</div></div></div>
+            <sc-if value="{{kb.twoWay}}" hint-placeholder-val="{{ true }}">
+              <div class="row" style="padding: 12px 16px; border-top: 1px solid var(--sep);"><div><div style="font-weight: 600;">Last sync · 9:14 AM</div><div class="tiny">2 notes came back from your iPhone (People/Karan, Trips/Goa October) and were merged. 0 conflicts this week.</div></div><div class="st"><i style="background: var(--ok);"></i><span>In sync</span></div></div>
+              <div class="row" style="padding: 12px 16px; border-top: 1px solid var(--sep);"><div><div style="font-weight: 600;">When both sides changed the same line</div><div class="tiny">Brownie keeps both: yours stays in the note, its own version goes under a “Brownie’s version” heading for you to pick from. Your words are never overwritten.</div></div><div class="btn q"><span>See an example</span></div></div>
+            </sc-if>
             <div class="row" style="padding: 12px 16px; border-top: 1px solid var(--sep);"><div><div style="font-weight: 600;">Wikilinks between notes</div><div class="tiny">[[Priya]] instead of plain text, so people, groups and trips connect. On by default.</div></div><div class="tog on"></div></div>
           </div>
 
@@ -959,7 +1024,7 @@
   </div>
 </div>
 </x-dc>
-<script data-dc-script data-props='{"route":{"editor":"enum","default":"brief","options":["foryou","came-back","loops","ask","knowledge","brief","weekly","recipes","edit","teach","teach-watching","teach-tune","teach-saved","left","settings-knowledge","settings-brain","settings-brain-local","settings-hands","settings-privacy","settings-overnight","panic"],"section":"Screen"},"dark":{"editor":"boolean","default":false,"section":"Theme"},"compact":{"editor":"boolean","default":false,"section":"Window"},"walkthrough":{"editor":"enum","default":"off","options":["on","off"],"section":"First time"},"$preview":{"width":1440,"height":900}}'>
+<script data-dc-script data-props='{"route":{"editor":"enum","default":"brief","options":["foryou","came-back","loops","ask","knowledge","brief","due-card","voice-card","settings-sources","edit-trigger","weekly","recipes","edit","teach","teach-watching","teach-tune","teach-saved","left","settings-sources","settings-knowledge","settings-brain","settings-brain-local","settings-hands","settings-privacy","settings-overnight","panic"],"section":"Screen"},"dark":{"editor":"boolean","default":false,"section":"Theme"},"compact":{"editor":"boolean","default":false,"section":"Window"},"walkthrough":{"editor":"enum","default":"off","options":["on","off"],"section":"First time"},"$preview":{"width":1440,"height":900}}'>
 class Component extends DCLogic {
   state = { route: null, tab: null, card: 0, loopTab: 'mine', teach: null, brainIx: null, panic: null, ftueDone: null, logOpen: null, teachOpts: null, editSteps: null, addKind: 1 };
 
@@ -968,7 +1033,10 @@ class Component extends DCLogic {
     const initial = p.route ?? 'foryou';
     let route = this.state.route ?? initial;
     let cardIx = this.state.card;
-    if (route === 'came-back') { route = 'card'; cardIx = 0; }
+    if (route === 'came-back') { route = 'card'; cardIx = 2; }
+    if (route === 'due-card') { route = 'card'; cardIx = 0; }
+    if (route === 'voice-card') { route = 'card'; cardIx = 1; }
+    if (route === 'edit-trigger') { route = 'edit'; }
     let teach = this.state.teach ?? ({ 'teach': 1, 'teach-watching': 2, 'teach-tune': 3, 'teach-saved': 4 }[initial] ?? 1);
     if (route.startsWith('teach')) route = 'teach';
     const panic = this.state.panic ?? (initial === 'panic');
@@ -980,10 +1048,14 @@ class Component extends DCLogic {
     const go = (r) => () => this.setState({ route: r, panic: false });
     const is = {}; ['foryou','card','loops','ask','brief','weekly','recipes','edit','teach','left','knowledge','settings'].forEach(k => is[k] = (route === k));
     const nav = { foryou: (is.foryou || is.card || is.brief || is.weekly) ? 'on' : '', loops: is.loops ? 'on' : '', ask: is.ask ? 'on' : '', knowledge: is.knowledge ? 'on' : '', recipes: (is.recipes || is.teach || is.edit) ? 'on' : '', settings: is.settings ? 'on' : '' };
-    const st = { knowledge: tab === 'knowledge', brain: tab === 'brain', hands: tab === 'hands', privacy: tab === 'privacy', overnight: tab === 'overnight' };
+    const st = { sources: tab === 'sources', knowledge: tab === 'knowledge', brain: tab === 'brain', hands: tab === 'hands', privacy: tab === 'privacy', overnight: tab === 'overnight' };
     const tabs = {}; Object.keys(st).forEach(k => tabs[k] = st[k] ? 'on' : '');
-    const kbs = this.state.kb ?? { icloud: true, mcp: true };
-    const kb = { icloud: kbs.icloud ? 'on' : '', mcp: kbs.mcp ? 'on' : '', mcpOn: kbs.mcp };
+    const kbs = this.state.kb ?? { icloud: true, mcp: true, sync: 2 };
+    const kb = { icloud: kbs.icloud ? 'on' : '', mcp: kbs.mcp ? 'on' : '', mcpOn: kbs.mcp, s0: kbs.sync === 0 ? 'on' : '', s1: kbs.sync === 1 ? 'on' : '', s2: kbs.sync === 2 ? 'on' : '', twoWay: kbs.sync === 2 };
+    const srcs = this.state.src ?? { vm: true, ma: true, slackOpen: false };
+    const src = { vm: srcs.vm ? 'on' : '', ma: srcs.ma ? 'on' : '', slackOpen: srcs.slackOpen };
+    const trv = this.state.trig ?? (initial === 'edit-trigger' ? 'c' : 'b');
+    const tr = { a: trv === 'a' ? 'on' : '', b: trv === 'b' ? 'on' : '', c: trv === 'c' ? 'on' : '', weekly: trv === 'b', trigger: trv === 'c' };
     const fr = this.state.fresh ?? 'h1';
     const fresh = { h1: fr === 'h1' ? 'on' : '', h3: fr === 'h3' ? 'on' : '', off: fr === 'off' ? 'on' : '' };
     const setTab = (t) => () => this.setState({ tab: t, route: 'settings', panic: false });
@@ -1009,12 +1081,14 @@ class Component extends DCLogic {
 
     const urg = { high: '#d94f45', medium: '#c9853a', low: '#8e8e93' };
     const allCards = [
+      { title: 'The villa hold ends tomorrow', source: 'Loops', urgency: 'high', back: false, due: 'Due Tuesday · nudged Monday morning', why: 'Nothing new was said — this card is here because the loop with Priya has a date and it’s tomorrow. The booking site says the hold expires Tuesday 23 Sep.', actionLabel: 'Answer Priya', fireLabel: 'Send to Priya', draftLabel: 'Draft answer', method: 'WhatsApp link', draft: 'Yes to the villa — count me in for 3–6 Oct. Sending my share now.', recipe: ['Open WhatsApp on the chat with Priya, from a link', 'Put the answer in the box', 'Stop. You press Send'], evidence: [{ src: 'Loops', when: 'opened Thu', text: 'Priya → you: an answer on splitting the deposit · due Tue' }, { src: 'Gmail · villa booking', when: 'Wed', text: 'Hold expires Tuesday 23 Sep.' }] },
+      { title: 'You told Rohan you’d send the deck by Thursday', source: 'Voice Memo', urgency: 'medium', back: false, due: 'Said Tuesday · due Thursday', why: 'In Tuesday’s recorded call you said “I’ll send you the deck by Thursday, promise.” Nothing has gone out yet. The deck is in Documents/Pricing.', actionLabel: 'Send the deck', fireLabel: 'Email Rohan', draftLabel: 'Draft email', method: 'AppleScript', draft: 'Rohan — deck attached, as promised. Two slides changed since Tuesday: pricing tiers and the timeline.', recipe: ['Compose an email to Rohan with pricing-deck.pdf attached', 'Stop at Send'], evidence: [{ src: 'Voice Memo · Pricing call', when: 'Tue 16:12 · 04:12', text: '“I’ll send you the deck by Thursday, promise.” — transcribed on this Mac; the audio never left it.' }, { src: 'Files', when: 'Wed', text: 'Documents/Pricing/pricing-deck.pdf updated.' }], voice: true },
       { title: 'Priya still hasn’t replied about the villa deposit', source: 'WhatsApp', urgency: 'high', back: true, why: 'You asked on Thursday whether she wants the deposit split three ways. Two reads later there is no answer, and the booking holds until Tuesday.', actionLabel: 'Send a nudge', due: 'Came back · fired 3 days ago', fireLabel: 'Send to Priya', draftLabel: 'Draft nudge', method: 'WhatsApp link', draft: 'Hey — no rush, but the villa holds only till Tuesday. Split three ways still ok with you?', recipe: ['Open WhatsApp on the chat with Priya, from a link', 'Put the nudge in the box', 'Stop. You press Send'], evidence: [{ src: 'WhatsApp · Priya', when: 'Thu 9:14 PM', text: 'You asked about splitting the deposit. No reply since.' }, { src: 'Gmail · villa booking', when: 'Wed', text: 'Confirmation says the hold expires Tuesday 23 Sep.' }] },
       { title: 'Prep for 4 PM with Rohan and Meera', source: 'Calendar', urgency: 'high', back: false, why: 'Pricing review at 4. You have two open loops with Rohan and one with Meera, and Tuesday’s notes list what he expects.', actionLabel: 'Open the brief', due: 'Today, 4:00 PM', fireLabel: 'Open the brief', draftLabel: 'One-page brief', method: 'Built on this Mac', draft: '', recipe: [], evidence: [] , brief: true },
       { title: 'Karan still hasn’t sent his villa share', source: 'WhatsApp', urgency: 'medium', back: false, why: 'You paid the full deposit on Friday; Karan wrote “will send my share tonight” and hasn’t. He is online most evenings.', actionLabel: 'Remind him', due: 'Since Friday', fireLabel: 'Send to Karan', draftLabel: 'Draft reminder', method: 'WhatsApp link', draft: 'Hey — whenever you get a sec, the villa share. UPI’s fine.', recipe: ['Open WhatsApp on the chat with Karan, from a link', 'Put the reminder in the box', 'Stop. You press Send'], evidence: [{ src: 'WhatsApp · Karan', when: 'Fri 11:02 PM', text: 'Said he’d send his share tonight.' }, { src: 'WhatsApp · Goa trip', when: 'Fri', text: 'You confirmed you’d paid the full deposit.' }] },
       { title: 'Meera is waiting on the mobile notes', source: 'Slack', urgency: 'medium', back: false, why: 'She asked three times; your last “tomorrow” was Wednesday. The desktop mocks she sent are in Drive.', actionLabel: 'Send your notes', due: 'Promised 4 days ago', fireLabel: 'Send to Meera', draftLabel: 'Draft message', method: 'Slack API', draft: 'Sorry for the wait — notes on the mobile layout are in the doc, five points, nothing structural. Happy to talk through them before 4.', recipe: ['Open Slack DM with Meera through its API', 'Put the message in the box', 'Stop. You press Send'], evidence: [{ src: 'Slack · Meera', when: 'Fri', text: 'Third ask for the mobile notes.' }, { src: 'Slack · you', when: 'Wed', text: 'You said “tomorrow”.' }] }
     ];
-    const cards = allCards.map((c, i) => ({ ...c, urgColor: urg[c.urgency], open: () => this.setState({ route: c.brief ? 'brief' : 'card', card: i }) }));
+    const cards = allCards.map((c, i) => ({ ...c, urgColor: urg[c.urgency], isDue: i === 0, open: () => this.setState({ route: c.brief ? 'brief' : 'card', card: i }) }));
     const card = allCards[cardIx] ?? allCards[0];
     const recipe = card.recipe.map((text, i) => ({ n: i + 1, text }));
 
@@ -1023,14 +1097,15 @@ class Component extends DCLogic {
     const setLoop = (t) => () => this.setState({ loopTab: t, ftueDone: mark('loops') });
     const loopData = {
       mine: [
-        ['M', 'Meera', 'notes on the mobile layout', '“tomorrow” — Wednesday', 'Slack DM · Wed', 'Overdue 4 days', 'bad', 'Open', 'Send now', 3],
-        ['R', 'Rohan', 'pricing page live before the review', 'agreed Tuesday, late evening', 'WhatsApp · Tue', 'Today 4 PM', 'warn', 'Open · 3 tickets', 'Brief', 1],
+        ['M', 'Meera', 'notes on the mobile layout', '“tomorrow” — Wednesday', 'Slack DM · Wed', 'Overdue 4 days', 'bad', 'Open', 'Send now', 5],
+        ['R', 'Rohan', 'pricing page live before the review', 'agreed Tuesday, late evening', 'WhatsApp · Tue', 'Today 4 PM', 'warn', 'Open · 3 tickets', 'Brief', 3],
         ['A', 'Amma', 'call on Sunday', '“I’ll call Sunday, promise”', 'iMessage · Thu', 'Today', 'warn', 'Open', 'Call', null],
         ['L', 'Landlord', 'answer about the lease', 'he asked whether you’re renewing', 'WhatsApp · 9 Sep', 'No date', 'ink3', 'Open', 'Reply', null]
       ],
       theirs: [
-        ['K', 'Karan', 'his villa share', '“will send my share tonight”', 'WhatsApp · Fri', 'Since Friday', 'warn', 'Open', 'Remind', 2],
-        ['P', 'Priya', 'answer on splitting the deposit', 'you asked Thursday', 'WhatsApp · Thu', 'Booking holds till Tue', 'bad', 'Came back', 'Nudge', 0],
+        ['K', 'Karan', 'his villa share', '“will send my share tonight”', 'WhatsApp · Fri', 'Since Friday', 'warn', 'Open', 'Remind', 4],
+        ['P', 'Priya', 'answer on splitting the deposit', 'you asked Thursday', 'WhatsApp · Thu', 'Due Tue', 'bad', 'Came back', 'Nudge', 2, 'card Mon 7:30'],
+        ['R', 'Rohan', 'the pricing deck', '“by Thursday, promise” · said out loud', 'Voice Memo · Tue', 'Due Thu', 'warn', 'Open', 'Send', 1, 'card Wed 7:30'],
         ['S', 'Sunil', 'the filing confirmation', '“will confirm once uploaded”', 'Gmail · Mon', 'By 30 Sep', 'ink3', 'Open', 'Ask', null]
       ],
       closed: [
@@ -1042,7 +1117,9 @@ class Component extends DCLogic {
       ]
     };
     const col = { bad: '#d94f45', warn: '#c9853a', ok: '#2f9e5a', ink3: 'var(--ink3)' };
-    const loops = loopData[lt].map(([ini, who, what, quote, where, due, c, status, actLabel, cardI]) => ({ ini, who, what, quote, where, due, dueColor: c === 'ink3' ? 'var(--ink2)' : col[c], stColor: col[c], status, actLabel, act: () => this.setState(cardI === null ? { route: 'loops' } : cardI === 1 ? { route: 'brief' } : { route: 'card', card: cardI }) }));
+    const loops = loopData[lt].map(([ini, who, what, quote, where, due, c, status, actLabel, cardI, nudge]) => ({ ini, who, what, quote, where, due, dueColor: c === 'ink3' ? 'var(--ink2)' : col[c], stColor: col[c], status, actLabel, hasNudge: !!nudge, nudge: nudge ?? '', act: () => this.setState(cardI === null ? { route: 'loops' } : cardI === 3 ? { route: 'brief' } : { route: 'card', card: cardI }) }));
+    const ndv = this.state.nudgeDays ?? 'a';
+    const nd = { a: ndv === 'a' ? 'on' : '', b: ndv === 'b' ? 'on' : '', c: ndv === 'c' ? 'on' : '' };
 
 
     const recipes = [
@@ -1114,6 +1191,10 @@ class Component extends DCLogic {
       goForYou: go('foryou'), goLoops: go('loops'), goWeekly: go('weekly'), goRecipes: go('recipes'), goTeach: () => this.setState({ route: 'teach', teach: 1, ftueDone: mark('recipes') }), goLeft: go('left'), goKnowledge: go('knowledge'), goSettings: go('settings'),
       goBrain: setTab('brain'), goHands: setTab('hands'), tabBrain: setTab('brain'), tabKnowledge: setTab('knowledge'), tabOvernight: setTab('overnight'), goKnowledgeSettings: setTab('knowledge'), goAsk: go('ask'),
       kb, kbIcloud: () => this.setState({ kb: { ...kbs, icloud: !kbs.icloud } }), kbMcp: () => this.setState({ kb: { ...kbs, mcp: !kbs.mcp } }),
+      kbS0: () => this.setState({ kb: { ...kbs, sync: 0 } }), kbS1: () => this.setState({ kb: { ...kbs, sync: 1 } }), kbS2: () => this.setState({ kb: { ...kbs, sync: 2 } }),
+      src, srcVm: () => this.setState({ src: { ...srcs, vm: !srcs.vm } }), srcMa: () => this.setState({ src: { ...srcs, ma: !srcs.ma } }), pickSlack: () => this.setState({ src: { ...srcs, slackOpen: !srcs.slackOpen } }), tabSources: setTab('sources'),
+      tr, trA: () => this.setState({ trig: 'a' }), trB: () => this.setState({ trig: 'b' }), trC: () => this.setState({ trig: 'c' }),
+      nd, ndA: () => this.setState({ nudgeDays: 'a' }), ndB: () => this.setState({ nudgeDays: 'b' }), ndC: () => this.setState({ nudgeDays: 'c' }),
       fresh, freshH1: () => this.setState({ fresh: 'h1' }), freshH3: () => this.setState({ fresh: 'h3' }), freshOff: () => this.setState({ fresh: 'off' }),
       cite1: go('loops'), cite2: go('knowledge'), cite3: go('knowledge'), tabHands: setTab('hands'), tabPrivacy: setTab('privacy'),
       loopTabs, loopMine: setLoop('mine'), loopTheirs: setLoop('theirs'), loopClosed: setLoop('closed'), loops,

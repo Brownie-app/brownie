@@ -17,6 +17,10 @@ public struct Loop: Codable, Sendable, Identifiable, Equatable {
     /// "WhatsApp · Fri" — where and when it was said.
     public let sourceLabel: String
     public let due: String?
+    /// The real date behind `due`, when the judge could name one (from `dueISO`).
+    public var dueDate: Date?
+    /// True once a due-aware card was made for this loop, so it isn't made twice.
+    public var nudgedForDue: Bool?
     public var status: LoopStatus
     public let openedAt: Date
     public var closedAt: Date?
@@ -26,10 +30,10 @@ public struct Loop: Codable, Sendable, Identifiable, Equatable {
     public var cameBackCount: Int
 
     public init(id: String = UUID().uuidString, direction: LoopDirection, person: String, what: String, quote: String, sourceLabel: String,
-                due: String?, status: LoopStatus = .open, openedAt: Date, closedAt: Date? = nil, closedHow: String? = nil,
+                due: String?, dueDate: Date? = nil, status: LoopStatus = .open, openedAt: Date, closedAt: Date? = nil, closedHow: String? = nil,
                 firedCardIDs: [String] = [], cameBackCount: Int = 0) {
         self.id = id; self.direction = direction; self.person = person; self.what = what; self.quote = quote; self.sourceLabel = sourceLabel
-        self.due = due; self.status = status; self.openedAt = openedAt; self.closedAt = closedAt; self.closedHow = closedHow
+        self.due = due; self.dueDate = dueDate; self.status = status; self.openedAt = openedAt; self.closedAt = closedAt; self.closedHow = closedHow
         self.firedCardIDs = firedCardIDs; self.cameBackCount = cameBackCount
     }
 

@@ -115,6 +115,7 @@ final class AppModel: ObservableObject {
     @Published var asks: [Asker.Answer] = []
     @Published var asking = false
     @Published var panicAsked = false
+    @Published var nudgeDays = 1
     let sendLogger: SendLogger
     let recorder = Recorder()
     var briefTimer: Timer?
@@ -203,6 +204,7 @@ final class AppModel: ObservableObject {
         modelPath = ModelCatalog.locate(ModelCatalog.info(for: readerChoice))
         if let j = await v("sources.mcp"), let d = j.data(using: .utf8), let ms = try? JSONDecoder().decode([MCPManifest].self, from: d) { mcpManifests = ms }
         showSendLine = (await v(SettingKey.showSendLine) ?? "true") == "true"
+        nudgeDays = Int(await v(SettingKey.nudgeDays) ?? "1") ?? 1
         icloudMirror = (await v(SettingKey.icloudMirror) ?? "false") == "true"
         mcpEnabled = (await v(SettingKey.mcpEnabled) ?? "false") == "true"
         if let j = await v(SettingKey.mcpLog), let d = j.data(using: .utf8) { mcpAsks = (try? JSONDecoder().decode([MCPAsk].self, from: d)) ?? [] }

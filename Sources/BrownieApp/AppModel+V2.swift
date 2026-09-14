@@ -69,6 +69,7 @@ extension AppModel {
         loops[i].status = .closed; loops[i].closedAt = Date(); loops[i].closedHow = how
         let ls = loops; Task { await LoopLedger.save(ls, store) }
     }
+    func setNudgeDays(_ d: Int) { nudgeDays = d; set(SettingKey.nudgeDays, String(d)) }
     func dismissLoop(_ id: String) {
         guard let i = loops.firstIndex(where: { $0.id == id }) else { return }
         loops[i].status = .dismissed; loops[i].closedAt = Date(); loops[i].closedHow = "not a promise"

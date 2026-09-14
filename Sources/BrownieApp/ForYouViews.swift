@@ -154,7 +154,7 @@ struct CardTile: View {
     var body: some View {
         CardBox {
             VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 8) { UrgencyDot(urgency: card.urgency); Text(card.title).font(.system(size: 14, weight: .semibold)).lineLimit(1); Spacer(); if card.isComeBack { CameBackChip() }; Chip(text: card.sourceLabel) }
+                HStack(spacing: 8) { UrgencyDot(urgency: card.urgency); Text(card.title).font(.system(size: 14, weight: .semibold)).lineLimit(1); Spacer(); if card.isComeBack { CameBackChip() }; if card.isDue { Chip(text: card.dueLine, accent: true) }; Chip(text: card.sourceLabel) }
                 Text(card.why).font(.system(size: 12.5)).foregroundStyle(t.ink2).lineLimit(3)
                 HStack(spacing: 8) { Chip(text: card.actionLabel, accent: true); Text(card.dueLine).font(.system(size: 11)).foregroundStyle(t.ink2) }
             }.frame(maxWidth: .infinity, alignment: .leading)

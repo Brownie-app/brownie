@@ -13,7 +13,11 @@ public enum LoopLedger {
                 loops[i].status = .closed; loops[i].closedAt = now; loops[i].closedHow = u.how
             }
         }
-        for f in found where !loops.contains(where: { $0.status == .open && same($0, f) }) { loops.append(f) }
+        for f in found {
+            if let i = loops.firstIndex(where: { $0.status == .open && same($0, f) }) {
+                if loops[i].dueDate == nil, let d = f.dueDate { loops[i].dueDate = d }   // a date learned later still counts
+            } else { loops.append(f) }
+        }
         for it in items where it.cameBack == true {
             if let id = it.loopID, let i = loops.firstIndex(where: { $0.id.hasPrefix(id) }) { loops[i].cameBackCount += 1 }
         }
@@ -50,6 +54,31 @@ public enum LoopLedger {
     }
 }
 
+/// Due-aware nudges: a loop with a date gets a card ahead of it, even when nothing new was said.
+public enum DueNudger {
+    /// Open loops whose due date falls within `days` days of now (or is already past), not yet nudged.
+    public static func due(_ loops: [Loop], now: Date, days: Int, calendar: Calendar = .current) -> [Loop] {
+        guard days > 0 else { return [] }
+        // Calendar days, not hours: a 3 AM run the morning before still counts as "the day before".
+        let horizon = calendar.date(byAdding: .day, value: days, to: calendar.startOfDay(for: now)) ?? now
+        return loops.filter { $0.status == .open && $0.nudgedForDue != true && $0.dueDate != nil && calendar.startOfDay(for: $0.dueDate!) <= horizon }
+    }
+    /// The line under a loop on the Loops screen: when its card will come, if a date is known.
+    public static func nudgeLine(for loop: Loop, days: Int, now: Date, calendar: Calendar = .current) -> String? {
+        guard days > 0, loop.status == .open, let d = loop.dueDate else { return nil }
+        if loop.nudgedForDue == true { return "card sent" }
+        let when = calendar.date(byAdding: .day, value: -days, to: calendar.startOfDay(for: d)) ?? d
+        if when <= now { return "card next morning" }
+        let f = DateFormatter(); f.calendar = calendar; f.timeZone = calendar.timeZone; f.dateFormat = "EEE"
+        return "card \(f.string(from: when)) 7:30"
+    }
+    /// "Due tomorrow", "Due today", "Overdue 2 days", "Due in 5 days" — from the date, for the card.
+    public static func dueLine(_ d: Date, now: Date, calendar: Calendar = .current) -> String {
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: calendar.startOfDay(for: d)).day ?? 0
+        switch days { case ..<(-1): return "Overdue \(-days) days"; case -1: return "Overdue 1 day"; case 0: return "Due today"; case 1: return "Due tomorrow"; default: return "Due in \(days) days" }
+    }
+}
+
 /// One card, on demand, for a loop the user wants to act on now: "Nudge" on the Loops screen.
 public struct LoopNudger: Sendable {
     private let brain: any Brain
@@ -61,15 +90,17 @@ public struct LoopNudger: Sendable {
         self.brain = brain; self.knowledge = knowledge; self.clock = clock
         template = try String(contentsOf: bundle.url(forResource: "nudge", withExtension: "md", subdirectory: "Prompts") ?? bundle.url(forResource: "nudge", withExtension: "md")!, encoding: .utf8)
     }
-    public func card(for loop: Loop) async throws -> (Card, Usage) {
+    public func card(for loop: Loop, dueAware: Bool = false) async throws -> (Card, Usage) {
         let person = (try? await knowledge.search(loop.person, limit: 2))?.first?.body.prefix(2500) ?? ""
         var p = template
         p = p.replacingOccurrences(of: "{{now}}", with: Judge.now(clock))
-        p = p.replacingOccurrences(of: "{{loop}}", with: "\(loop.direction == .mine ? "The user promised \(loop.person)" : "\(loop.person) promised the user"): \(loop.what)\nOpened: \(loop.quote) (\(loop.sourceLabel))\(loop.due.map { "\nDue: \($0)" } ?? "")\(loop.firedCardIDs.isEmpty ? "" : "\nThe user already sent one message about this; it went unanswered.")")
+        let dueNote = dueAware && loop.dueDate != nil ? "\nThis card exists because the date is close (\(DueNudger.dueLine(loop.dueDate!, now: clock.now()))) — nothing new was said. Say so plainly in `why`; the draft stays light." : ""
+        p = p.replacingOccurrences(of: "{{loop}}", with: "\(loop.direction == .mine ? "The user promised \(loop.person)" : "\(loop.person) promised the user"): \(loop.what)\nOpened: \(loop.quote) (\(loop.sourceLabel))\(loop.due.map { "\nDue: \($0)" } ?? "")\(loop.firedCardIDs.isEmpty ? "" : "\nThe user already sent one message about this; it went unanswered.")" + dueNote)
         p = p.replacingOccurrences(of: "{{person}}", with: person.isEmpty ? "(no note about \(loop.person) yet)" : String(person))
         let r = try await brain.complete(BrainRequest(system: "You return only the JSON the user asks for.", input: p, effort: .medium, maxOutputTokens: 4000, timeout: 300))
         guard let data = r.jsonData, let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any], var card = Preparer.card(from: obj, now: clock.now()) else { throw BrainError.badResponse("nudge returned no card") }
         card.loopID = loop.id; card.cameBack = loop.firedCardIDs.isEmpty ? nil : true
+        if dueAware, let d = loop.dueDate { card.dueDate = d; card = card.withDueLine(DueNudger.dueLine(d, now: clock.now())) }
         return (card, r.usage)
     }
 }

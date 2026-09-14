@@ -43,7 +43,7 @@ Brownie's architecture was inspired by Sentient OS (AGPL). The implementation, p
 
 Nothing merges without tests for what it changes. The tiers:
 
-1. **Logic** — unit tests, on every PR (`swift test --skip EvalTests`, a few seconds). Cursors, the ledger of loops, card merging, every parser of brain output (they fail closed on garbage), the MCP server's protocol and off-switch, recipe recording and replay rules, the send log, scheduling decisions.
+1. **Logic** — unit tests in Swift Testing, on every PR (`swift test --skip EvalTests`, a few seconds; without Xcode installed, `source Scripts/dev-env.sh` first and add `$=BROWNIE_TEST_FLAGS`). Cursors, the ledger of loops, card merging, every parser of brain output (they fail closed on garbage), the MCP server's protocol and off-switch, recipe recording and replay rules, the send log, scheduling decisions.
 2. **Brain-facing code** — tested against recorded responses, never live API calls in CI.
 3. **Prompts** — the eval corpus (`Tests/Eval/Corpus/corpus.json`). Needs the 3.7 GB reader, so it runs locally (`swift test --filter EvalTests`) and must be run before a release; the score must not drop. Add a case for every miss you see on real data.
 4. **Integration** — the SQLite store, the knowledge base index, the MCP server end to end, all in-process.

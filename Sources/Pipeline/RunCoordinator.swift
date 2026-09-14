@@ -132,9 +132,21 @@ public actor RunCoordinator {
                 deps.stage("Prepare the cards", "\(candidates.count) candidates, the summaries, and the notes the brain chose to read")
                 let (cards, u2) = try await Preparer(brain: brain, knowledge: deps.knowledge, clock: deps.clock).prepare(candidates: candidates, summaries: recent, instructions: instructions, max: max) { e in if case .message(let m) = e { onEvent(.thought(m)) } }
                 usage = usage + u2
+                // Due-aware nudges: loops whose date is close get a card even when nothing new was said.
+                var dueCards: [Card] = []
+                let nudgeDays = Int(try await store.value(SettingKey.nudgeDays) ?? "1") ?? 1
+                var loopsNow = allLoops
+                var dueCal = Calendar.current; dueCal.timeZone = deps.clock.timeZone
+                for l in DueNudger.due(loopsNow, now: deps.clock.now(), days: nudgeDays, calendar: dueCal) where !cards.contains(where: { $0.loopID == l.id }) {
+                    deps.stage("Nudge before a deadline", "one loop with a date, and the note about \(l.person)")
+                    do { let (c, u) = try await LoopNudger(brain: brain, knowledge: deps.knowledge, clock: deps.clock).card(for: l, dueAware: true); dueCards.append(c); usage = usage + u
+                         if let i = loopsNow.firstIndex(where: { $0.id == l.id }) { loopsNow[i].nudgedForDue = true } }
+                    catch { log.warn("due nudge for \(l.person) failed: \(error)") }
+                }
+                if !dueCards.isEmpty { await LoopLedger.save(loopsNow, store) }
                 // New cards replace the ones still waiting; what the user already fired, snoozed or dismissed stays.
                 let kept = try await Self.loadCards(store: store).filter { $0.state != .ready }
-                try await Self.saveCards(kept + cards, store: store)
+                try await Self.saveCards(kept + cards + dueCards, store: store)
                 try await store.setValue("brain.lastUsage", String(data: JSONEncoder().encode(usage), encoding: .utf8))
 
                 // Sunday: the week in a letter, once per week
@@ -145,7 +157,7 @@ public actor RunCoordinator {
                 if (try await store.value(SettingKey.icloudMirror) ?? "false") == "true", let root = (deps.knowledge as? FileKnowledgeStore)?.rootURL {
                     do { _ = try Vault.mirror(root) } catch { log.warn("iCloud mirror: \(error)") }
                 }
-                outcome = .ran(cards: cards.count)
+                outcome = .ran(cards: cards.count + dueCards.count)
             } else if deps.brain == nil {
                 outcome = .failedBrain(.notConfigured)
                 if !summaries.isEmpty { log.info("no brain: keeping \(summaries.count) summaries for later") }

@@ -3,6 +3,8 @@
 # (permissions, notifications, login item, menu bar). Ad-hoc signed unless APPLE_SIGNING_IDENTITY is set.
 set -e
 cd "$(dirname "$0")/.."
+# Xcode missing or broken (e.g. after a macOS upgrade)? The Command Line Tools can build everything.
+if [ -z "$DEVELOPER_DIR" ] && ! xcodebuild -version >/dev/null 2>&1 && [ -d /Library/Developer/CommandLineTools ]; then export DEVELOPER_DIR=/Library/Developer/CommandLineTools; fi
 CONFIG=${1:-debug}
 VERSION=${BROWNIE_VERSION:-0.2}
 BUILD=$(git -C "$(dirname "$0")/.." rev-list --count HEAD 2>/dev/null || echo 1)

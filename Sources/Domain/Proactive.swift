@@ -91,7 +91,14 @@ public struct Card: Codable, Sendable, Identifiable, Equatable {
     /// True when a card for the same loop was fired earlier and the next read saw no change.
     public var cameBack: Bool?
     public var loopID: String?
+    /// Set on due-aware cards: the loop's date. The tile shows a "Due tomorrow" badge.
+    public var dueDate: Date?
     public var isComeBack: Bool { cameBack ?? false }
+    public var isDue: Bool { dueDate != nil }
+    public func withDueLine(_ line: String) -> Card {
+        var c = Card(id: id, title: title, sourceLabel: sourceLabel, why: why, actionLabel: actionLabel, dueLine: line, urgency: urgency, draftLabel: draftLabel, draft: draft, recipe: recipe, evidence: evidence, verification: verification, verifiedLine: verifiedLine, state: state, createdAt: createdAt, cameBack: cameBack, loopID: loopID)
+        c.dueDate = dueDate; c.snoozedUntil = snoozedUntil; c.resolvedAt = resolvedAt; return c
+    }
 
     public init(id: String, title: String, sourceLabel: String, why: String, actionLabel: String, dueLine: String,
                 urgency: Urgency, draftLabel: String, draft: String, recipe: Recipe, evidence: [Evidence],
@@ -121,8 +128,9 @@ public struct Card: Codable, Sendable, Identifiable, Equatable {
         case .note(let path, _): r = .note(relativePath: path, body: text)
         case .browser, .computerUse: r = recipe
         }
-        return Card(id: id, title: title, sourceLabel: sourceLabel, why: why, actionLabel: actionLabel, dueLine: dueLine, urgency: urgency,
+        var c = Card(id: id, title: title, sourceLabel: sourceLabel, why: why, actionLabel: actionLabel, dueLine: dueLine, urgency: urgency,
                     draftLabel: draftLabel, draft: text, recipe: r, evidence: evidence, verification: verification, verifiedLine: verifiedLine, state: state, createdAt: createdAt, cameBack: cameBack, loopID: loopID)
+        c.dueDate = dueDate; c.snoozedUntil = snoozedUntil; c.resolvedAt = resolvedAt; return c
     }
 
     public var fireLabel: String {

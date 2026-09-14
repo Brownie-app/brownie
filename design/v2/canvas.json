@@ -11,6 +11,10 @@
   {
    "id": "page-3",
    "name": "Knowledge as the product"
+  },
+  {
+   "id": "page-4",
+   "name": "Next: sync, ask anywhere, due nudges, voice, work chat, triggers"
   }
  ],
  "artboards": [
@@ -203,6 +207,78 @@
    "h": 900,
    "title": "04 \u00b7 Settings \u00b7 Overnight \u2014 reads during the day",
    "page": "page-3"
+  },
+  {
+   "file": "KnowledgeSettingsNext.dc.html",
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 900,
+   "title": "01 \u00b7 Two-way vault sync \u2014 Settings \u2192 Knowledge (iCloud: Off / To the phone / Two-way, last sync, conflicts)",
+   "page": "page-4"
+  },
+  {
+   "file": "NotesVaultNext.dc.html",
+   "x": 1540,
+   "y": 0,
+   "w": 1440,
+   "h": 900,
+   "title": "02 \u00b7 A note merged from the iPhone \u2014 \u201c1 line from your phone\u201d",
+   "page": "page-4"
+  },
+  {
+   "file": "AskBar.dc.html",
+   "x": 0,
+   "y": 1040,
+   "w": 1200,
+   "h": 720,
+   "title": "03 \u00b7 Ask from anywhere \u2014 \u2318\u21e7Space in question mode over another app",
+   "page": "page-4"
+  },
+  {
+   "file": "LoopsNext.dc.html",
+   "x": 1540,
+   "y": 1040,
+   "w": 1440,
+   "h": 900,
+   "title": "04 \u00b7 Loops with due dates and the nudge day; \u201cNudge before a deadline\u201d setting",
+   "page": "page-4"
+  },
+  {
+   "file": "DueCard.dc.html",
+   "x": 0,
+   "y": 2080,
+   "w": 1440,
+   "h": 900,
+   "title": "05 \u00b7 A due-aware card: \u201cThe villa hold ends tomorrow\u201d \u2014 nothing new was said",
+   "page": "page-4"
+  },
+  {
+   "file": "SourcesNew.dc.html",
+   "x": 1540,
+   "y": 2080,
+   "w": 1440,
+   "h": 900,
+   "title": "06 \u00b7 Settings \u2192 Sources: Voice Memos, meeting audio, Slack channels, Teams",
+   "page": "page-4"
+  },
+  {
+   "file": "VoiceCard.dc.html",
+   "x": 0,
+   "y": 3120,
+   "w": 1440,
+   "h": 900,
+   "title": "07 \u00b7 A card from a spoken promise \u2014 12-second clip as evidence",
+   "page": "page-4"
+  },
+  {
+   "file": "TriggerRecipe.dc.html",
+   "x": 1540,
+   "y": 3120,
+   "w": 1440,
+   "h": 900,
+   "title": "08 \u00b7 Recipe on a trigger \u2014 \u201cwhen a file arrives in Downloads matching *invoice*.pdf\u201d",
+   "page": "page-4"
   }
  ],
  "annotations": [
@@ -221,10 +297,18 @@
    "w": 620,
    "page": "page-3",
    "text": "Knowledge as the product \u2014 four screens to react to.\n\n1 \u00b7 Ask: every claim carries a chip; clicking opens the original chat, mail or note.\n2 \u00b7 Notes: the knowledge base is an Obsidian vault \u2014 [[wikilinks]], Open in Obsidian, a mirror in iCloud Drive for the phone.\n3 \u00b7 Settings \u2192 Knowledge: vault location, Obsidian, iCloud; and \u201cLet your other AIs read your notes\u201d \u2014 Brownie as an MCP server that runs ON THIS MAC only (no hosting, no port, no account): Claude Desktop / Cursor / Raycast start it on demand. ChatGPT needs a public URL, so it's marked not possible. Per-app allow list and a log of what each app asked.\n4 \u00b7 Settings \u2192 Overnight: reads during the day every hour / 3 hours, only when idle and on power."
+  },
+  {
+   "id": "next-note",
+   "x": 0,
+   "y": -190,
+   "w": 640,
+   "page": "page-4",
+   "text": "Six bets, designed before they're built \u2014 click through in the prototype too.\n\n1\u20132 \u00b7 Two-way vault sync: Settings \u2192 Knowledge gets Off / To the phone / Two-way, a last-sync line and the conflict rule (your words never overwritten; Brownie's version goes under its own heading). A note shows the line that came from the phone.\n3 \u00b7 Ask from anywhere: \u2318\u21e7Space over any app; a question is answered inline with citation chips; anything else is a Hands goal or a recipe.\n4\u20135 \u00b7 Due-aware nudges: loops with dates show when the card will come (Mon 7:30); a card appears the morning before even if nothing new was said; setting: morning before / 2 days / only when asked.\n6\u20137 \u00b7 Voice Memos and meeting audio, transcribed on the GPU at night; a promise said out loud becomes a loop with a 12-second clip as evidence. Slack with channel picking; Teams via Microsoft sign-in.\n8 \u00b7 Recipes on a trigger: When a file arrives in a folder matching a pattern; the file is a parameter; it still waits for you at the last step."
   }
  ],
  "launch": {
   "view": "canvas",
-  "page": "page-3"
+  "page": "page-4"
  }
 }
