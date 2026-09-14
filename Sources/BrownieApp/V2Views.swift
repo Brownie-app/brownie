@@ -820,7 +820,7 @@ struct AnswerText: View {
 struct CiteChip: View {
     @Environment(\.theme) var t
     let c: Asker.Citation; let open: () -> Void
-    var icon: String { switch c.kind { case "whatsapp", "imessage": return "bubble.left"; case "mail": return "envelope"; case "loop": return "arrow.triangle.2.circlepath"; case "card": return "sun.max"; default: return "doc.text" } }
+    var icon: String { switch c.kind { case "whatsapp", "imessage": return "bubble.left"; case "mail": return "envelope"; case "recording", "voicememo": return "waveform"; case "loop": return "arrow.triangle.2.circlepath"; case "card": return "sun.max"; default: return "doc.text" } }
     var body: some View {
         Button(action: open) {
             HStack(spacing: 5) { Text("\(c.n)").font(.system(size: 9.5, weight: .bold)); Image(systemName: icon).font(.system(size: 10)); Text(c.label).font(.system(size: 11.5, weight: .medium)).lineLimit(1) }

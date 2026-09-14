@@ -15,7 +15,7 @@ public struct Triage: Sendable {
     public init(bundle: Bundle? = nil) throws {
         let bundle = bundle ?? Bundle.module
         var t: [SourceKind: String] = [:]
-        let files: [SourceKind: String] = [.document: "document", .directMessage: "direct-message", .groupChat: "group-chat", .mail: "mail", .event: "event", .ticket: "ticket"]
+        let files: [SourceKind: String] = [.document: "document", .directMessage: "direct-message", .groupChat: "group-chat", .mail: "mail", .event: "event", .ticket: "ticket", .transcript: "transcript"]
         for (kind, name) in files {
             guard let url = bundle.url(forResource: name, withExtension: "md", subdirectory: "Prompts") ?? bundle.url(forResource: name, withExtension: "md") else {
                 throw TriageError.missingPrompt(name)

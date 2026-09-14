@@ -50,7 +50,7 @@ struct SourcesPane: View {
         Text("Personal").font(.system(size: 14, weight: .semibold)).padding(.top, 4)
         CardBox(padding: 0) {
             VStack(spacing: 0) {
-                ForEach(m.allSources, id: \.id) { s in
+                ForEach(personal, id: \.id) { s in
                     let d = s.descriptor
                     SettingRow(title: d.name, detail: detail(s)) {
                         if s.id == "files" { BButton(title: "Choose folders", kind: .quiet) { chooseFolder() } }
@@ -65,10 +65,25 @@ struct SourcesPane: View {
                         if s.id == "calendar", m.permissions[.calendar] != true { BButton(title: "Allow") { Task { _ = await CalendarSource.requestAccess(); await m.refreshPermissions(); await m.refreshSources() } } }
                         Toggle2(on: Binding(get: { m.enabledSources.contains(s.id) }, set: { _ in m.toggleSource(s.id) }))
                     }.padding(.horizontal, 16)
-                    if s.id != m.allSources.last?.id { Divider() }
+                    if s.id != personal.last?.id { Divider() }
                 }
             }
         }.walkthroughTarget("sources")
+        Text("Things you said out loud").font(.system(size: 14, weight: .semibold)).padding(.top, 10)
+        Sub(text: "Transcribed on this Mac with Apple's speech engine, at night. Transcripts are kept as notes; the audio is never copied and never leaves.")
+        CardBox(padding: 0) {
+            VStack(spacing: 0) {
+                ForEach(spoken, id: \.id) { s in
+                    SettingRow(title: s.descriptor.name, detail: detail(s)) {
+                        if s.id == "recordings" { BButton(title: "Choose folder", kind: .quiet) { chooseRecordingsFolder() } }
+                        if m.permissions[.speech] != true, m.enabledSources.contains(s.id) { BButton(title: "Allow speech") { Task { _ = await SpeechTranscriber.requestAccess(); await m.refreshPermissions(); await m.refreshSources() } } }
+                        Toggle2(on: Binding(get: { m.enabledSources.contains(s.id) }, set: { _ in m.toggleSource(s.id) }))
+                    }.padding(.horizontal, 16)
+                    if s.id != spoken.last?.id { Divider() }
+                }
+            }
+        }
+        Text("About 1 minute per 10 minutes of audio — a 1-hour call is read in about 6 minutes. Every recording is transcribed once.").font(.system(size: 11)).foregroundStyle(t.ink2)
         ForEach(m.allSources, id: \.id) { s in
             if s.descriptor.supportsPerBucketOptIn, m.enabledSources.contains(s.id), let all = m.discovered[s.id], !all.isEmpty {
                 let chosen = m.enabledBuckets[s.id] ?? []
@@ -113,10 +128,21 @@ struct SourcesPane: View {
     func mcpDetail(_ sid: SourceID, _ mf: MCPManifest) -> String {
         switch m.availability[sid] { case .available: return "Connected · \(mf.url)"; case .needsSignIn: return "Token rejected — remove and add again with a valid token"; case .unavailable(let w): return w; default: return mf.url }
     }
+    var personal: [any Source] { m.allSources.filter { $0.id != "voicememos" && $0.id != "recordings" } }
+    var spoken: [any Source] { m.allSources.filter { $0.id == "voicememos" || $0.id == "recordings" } }
+    func chooseRecordingsFolder() {
+        let p = NSOpenPanel(); p.canChooseDirectories = true; p.canChooseFiles = false; p.allowsMultipleSelection = false; p.directoryURL = m.recordingsFolder
+        if p.runModal() == .OK, let u = p.url { m.setRecordingsFolder(u) }
+    }
     func detail(_ s: any Source) -> String {
+        if s.id == "voicememos" || s.id == "recordings", m.availability[s.id] == .available {
+            let c = m.audioCost[s.id] ?? (0, 0)
+            let where_ = s.id == "recordings" ? m.recordingsFolder.path.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~") + " · " : ""
+            return where_ + VoiceCost.line(count: c.count, seconds: c.seconds)
+        }
         switch m.availability[s.id] {
         case .notInstalled: return "\(s.descriptor.name) isn't on this Mac"
-        case .needsPermission(let p): return "Needs \(p == .fullDiskAccess ? "Full Disk Access" : p.rawValue) — grant it in Settings → Privacy"
+        case .needsPermission(let p): return p == .speech ? "Needs Speech Recognition — turn it on and allow when asked" : "Needs \(p == .fullDiskAccess ? "Full Disk Access" : p.rawValue) — grant it in Settings → Privacy"
         case .unavailable(let why): return why
         case .needsSignIn: return s.id == "telegram" ? "Sign in with your own phone number" : "Sign in with your own Google account · read-only"
         default:

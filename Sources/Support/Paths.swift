@@ -13,6 +13,8 @@ public enum Paths {
     public static var modelCache: URL { ensure(applicationSupport.appendingPathComponent("ModelCache", isDirectory: true)) }
     public static var store: URL { applicationSupport.appendingPathComponent("brownie.sqlite") }
     public static var knowledgeBase: URL { ensure(home.appendingPathComponent("\(appName) Knowledge Base", isDirectory: true)) }
+    /// Transcripts of audio already read, so a recording is transcribed once. Text only; the audio is never copied.
+    public static var transcripts: URL { ensure(applicationSupport.appendingPathComponent("Transcripts", isDirectory: true)) }
     public static var scratch: URL { ensure(applicationSupport.appendingPathComponent("Scratch", isDirectory: true)) }
     public static var logs: URL { FileLog.shared.directoryURL }
 

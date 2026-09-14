@@ -340,8 +340,21 @@ extension AppModel {
             if let phone = ContactLookup.phone(for: name), let u = URL(string: "whatsapp://send?phone=\(phone)") { NSWorkspace.shared.open(u) } else { NSWorkspace.shared.launchApplication("WhatsApp"); announcement = "Opened WhatsApp — Contacts has no number for \(name), so pick the chat." }
         case "imessage": NSWorkspace.shared.launchApplication("Messages")
         case "mail": NSWorkspace.shared.launchApplication("Mail")
+        case "recording", "voicememo": openRecording(named: c.ref.isEmpty ? c.label : c.ref)
         default: if let p = notePath(named: c.ref) { openNote(p) }
         }
+    }
+    /// A citation into something said out loud: the recording opens in its player; a Voice Memo opens the app.
+    func openRecording(named name: String) {
+        let stem = name.split(separator: "·").map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.lowercased().hasPrefix("recording") && !$0.lowercased().hasPrefix("voice") } ?? name
+        let wanted = (stem as NSString).deletingPathExtension.lowercased()
+        for folder in [recordingsFolder, VoiceMemosSource.folder] {
+            if let f = AudioFolder.recordings(in: folder, settled: 0).first(where: { $0.url.deletingPathExtension().lastPathComponent.lowercased() == wanted }) {
+                if folder == VoiceMemosSource.folder { NSWorkspace.shared.launchApplication("Voice Memos") } else { NSWorkspace.shared.open(f.url) }
+                return
+            }
+        }
+        NSWorkspace.shared.launchApplication("Voice Memos"); announcement = "Couldn't find “\(stem)” — opened Voice Memos."
     }
     func run(_ a: Asker.Action) {
         switch a.kind {

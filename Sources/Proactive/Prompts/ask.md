@@ -13,4 +13,4 @@ CARDS WAITING (cite as kind "card"):
 THE QUESTION:
 {{question}}
 
-When you have looked, call `finish` once with: {"answer":"<the answer with [n] markers>","citations":[{"n":1,"kind":"note|whatsapp|imessage|mail|loop|card","label":"<what the chip says, e.g. People/Karan or WhatsApp · Karan · Fri>","ref":"<note path, person/chat name, loop id, or card id>"}],"actions":[{"label":"<two or three words>","kind":"loops|card|note","ref":"<id or path>"}]}
+When you have looked, call `finish` once with: {"answer":"<the answer with [n] markers>","citations":[{"n":1,"kind":"note|whatsapp|imessage|mail|recording|loop|card","label":"<what the chip says, e.g. People/Karan or WhatsApp · Karan · Fri, or Recording · Meera call · 03:12>","ref":"<note path, person/chat name, loop id, or card id>"}],"actions":[{"label":"<two or three words>","kind":"loops|card|note","ref":"<id or path>"}]}

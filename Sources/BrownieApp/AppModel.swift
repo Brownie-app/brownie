@@ -72,6 +72,9 @@ final class AppModel: ObservableObject {
     @Published var discovered: [SourceID: [BucketInfo]] = [:]
     @Published var availability: [SourceID: Availability] = [:]
     @Published var fileRoots: [URL] = FilesSource.defaultRoots
+    @Published var recordingsFolder: URL = RecordingsSource.defaultFolder
+    /// What the two audio rows would read tonight: count and seconds, per source id.
+    @Published var audioCost: [SourceID: (count: Int, seconds: TimeInterval)] = [:]
     @Published var permissions: [Permission: Bool] = [:]
     @Published var overnight = OvernightScheduler.Config()
     @Published var helperInstalled = false
@@ -132,7 +135,7 @@ final class AppModel: ObservableObject {
         sendLogger = SendLogger(sink: { p, model, bytes, detail, payload in try? await st.logSend(purpose: p, model: model, bytes: bytes, detail: detail, cameBack: "…", payload: payload, at: Date()) },
                                 result: { id, back in try? await st.setSendResult(id, cameBack: back) })
         knowledge = try! FileKnowledgeStore(root: Paths.knowledgeBase, indexPath: Paths.applicationSupport.appendingPathComponent("knowledge-index.sqlite").path)
-        allSources = [FilesSource(roots: FilesSource.defaultRoots), NotesSource(), iMessageSource(), WhatsAppSource(), CalendarSource(), GmailSource(), TelegramSource()]
+        allSources = [FilesSource(roots: FilesSource.defaultRoots), NotesSource(), iMessageSource(), WhatsAppSource(), CalendarSource(), GmailSource(), TelegramSource(), VoiceMemosSource(), RecordingsSource()]
         download = ModelDownload(info: ModelCatalog.info(for: UserDefaults.standard.string(forKey: "reader.model")))
         Task { await bootstrap() }
     }
@@ -186,6 +189,7 @@ final class AppModel: ObservableObject {
             if let j = await v(SettingKey.enabledBuckets(s.id)), let d = j.data(using: .utf8), let ids = try? JSONDecoder().decode([String].self, from: d) { enabledBuckets[s.id] = Set(ids.map { BucketID($0) }) }
         }
         if let r = await v(SettingKey.fileRoots), let d = r.data(using: .utf8), let ps = try? JSONDecoder().decode([String].self, from: d) { fileRoots = ps.map { URL(fileURLWithPath: $0) } }
+        if let r = await v(SettingKey.recordingsFolder), !r.isEmpty { recordingsFolder = URL(fileURLWithPath: r, isDirectory: true) }
         brainConfig = BrainConfig(engine: BrainEngine(rawValue: await v(SettingKey.brainEngine) ?? "openai") ?? .openai,
                                   model: await v(SettingKey.brainModel) ?? BrainEngine.openai.defaultModel,
                                   customBaseURL: await v(SettingKey.customBaseURL) ?? "http://127.0.0.1:1234/v1")
@@ -228,6 +232,7 @@ final class AppModel: ObservableObject {
         (allSources + workSources).compactMap { s in
             guard enabledSources.contains(s.id) else { return nil }
             if s.id == "files" { return FilesSource(roots: fileRoots) }
+            if s.id == "recordings" { return RecordingsSource(folder: recordingsFolder) }
             return s
         }
     }
@@ -247,7 +252,15 @@ final class AppModel: ObservableObject {
 
     func refreshSources() async {
         for s in allSources + workSources {
-            let a = await s.availability(); availability[s.id] = a
+            let src: any Source = s.id == "recordings" ? RecordingsSource(folder: recordingsFolder) : s
+            let a = await src.availability(); availability[s.id] = a
+            if s.id == "voicememos" || s.id == "recordings" {
+                // The cost line: how much audio sits there, so the user can judge the night's work.
+                let folder = s.id == "recordings" ? recordingsFolder : VoiceMemosSource.folder
+                let files = AudioFolder.recordings(in: folder)
+                var secs = 0.0; for f in files.prefix(200) { secs += await AudioFolder.duration(of: f.url) }
+                audioCost[s.id] = (files.count, secs)
+            }
             if s.descriptor.supportsPerBucketOptIn, a == .available, s.id != "files" {
                 do {
                     // A source that never answers (a wedged Telegram client) must not hold the others hostage.
@@ -267,6 +280,7 @@ final class AppModel: ObservableObject {
         if enabledSources.contains(id) { enabledSources.remove(id) } else {
             enabledSources.insert(id)
             if id == "calendar", !CalendarSource.isAuthorized { Task { _ = await CalendarSource.requestAccess(); await refreshPermissions(); await refreshSources() } }
+            if id == "voicememos" || id == "recordings", !SpeechTranscriber.isAuthorized { Task { _ = await SpeechTranscriber.requestAccess(); await refreshPermissions(); await refreshSources() } }
         }
         set(SettingKey.enabledSources, json(enabledSources.map(\.rawValue)))
         markWalkthrough("sources")
@@ -302,10 +316,15 @@ final class AppModel: ObservableObject {
         fileRoots.append(url); set(SettingKey.fileRoots, json(fileRoots.map(\.path)))
         Task { await refreshSources() }
     }
+    func setRecordingsFolder(_ url: URL) {
+        recordingsFolder = url; set(SettingKey.recordingsFolder, url.path)
+        Task { await refreshSources() }
+    }
     func removeFileRoot(_ url: URL) { fileRoots.removeAll { $0 == url }; set(SettingKey.fileRoots, json(fileRoots.map(\.path))); Task { await refreshSources() } }
 
     func refreshPermissions() async {
         for p in [Permission.fullDiskAccess, .accessibility, .screenRecording, .calendar, .contacts] { permissions[p] = PermissionProbe.status(p) }
+        permissions[.speech] = SpeechTranscriber.isAuthorized
     }
 
     // MARK: brain + reader

@@ -40,7 +40,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>NSAppleEventsUsageDescription</key><string>Brownie drives Messages, Mail and Calendar for the cards you fire.</string>
   <key>NSContactsUsageDescription</key><string>To show names instead of phone numbers in your chats.</string>
   <key>NSMicrophoneUsageDescription</key><string>Hold-to-talk for Hands. Speech is recognised on this Mac.</string>
-  <key>NSSpeechRecognitionUsageDescription</key><string>Hold-to-talk for Hands. Speech is recognised on this Mac.</string>
+  <key>NSSpeechRecognitionUsageDescription</key><string>Hold-to-talk for Hands, and reading your Voice Memos and recordings. Speech is recognised on this Mac; audio never leaves.</string>
   <key>NSCalendarsUsageDescription</key><string>To time cards against your calendar.</string>
   <key>NSCalendarsFullAccessUsageDescription</key><string>To read your events for the last week and the next day, on this Mac, so morning cards know what is coming up.</string>
 </dict></plist>

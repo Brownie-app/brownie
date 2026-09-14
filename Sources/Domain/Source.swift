@@ -18,6 +18,8 @@ public struct BucketID: Hashable, Codable, Sendable, CustomStringConvertible {
 /// How the reader should judge an item. Prompts key off this, never off the app.
 public enum SourceKind: String, Codable, Sendable, CaseIterable {
     case document, directMessage, groupChat, mail, event, ticket
+    /// Something the user said out loud — a Voice Memo, a recorded call — transcribed on this Mac.
+    case transcript
 }
 
 /// How a source reaches its data.
