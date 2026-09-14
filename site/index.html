@@ -1,0 +1,41 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Brownie — your Mac, while you sleep</title>
+<style>
+:root{--ink:#1d1d1f;--ink2:#6e6e73;--accent:#d8983a;--ink-a:#8f5c1f;--bg:#f7f5f1;--card:#fff;--sep:rgba(0,0,0,.1)}
+@media(prefers-color-scheme:dark){:root{--ink:#f2f2f4;--ink2:#a1a1a8;--accent:#e2a54a;--ink-a:#f0c47c;--bg:#1e1e21;--card:#27272b;--sep:rgba(255,255,255,.1)}}
+body{margin:0;font-family:-apple-system,"SF Pro Text","Helvetica Neue",Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.5}
+.wrap{max-width:880px;margin:0 auto;padding:48px 24px}
+nav{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px}nav .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);margin-left:-6px;margin-top:-14px}
+.tile{width:26px;height:26px;border-radius:7px;background:url(icon.svg) center/cover no-repeat;display:inline-block;vertical-align:middle}
+h1{font-size:44px;line-height:1.1;letter-spacing:-.02em;margin:56px 0 16px;max-width:720px}
+.lead{font-size:19px;color:var(--ink2);max-width:640px}
+.cta{display:inline-block;margin-top:28px;background:var(--accent);color:#1a1205;font-weight:600;padding:12px 20px;border-radius:8px;text-decoration:none}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:56px}@media(max-width:700px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--sep);border-radius:12px;padding:18px}.card h3{margin:0 0 6px;font-size:15px}.card p{margin:0;color:var(--ink2);font-size:14px}
+h2{font-size:24px;margin:64px 0 12px;letter-spacing:-.01em}
+.inv{padding-left:0;list-style:none}.inv li{padding:12px 0;border-top:1px solid var(--sep)}.inv li strong{display:block}
+footer{margin-top:80px;color:var(--ink2);font-size:13px;border-top:1px solid var(--sep);padding-top:20px}
+a{color:var(--ink-a)}
+</style></head><body><div class="wrap">
+<nav><span class="tile"></span> brownie<span class="dot"></span></nav>
+<h1>A house spirit that lives in your Mac and does the chores while you sleep.</h1>
+<p class="lead">Every night, while your Mac is plugged in, Brownie reads what's new in your life — files, messages, notes, mail — with a small model that runs entirely on the machine, and leaves a handful of morning cards: things worth your attention, each ready to do in one tap.</p>
+<a class="cta" href="[DOWNLOAD_URL]">Download for macOS</a>
+<div class="grid">
+<div class="card"><h3>Reads on your Mac</h3><p>A 4-billion-parameter model on your own GPU does the reading. Raw files and messages never leave.</p></div>
+<div class="card"><h3>Your brain, your key</h3><p>Deciding what matters and drafting uses a bigger model you already pay for. It only ever sees short, scrubbed summaries.</p></div>
+<div class="card"><h3>Hands, not autopilot</h3><p>Hands can act in your apps — and always stops one step short of Send, Pay or Delete. Those stay yours.</p></div>
+</div>
+<h2>What you get in the morning</h2>
+<p class="lead" style="font-size:16px">"Reply to Priya about Goa — waiting 3 days." "Amma is waiting for the scan report." "Adobe renews Friday." Each card shows why it's there, the evidence, and a draft in your voice. Tap it, and Hands puts everything in place; you press Send.</p>
+<h2>What we never do</h2>
+<ul class="inv">
+<li><strong>Raw data never leaves your Mac.</strong> Only summaries reach the model you chose.</li>
+<li><strong>Sensitive things are erased on sight.</strong> ID numbers, cards, passwords, medical records: nothing stored, not even a log line with content.</li>
+<li><strong>Nothing is sent without your tap.</strong> Ever. There is no auto-send setting.</li>
+<li><strong>No account.</strong> Nothing to sign up for. There is no Brownie server holding your data.</li>
+<li><strong>Deletion is total.</strong> Uninstall removes the app, the model, the knowledge base, the helper — everything.</li>
+</ul>
+<h2>What it needs</h2>
+<p style="color:var(--ink2)">An Apple-silicon Mac with macOS 14 or later and 8 GB of memory. A 3.7 GB model download, once. Your own API key for ChatGPT/OpenAI or Claude (or a local model server) for the cards; without one, Brownie still keeps your notes.</p>
+<footer>© [YEAR] [YOUR COMPANY] · <a href="privacy.html">Privacy</a> · <a href="[REPO_URL]">Source</a> · Inspired by the architecture of Sentient OS.</footer>
+</div></body></html>

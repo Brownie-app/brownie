@@ -1,0 +1,12 @@
+.secrets/
+.build/
+.swiftpm/
+*.xcodeproj/xcuserdata/
+DerivedData/
+dist/
+Models/
+*.litertlm
+.DS_Store
+design/brownie.html
+
+Vendor/tdlib/lib/*.dylib

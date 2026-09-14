@@ -1,0 +1,177 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: -apple-system, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #1d1d1f; background: #d8d8dc; }
+    a { color: #b3762a; } a:hover { color: #8f5c1f; }
+    .desk { width: 1440px; height: 560px; position: relative; overflow: hidden; background: linear-gradient(180deg, #2b3a55 0%, #4a5f85 45%, #a9b8cf 100%); font-size: 13px; }
+    .menubar { position: absolute; top: 0; left: 0; right: 0; height: 24px; background: rgba(20,24,34,0.55); backdrop-filter: blur(20px); display: flex; align-items: center; justify-content: space-between; padding: 0 12px; color: #fff; font-size: 13px; font-weight: 500; }
+    .menubar .l, .menubar .r { display: flex; gap: 16px; align-items: center; }
+    .notch { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 196px; height: 32px; background: #000; border-radius: 0 0 14px 14px; }
+    .overlay { position: absolute; top: 0; left: 50%; transform: translateX(-50%); background: #000; color: #fff; border-radius: 0 0 22px 22px; box-shadow: 0 16px 40px rgba(0,0,0,0.45); display: flex; flex-direction: column; overflow: hidden; }
+    .win { position: absolute; background: #ffffff; border-radius: 10px; box-shadow: 0 20px 60px rgba(0,0,0,0.35), 0 0 0 0.5px rgba(0,0,0,0.25); overflow: hidden; color: #1d1d1f; }
+    .lights { display: flex; gap: 8px; padding: 12px 0 0 14px; }
+    .light { width: 12px; height: 12px; border-radius: 50%; }
+    .btn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; border-radius: 7px; font-size: 13px; font-weight: 500; cursor: pointer; background: rgba(255,255,255,0.12); color: #fff; white-space: nowrap; }
+    .btn.d { background: rgba(217,79,69,0.9); }
+    .btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .pill { display: inline-flex; align-items: center; height: 26px; padding: 0 12px; border-radius: 13px; background: rgba(255,255,255,0.14); color: #fff; font-size: 12px; font-weight: 500; cursor: pointer; }
+    .pill.on { background: #d8983a; color: #1a1205; }
+    .wave { display: flex; gap: 3px; align-items: center; height: 22px; }
+    .wave > div { width: 3px; border-radius: 2px; background: #d8983a; }
+    .stepl { display: flex; gap: 10px; align-items: center; font-size: 13px; }
+    .dot { width: 16px; height: 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .dot svg { width: 10px; height: 10px; stroke: #fff; fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+    .tiny { font-size: 11px; opacity: 0.6; }
+    .cursor { position: absolute; width: 22px; height: 26px; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.4)); }
+    .field { height: 30px; padding: 0 10px; border-radius: 7px; background: rgba(255,255,255,0.1); display: flex; align-items: center; color: #fff; font-size: 13px; flex: 1; }
+    .tip { position: absolute; z-index: 7; width: 320px; background: #fff; color: #1d1d1f; border: 1px solid rgba(0,0,0,0.08); border-radius: 10px; box-shadow: 0 14px 36px rgba(0,0,0,0.35); padding: 14px 16px 12px 16px; display: flex; flex-direction: column; gap: 6px; }
+    .tip .arrow { position: absolute; width: 12px; height: 12px; background: #fff; border-left: 1px solid rgba(0,0,0,0.08); border-top: 1px solid rgba(0,0,0,0.08); transform: rotate(45deg); }
+    .tip .eyebrow { font-size: 11px; font-weight: 600; color: #8f5c1f; text-transform: uppercase; letter-spacing: 0.04em; }
+    .tip .t { font-size: 14px; font-weight: 600; }
+    .tip .b { font-size: 12.5px; color: #6e6e73; }
+    .tip .do { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 500; }
+    .tip .do svg { width: 14px; height: 14px; stroke: #8f5c1f; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .tip .foot { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; font-size: 11px; color: #6e6e73; }
+    .tip .skip { font-size: 12px; font-weight: 500; color: #6e6e73; cursor: pointer; }
+    .notch.spot { box-shadow: 0 0 0 3px #d8983a, 0 0 0 9px rgba(216,152,58,0.3); }
+  </style>
+</helmet>
+
+<div class="desk">
+  <div class="menubar">
+    <div class="l"><span style="font-weight: 700;">Messages</span><span>File</span><span>Edit</span><span>View</span><span>Conversations</span><span>Window</span><span>Help</span></div>
+    <div class="r">
+      <span style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 8px; height: 8px; border-radius: 50%; background: #d8983a; display: inline-block;"></span>Brownie</span>
+      <span>Sat 13 Sep</span><span>9:41 AM</span>
+    </div>
+  </div>
+  <div class="notch {{notchSpot}}"></div>
+  <sc-if value="{{ftue}}" hint-placeholder-val="{{ false }}">
+    <div class="tip" style="left: 560px; top: 52px;">
+      <div class="arrow" style="left: 154px; top: -7px;"></div>
+      <div class="eyebrow">First time · Hands</div>
+      <div class="t">Hold right ⌘ and say what you want done.</div>
+      <div class="b">Hands works in your apps with its own cursor and stops before anything irreversible. Let go of the key to start.</div>
+      <div class="do"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"></path></svg><span>Try it now</span></div>
+      <div class="foot"><span>Shown once. Done when you do it.</span><span class="skip" onClick="{{skipFtue}}">Skip</span></div>
+    </div>
+  </sc-if>
+
+  <!-- A background app window (Messages) the Hands acts in -->
+  <div class="win" style="left: 200px; top: 70px; width: 820px; height: 470px; display: flex;">
+    <div style="width: 220px; background: #ececee; border-right: 1px solid rgba(0,0,0,0.1);">
+      <div class="lights"><div class="light" style="background: #ff5f57;"></div><div class="light" style="background: #febc2e;"></div><div class="light" style="background: #28c840;"></div></div>
+      <div style="padding: 18px 10px 0 10px; display: flex; flex-direction: column; gap: 2px;">
+        <div style="padding: 8px 10px; border-radius: 6px; background: rgba(0,0,0,0.09); font-weight: 500;">Amma</div>
+        <div style="padding: 8px 10px; border-radius: 6px; color: #6e6e73;">Karan</div>
+        <div style="padding: 8px 10px; border-radius: 6px; color: #6e6e73;">Rohan</div>
+        <div style="padding: 8px 10px; border-radius: 6px; color: #6e6e73;">Goa trip</div>
+      </div>
+    </div>
+    <div style="flex: 1; display: flex; flex-direction: column;">
+      <div style="height: 44px; border-bottom: 1px solid rgba(0,0,0,0.1); display: flex; align-items: center; padding: 0 16px; font-weight: 600;">Amma</div>
+      <div style="flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 8px; justify-content: flex-end;">
+        <div style="align-self: flex-start; background: #e9e9eb; padding: 8px 12px; border-radius: 14px; max-width: 320px;">Did you send the report beta?</div>
+        <div style="align-self: flex-end; background: #d8983a; color: #1a1205; padding: 8px 12px; border-radius: 14px; max-width: 320px;">will send tonight</div>
+        <div style="align-self: flex-start; background: #e9e9eb; padding: 8px 12px; border-radius: 14px; max-width: 320px;">?</div>
+      </div>
+      <div style="height: 52px; border-top: 1px solid rgba(0,0,0,0.1); display: flex; align-items: center; gap: 10px; padding: 0 14px;">
+        <div style="flex: 1; height: 30px; border-radius: 15px; border: 1px solid rgba(0,0,0,0.15); display: flex; align-items: center; padding: 0 12px; color: {{fieldInk}};">{{fieldText}}</div>
+        <div style="width: 30px; height: 30px; border-radius: 50%; background: {{sendBg}}; display: flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" style="width: 14px; height: 14px; stroke: #fff; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round;"><path d="M12 19V5M6 11l6-6 6 6"></path></svg></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hands' own cursor -->
+  <sc-if value="{{running}}" hint-placeholder-val="{{ false }}">
+    <svg class="cursor" viewBox="0 0 24 28" style="left: 966px; top: 500px;"><path d="M3 2l16 12-7 1 4 9-3 1-4-9-6 5z" fill="#d8983a" stroke="#1a1205" stroke-width="1.5" stroke-linejoin="round"></path></svg>
+  </sc-if>
+
+  <!-- ===== Overlay states ===== -->
+  <sc-if value="{{idle}}" hint-placeholder-val="{{ true }}">
+    <div class="overlay" style="width: 196px; height: 32px; border-radius: 0 0 14px 14px; align-items: center; justify-content: center;">
+      <div class="tiny" style="opacity: 0.8; font-size: 11px;">hold right ⌘ to talk</div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{listening}}" hint-placeholder-val="{{ false }}">
+    <div class="overlay" style="width: 520px; padding: 42px 22px 18px 22px; gap: 14px;">
+      <div style="display: flex; align-items: center; gap: 14px;">
+        <div class="wave"><div style="height: 8px;"></div><div style="height: 16px;"></div><div style="height: 22px;"></div><div style="height: 12px;"></div><div style="height: 18px;"></div><div style="height: 8px;"></div><div style="height: 14px;"></div></div>
+        <div style="font-size: 15px; font-weight: 500;">“send amma the scan report from downloads”</div>
+      </div>
+      <div class="tiny">Transcribed on this Mac · let go to start · Esc to cancel</div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{running}}" hint-placeholder-val="{{ false }}">
+    <div class="overlay" style="width: 560px; padding: 42px 22px 18px 22px; gap: 14px;">
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <div style="font-size: 15px; font-weight: 600;">Sending Amma the scan report</div>
+        <div class="btn d" onClick="{{toIdle}}"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg><span>Stop</span></div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <div class="stepl"><div class="dot" style="background: #2f9e5a;"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"></path></svg></div><span>Found “scan-report-sep.pdf” in Downloads</span></div>
+        <div class="stepl"><div class="dot" style="background: #2f9e5a;"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"></path></svg></div><span>Opened Messages → Amma</span></div>
+        <div class="stepl"><div class="dot" style="background: #2f9e5a;"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"></path></svg></div><span>Attached the file, typed a short note in your voice</span></div>
+        <div class="stepl"><div class="dot" style="background: #d8983a;"></div><span style="font-weight: 500;">Paused at Send — press it when you're ready</span></div>
+      </div>
+      <div class="tiny">Hands uses its own cursor. Keep working; it won't touch your mouse. Sending, paying and deleting always wait for you.</div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{command}}" hint-placeholder-val="{{ false }}">
+    <div class="overlay" style="width: 620px; padding: 42px 18px 16px 18px; gap: 12px;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <svg viewBox="0 0 24 24" style="width: 18px; height: 18px; stroke: #d8983a; fill: none; stroke-width: 1.8; stroke-linecap: round;"><path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2"></path><circle cx="12" cy="12" r="4"></circle></svg>
+        <div class="field"><span>Move every invoice in Downloads into ~/Documents/Invoices/2026</span></div>
+        <div class="btn" style="background: #d8983a; color: #1a1205;"><span>Do it</span></div>
+      </div>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <div class="pill">Reply to the last message from Rohan</div>
+        <div class="pill">What did I promise this week?</div>
+        <div class="pill">Cancel Adobe</div>
+      </div>
+      <div class="tiny">⌘⇧Space · knows your notes · asks before anything irreversible</div>
+    </div>
+  </sc-if>
+
+  <!-- Prototype controls (stand in for the key hold) -->
+  <div style="position: absolute; left: 24px; bottom: 20px; display: flex; gap: 8px; align-items: center;">
+    <div class="tiny" style="color: #fff; opacity: 0.85;">Prototype: simulate</div>
+    <div class="pill {{pIdle}}" onClick="{{toIdle}}">Idle</div>
+    <div class="pill {{pListening}}" onClick="{{toListening}}">Hold right ⌘</div>
+    <div class="pill {{pRunning}}" onClick="{{toRunning}}">Let go</div>
+    <div class="pill {{pCommand}}" onClick="{{toCommand}}">⌘⇧Space</div>
+  </div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"mode":{"editor":"enum","default":"running","options":["idle","listening","running","command"],"section":"State"},"walkthrough":{"editor":"enum","default":"off","options":["on","off"],"section":"First time"},"$preview":{"width":1440,"height":560}}'>
+class Component extends DCLogic {
+  state = { mode: null, ftueDone: false };
+  renderVals() {
+    const mode = this.state.mode ?? this.props.mode ?? 'idle';
+    const ftue = (this.props.walkthrough ?? 'on') === 'on' && !this.state.ftueDone && mode === 'idle';
+    const to = (m) => () => this.setState({ mode: m, ftueDone: this.state.ftueDone || m === 'listening' });
+    const running = mode === 'running';
+    return {
+      ftue, notchSpot: ftue ? 'spot' : '', skipFtue: () => this.setState({ ftueDone: true }),
+      idle: mode === 'idle', listening: mode === 'listening', running, command: mode === 'command',
+      pIdle: mode === 'idle' ? 'on' : '', pListening: mode === 'listening' ? 'on' : '', pRunning: running ? 'on' : '', pCommand: mode === 'command' ? 'on' : '',
+      toIdle: to('idle'), toListening: to('listening'), toRunning: to('running'), toCommand: to('command'),
+      fieldText: running ? 'Sorry Amma, here it is. Nothing to worry about — Dr. Menon said it’s all normal. [scan-report-sep.pdf attached]' : 'iMessage',
+      fieldInk: running ? '#1d1d1f' : '#aeaeb2',
+      sendBg: running ? '#d8983a' : '#c7c7cc'
+    };
+  }
+}
+</script>
+</body>
+</html>

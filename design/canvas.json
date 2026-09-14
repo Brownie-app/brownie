@@ -1,0 +1,446 @@
+{
+ "pages": [
+  {
+   "id": "page-1",
+   "name": "Prototype"
+  },
+  {
+   "id": "page-2",
+   "name": "All 28 screens"
+  },
+  {
+   "id": "page-3",
+   "name": "First-time walkthroughs"
+  }
+ ],
+ "artboards": [
+  {
+   "file": "Main.dc.html",
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 900,
+   "title": "Prototype \u00b7 the app",
+   "page": "page-1",
+   "is_interactive": true
+  },
+  {
+   "file": "Onboarding.dc.html",
+   "x": 1560,
+   "y": 0,
+   "w": 900,
+   "h": 640,
+   "title": "Prototype \u00b7 onboarding",
+   "page": "page-1",
+   "is_interactive": true
+  },
+  {
+   "file": "Hands.dc.html",
+   "x": 0,
+   "y": 1040,
+   "w": 1440,
+   "h": 560,
+   "title": "Prototype \u00b7 Hands & command bar",
+   "page": "page-1",
+   "is_interactive": true
+  },
+  {
+   "file": "MenuBar.dc.html",
+   "x": 1560,
+   "y": 780,
+   "w": 560,
+   "h": 480,
+   "title": "26 \u00b7 Menu bar",
+   "page": "page-1"
+  },
+  {
+   "file": "Notifications.dc.html",
+   "x": 2200,
+   "y": 780,
+   "w": 560,
+   "h": 660,
+   "title": "27 \u00b7 Notifications",
+   "page": "page-1"
+  },
+  {
+   "file": "DesignSystem.dc.html",
+   "x": 0,
+   "y": 1740,
+   "w": 1440,
+   "h": 1700,
+   "title": "28 \u00b7 Design system",
+   "page": "page-1"
+  },
+  {
+   "file": "Welcome.dc.html",
+   "x": 0,
+   "y": 0,
+   "w": 900,
+   "h": 640,
+   "title": "01 \u00b7 Welcome",
+   "page": "page-2"
+  },
+  {
+   "file": "ModelDownload.dc.html",
+   "x": 1000,
+   "y": 0,
+   "w": 900,
+   "h": 640,
+   "title": "02 \u00b7 Model download",
+   "page": "page-2"
+  },
+  {
+   "file": "ChooseBrain.dc.html",
+   "x": 2000,
+   "y": 0,
+   "w": 900,
+   "h": 640,
+   "title": "03 \u00b7 Choose a brain",
+   "page": "page-2"
+  },
+  {
+   "file": "ChooseSources.dc.html",
+   "x": 0,
+   "y": 780,
+   "w": 900,
+   "h": 640,
+   "title": "04 \u00b7 Connect sources",
+   "page": "page-2"
+  },
+  {
+   "file": "Permissions.dc.html",
+   "x": 1000,
+   "y": 780,
+   "w": 900,
+   "h": 640,
+   "title": "05 \u00b7 Permissions",
+   "page": "page-2"
+  },
+  {
+   "file": "OvernightSetup.dc.html",
+   "x": 2000,
+   "y": 780,
+   "w": 900,
+   "h": 640,
+   "title": "06 \u00b7 Overnight setup",
+   "page": "page-2"
+  },
+  {
+   "file": "FirstRead.dc.html",
+   "x": 0,
+   "y": 1560,
+   "w": 900,
+   "h": 640,
+   "title": "07 \u00b7 First analysis",
+   "page": "page-2"
+  },
+  {
+   "file": "ForYou.dc.html",
+   "x": 0,
+   "y": 2340,
+   "w": 1440,
+   "h": 900,
+   "title": "08 \u00b7 For You",
+   "page": "page-2"
+  },
+  {
+   "file": "CardDetail.dc.html",
+   "x": 1540,
+   "y": 2340,
+   "w": 1440,
+   "h": 900,
+   "title": "09 \u00b7 Card detail",
+   "page": "page-2"
+  },
+  {
+   "file": "Firing.dc.html",
+   "x": 0,
+   "y": 3380,
+   "w": 1440,
+   "h": 900,
+   "title": "10 \u00b7 Card firing",
+   "page": "page-2"
+  },
+  {
+   "file": "Letter.dc.html",
+   "x": 1540,
+   "y": 3380,
+   "w": 1440,
+   "h": 900,
+   "title": "11 \u00b7 Welcome letter",
+   "page": "page-2"
+  },
+  {
+   "file": "Processing.dc.html",
+   "x": 0,
+   "y": 4420,
+   "w": 1440,
+   "h": 900,
+   "title": "12 \u00b7 Processing",
+   "page": "page-2"
+  },
+  {
+   "file": "MissedNight.dc.html",
+   "x": 1540,
+   "y": 4420,
+   "w": 1440,
+   "h": 900,
+   "title": "13 \u00b7 Morning-after caution",
+   "page": "page-2"
+  },
+  {
+   "file": "Knowledge.dc.html",
+   "x": 0,
+   "y": 5460,
+   "w": 1440,
+   "h": 900,
+   "title": "17 \u00b7 Knowledge base",
+   "page": "page-2"
+  },
+  {
+   "file": "Graph.dc.html",
+   "x": 1540,
+   "y": 5460,
+   "w": 1440,
+   "h": 900,
+   "title": "18 \u00b7 Knowledge graph",
+   "page": "page-2"
+  },
+  {
+   "file": "Excluded.dc.html",
+   "x": 0,
+   "y": 6500,
+   "w": 1440,
+   "h": 900,
+   "title": "19 \u00b7 Excluded log",
+   "page": "page-2"
+  },
+  {
+   "file": "SettingsSources.dc.html",
+   "x": 1540,
+   "y": 6500,
+   "w": 1440,
+   "h": 900,
+   "title": "20 \u00b7 Settings \u00b7 Sources",
+   "page": "page-2"
+  },
+  {
+   "file": "SettingsBrain.dc.html",
+   "x": 0,
+   "y": 7540,
+   "w": 1440,
+   "h": 900,
+   "title": "21 \u00b7 Settings \u00b7 Brain",
+   "page": "page-2"
+  },
+  {
+   "file": "SettingsProactive.dc.html",
+   "x": 1540,
+   "y": 7540,
+   "w": 1440,
+   "h": 900,
+   "title": "22 \u00b7 Settings \u00b7 Proactive & Hands",
+   "page": "page-2"
+  },
+  {
+   "file": "SettingsPrivacy.dc.html",
+   "x": 0,
+   "y": 8580,
+   "w": 1440,
+   "h": 900,
+   "title": "23 \u00b7 Settings \u00b7 Privacy & Cloud",
+   "page": "page-2"
+  },
+  {
+   "file": "SettingsOvernight.dc.html",
+   "x": 1540,
+   "y": 8580,
+   "w": 1440,
+   "h": 900,
+   "title": "24 \u00b7 Settings \u00b7 Overnight",
+   "page": "page-2"
+  },
+  {
+   "file": "SettingsAbout.dc.html",
+   "x": 0,
+   "y": 9620,
+   "w": 1440,
+   "h": 900,
+   "title": "25 \u00b7 Settings \u00b7 About",
+   "page": "page-2"
+  },
+  {
+   "file": "ForYouDark.dc.html",
+   "x": 1540,
+   "y": 9620,
+   "w": 1440,
+   "h": 900,
+   "title": "08 \u00b7 For You \u00b7 dark",
+   "page": "page-2"
+  },
+  {
+   "file": "HandsIdle.dc.html",
+   "x": 0,
+   "y": 10660,
+   "w": 1440,
+   "h": 560,
+   "title": "14 \u00b7 Hands \u00b7 idle",
+   "page": "page-2"
+  },
+  {
+   "file": "HandsListening.dc.html",
+   "x": 1540,
+   "y": 10660,
+   "w": 1440,
+   "h": 560,
+   "title": "14 \u00b7 Hands \u00b7 hold to talk",
+   "page": "page-2"
+  },
+  {
+   "file": "HandsRunning.dc.html",
+   "x": 0,
+   "y": 11360,
+   "w": 1440,
+   "h": 560,
+   "title": "15 \u00b7 Hands \u00b7 running",
+   "page": "page-2"
+  },
+  {
+   "file": "CommandBar.dc.html",
+   "x": 1540,
+   "y": 11360,
+   "w": 1440,
+   "h": 560,
+   "title": "16 \u00b7 Command bar",
+   "page": "page-2"
+  },
+  {
+   "file": "MenuBarScreen.dc.html",
+   "x": 0,
+   "y": 12060,
+   "w": 560,
+   "h": 480,
+   "title": "26 \u00b7 Menu bar",
+   "page": "page-2"
+  },
+  {
+   "file": "NotificationsScreen.dc.html",
+   "x": 660,
+   "y": 12060,
+   "w": 560,
+   "h": 660,
+   "title": "27 \u00b7 Notifications",
+   "page": "page-2"
+  },
+  {
+   "file": "DesignSystemScreen.dc.html",
+   "x": 0,
+   "y": 12860,
+   "w": 1440,
+   "h": 1700,
+   "title": "28 \u00b7 Design system",
+   "page": "page-2"
+  },
+  {
+   "file": "FtueForYou.dc.html",
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 900,
+   "title": "FTUE 1 \u00b7 For You",
+   "page": "page-3"
+  },
+  {
+   "file": "FtueCard.dc.html",
+   "x": 1540,
+   "y": 0,
+   "w": 1440,
+   "h": 900,
+   "title": "FTUE 2 \u00b7 Card detail",
+   "page": "page-3"
+  },
+  {
+   "file": "FtueKnowledge.dc.html",
+   "x": 0,
+   "y": 1040,
+   "w": 1440,
+   "h": 900,
+   "title": "FTUE 3 \u00b7 Knowledge",
+   "page": "page-3"
+  },
+  {
+   "file": "FtueGraph.dc.html",
+   "x": 1540,
+   "y": 1040,
+   "w": 1440,
+   "h": 900,
+   "title": "FTUE 4 \u00b7 Graph",
+   "page": "page-3"
+  },
+  {
+   "file": "FtueExcluded.dc.html",
+   "x": 0,
+   "y": 2080,
+   "w": 1440,
+   "h": 900,
+   "title": "FTUE 5 \u00b7 Excluded",
+   "page": "page-3"
+  },
+  {
+   "file": "FtueSources.dc.html",
+   "x": 1540,
+   "y": 2080,
+   "w": 1440,
+   "h": 900,
+   "title": "FTUE 6 \u00b7 Sources",
+   "page": "page-3"
+  },
+  {
+   "file": "FtueHands.dc.html",
+   "x": 0,
+   "y": 3120,
+   "w": 1440,
+   "h": 560,
+   "title": "FTUE 7 \u00b7 Hands",
+   "page": "page-3"
+  }
+ ],
+ "annotations": [
+  {
+   "id": "how-to",
+   "x": 0,
+   "y": -300,
+   "w": 520,
+   "page": "page-1",
+   "text": "Click through the app: For You \u2192 a card \u2192 Fire \u2192 Simulate completion. Sidebar switches Notes / Graph / Excluded / Settings. The tweak chips above each frame jump to any screen or flip dark mode.\n\nFirst-time tips are on in this prototype: each plays once and disappears when you do what it asks. Settings \u2192 About \u2192 Replay brings them back."
+  },
+  {
+   "id": "hands-note",
+   "x": 1560,
+   "y": 1300,
+   "w": 420,
+   "page": "page-1",
+   "text": "Hands is triggered by holding right \u2318 on a real Mac; the pills at the bottom-left of the frame simulate that here."
+  },
+  {
+   "id": "board-note",
+   "x": 0,
+   "y": -300,
+   "w": 520,
+   "page": "page-2",
+   "text": "Every screen, in flow order, with first-time tips off. Names, people and numbers are sample data."
+  },
+  {
+   "id": "ftue-note",
+   "x": 0,
+   "y": -300,
+   "w": 560,
+   "page": "page-3",
+   "text": "One tip per screen, keyed: foryou \u00b7 card \u00b7 knowledge \u00b7 graph \u00b7 excluded \u00b7 sources \u00b7 hands. The target is spotlit, the rest dims. The tip completes only when the user performs the action (Skip also counts), is stored on disk, and never returns unless replayed from Settings \u2192 About."
+  }
+ ],
+ "launch": {
+  "view": "canvas",
+  "page": "page-3"
+ }
+}
