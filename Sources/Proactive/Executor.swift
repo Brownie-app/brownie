@@ -43,18 +43,23 @@ public struct RecipeExecutor: CardExecutor {
             onEvent(.step("Composing an email to \(to)", done: true))
             onEvent(.pausedForUser("Press Send in Mail when you're ready")); return .pausedAtUserStep
         case .calendar(let title, let startISO, let endISO, let notes):
-            onEvent(.step("Opening a new event", done: false))
+            let (start, end) = Self.eventTimes(startISO: startISO, endISO: endISO)
+            let f = DateFormatter(); f.dateFormat = "EEE d MMM, HH:mm"
+            onEvent(.step("Creating “\(title)” on \(f.string(from: start))", done: false))
+            // Offsets from now avoid AppleScript's locale-dependent date literals.
+            let s = Int(start.timeIntervalSinceNow), d = Int(end.timeIntervalSince(start))
             try await Self.appleScript("""
             tell application "Calendar"
               activate
+              set s to (current date) + (\(s))
               tell calendar 1
-                set e to make new event with properties {summary:"\(Self.esc(title))", start date:(current date), description:"\(Self.esc(notes))\n\(startISO) → \(endISO)"}
+                set e to make new event with properties {summary:"\(Self.esc(title))", start date:s, end date:(s + \(d)), description:"\(Self.esc(notes))"}
                 show e
               end tell
             end tell
             """)
-            onEvent(.step("Event created in Calendar — check the time and Save", done: true))
-            onEvent(.pausedForUser("Adjust the time and Save")); return .pausedAtUserStep
+            onEvent(.step("Event is in Calendar at \(f.string(from: start)) — change the time if you like, then it's saved", done: true))
+            onEvent(.pausedForUser("The event is in Calendar; adjust the time or leave it")); return .pausedAtUserStep
         case .note(let rel, let body):
             onEvent(.step("Writing \(rel)", done: false))
             let url = knowledgeRoot.appendingPathComponent(rel)
@@ -80,5 +85,22 @@ public struct RecipeExecutor: CardExecutor {
             NSAppleScript(source: source)?.executeAndReturnError(&err)
             if let err { throw NSError(domain: "AppleScript", code: 1, userInfo: [NSLocalizedDescriptionKey: "\(err)"]) }
         }
+    }
+}
+
+extension RecipeExecutor {
+    /// The event's times from the card, or a sensible proposal when none was agreed: the next weekday at 10:00, for an hour.
+    static func eventTimes(startISO: String, endISO: String, now: Date = Date(), calendar: Calendar = .current) -> (Date, Date) {
+        let iso = ISO8601DateFormatter(); let isoFrac = ISO8601DateFormatter(); isoFrac.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let local = DateFormatter(); local.calendar = calendar; local.timeZone = calendar.timeZone; local.dateFormat = "yyyy-MM-dd'T'HH:mm"
+        func parse(_ t: String) -> Date? { let t = t.trimmingCharacters(in: .whitespaces); return iso.date(from: t) ?? isoFrac.date(from: t) ?? local.date(from: String(t.prefix(16))) }
+        if let s = parse(startISO) {
+            let e = parse(endISO).flatMap { $0 > s ? $0 : nil } ?? s.addingTimeInterval(3600)
+            return (s, e)
+        }
+        var day = calendar.startOfDay(for: now)
+        repeat { day = calendar.date(byAdding: .day, value: 1, to: day)! } while calendar.isDateInWeekend(day)
+        let s = calendar.date(bySettingHour: 10, minute: 0, second: 0, of: day)!
+        return (s, s.addingTimeInterval(3600))
     }
 }

@@ -146,7 +146,9 @@ public actor RunCoordinator {
                 if !dueCards.isEmpty { await LoopLedger.save(loopsNow, store) }
                 // New cards replace the ones still waiting; what the user already fired, snoozed or dismissed stays.
                 let kept = try await Self.loadCards(store: store).filter { $0.state != .ready }
-                try await Self.saveCards(kept + cards + dueCards, store: store)
+                let fresh = CardDedupe.dedupe(cards + dueCards)
+                if fresh.count < cards.count + dueCards.count { log.info("\(cards.count + dueCards.count - fresh.count) duplicate card(s) folded") }
+                try await Self.saveCards(kept + fresh, store: store)
                 try await store.setValue("brain.lastUsage", String(data: JSONEncoder().encode(usage), encoding: .utf8))
 
                 // Sunday: the week in a letter, once per week
@@ -162,7 +164,7 @@ public actor RunCoordinator {
                         else { _ = try Vault.mirror(root, to: dest) }
                     } catch { log.warn("iCloud \(mode): \(error)") }
                 }
-                outcome = .ran(cards: cards.count + dueCards.count)
+                outcome = .ran(cards: fresh.count)
             } else if deps.brain == nil {
                 outcome = .failedBrain(.notConfigured)
                 if !summaries.isEmpty { log.info("no brain: keeping \(summaries.count) summaries for later") }

@@ -104,3 +104,45 @@ public struct LoopNudger: Sendable {
         return (card, r.usage)
     }
 }
+
+/// Two cards about the same thing — the same loop, or the same person and the same ask in other words — are one card.
+/// The stronger one stays: higher urgency, then verified over unverified, then the earlier one.
+public enum CardDedupe {
+    public static func dedupe(_ cards: [Card]) -> [Card] {
+        var kept: [Card] = []
+        for c in cards.sorted(by: stronger) {
+            if kept.contains(where: { same($0, c) }) { continue }
+            kept.append(c)
+        }
+        // back in the order the pipeline chose, minus the duplicates
+        return cards.filter { c in kept.contains { $0.id == c.id } }
+    }
+
+    static func stronger(_ a: Card, _ b: Card) -> Bool {
+        if a.urgency != b.urgency { return a.urgency > b.urgency }
+        if (a.verification == .verified) != (b.verification == .verified) { return a.verification == .verified }
+        return a.createdAt < b.createdAt
+    }
+
+    public static func same(_ a: Card, _ b: Card) -> Bool {
+        if let l = a.loopID, let m = b.loopID, l == m { return true }
+        guard let pa = person(a), let pb = person(b), pa == pb else { return false }
+        let wa = LoopLedger.words(a.title + " " + a.why + " " + a.draft), wb = LoopLedger.words(b.title + " " + b.why + " " + b.draft)
+        guard !wa.isEmpty, !wb.isEmpty else { return false }
+        return Double(wa.intersection(wb).count) / Double(min(wa.count, wb.count)) >= 0.5
+    }
+
+    /// Who the card is for, from its recipe: the chat, the recipient, the addressee.
+    static func person(_ c: Card) -> String? {
+        let raw: String
+        switch c.recipe {
+        case .whatsapp(let chat, _, _): raw = chat
+        case .imessage(let to, _, _): raw = to
+        case .mail(let to, _, _, _): raw = to
+        default: return nil
+        }
+        // "Kanika Pandey Loadmill" and "Kanika Pandey" are the same person: compare on the first two words
+        let parts = raw.lowercased().split(whereSeparator: { !$0.isLetter }).prefix(2)
+        return parts.isEmpty ? nil : parts.joined(separator: " ")
+    }
+}
