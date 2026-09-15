@@ -10,6 +10,9 @@ OPEN LOOPS (promises Brownie is tracking; cite as kind "loop"):
 CARDS WAITING (cite as kind "card"):
 {{cards}}
 
+NOTES THAT MATCH THE QUESTION'S WORDS (already looked up for you; cite them as kind "note" with their path):
+{{found}}
+
 THE QUESTION:
 {{question}}
 

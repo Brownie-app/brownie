@@ -322,7 +322,8 @@ extension AppModel {
             guard let brain else { announcement = "Ask needs a brain — Settings → Brain."; asking = false; return }
             sendLogger.setPurpose("Ask Brownie", detail: "your question, the notes the brain chose to read, open loops and waiting cards")
             do {
-                let (a, _) = try await Asker(brain: brain, knowledge: knowledge).ask(q, loops: loops.filter { $0.status == .open }, cards: cards)
+                askStatus = "Reading your notes…"
+                let (a, _) = try await Asker(brain: brain, knowledge: knowledge).ask(q, loops: loops.filter { $0.status == .open }, cards: cards, onProgress: { line in Task { @MainActor [weak self] in self?.askStatus = line } })
                 asks.append(a); if asks.count > 30 { asks.removeFirst() }
                 set(SettingKey.askHistory, json(asks))
                 await reloadV2()

@@ -120,6 +120,8 @@ final class AppModel: ObservableObject {
     @Published var mcpAsks: [MCPAsk] = []
     @Published var asks: [Asker.Answer] = []
     @Published var asking = false
+    /// What Ask is doing right now, for the waiting line.
+    @Published var askStatus = "Reading your notes…"
     @Published var panicAsked = false
     @Published var nudgeDays = 1
     let sendLogger: SendLogger

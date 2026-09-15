@@ -189,7 +189,7 @@ struct CommandBar: View {
                 Text(q).font(.system(size: 11)).foregroundStyle(t.ink2).lineLimit(1)
             }
             if m.asking {
-                HStack(spacing: 10) { DawnMark(size: 22); ProgressView().controlSize(.small); Text("Reading your notes…").font(.system(size: 12)).foregroundStyle(t.ink2) }
+                HStack(spacing: 10) { DawnMark(size: 22); ProgressView().controlSize(.small); Text(m.askStatus).font(.system(size: 12)).foregroundStyle(t.ink2) }
             } else if let a = m.asks.last, a.question == q {
                 AnswerText(answer: a).frame(maxWidth: .infinity, alignment: .leading)
                 if !a.citations.isEmpty { ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 6) { ForEach(a.citations) { c in CiteChip(c: c) { close(); m.open(c) } } } } }

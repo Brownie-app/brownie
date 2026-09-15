@@ -51,7 +51,7 @@ public actor FileKnowledgeStore: KnowledgeStore {
 
     public func search(_ query: String, limit: Int) throws -> [Note] {
         try reindex()
-        let q = query.split(separator: " ").map { "\"\($0.replacingOccurrences(of: "\"", with: ""))\"" }.joined(separator: " ")
+        let q = KnowledgeQuery.fts(query)
         let rows = try index.query("SELECT path FROM note_fts WHERE note_fts MATCH ? ORDER BY rank LIMIT ?", [.text(q), .init(limit)])
         return try rows.compactMap { r in try r["path"].text.flatMap { try note(at: $0) } }
     }
@@ -125,5 +125,21 @@ enum Fingerprint {
         var h1: UInt64 = 0xcbf29ce484222325, h2: UInt64 = 0x84222325cbf29ce4
         for b in s.utf8 { h1 = (h1 ^ UInt64(b)) &* 0x100000001b3; h2 = (h2 &+ UInt64(b)) &* 0x100000001b3 }
         return String(format: "%016llx%016llx", h1, h2)
+    }
+}
+
+/// Turns a question into an FTS5 query that finds notes instead of demanding every word:
+/// filler words go, punctuation goes, the rest is OR-ed with prefix matching so "nayan" finds "Nayan's".
+public enum KnowledgeQuery {
+    static let stop: Set<String> = ["a", "an", "the", "is", "are", "am", "was", "were", "be", "been", "do", "does", "did", "have", "has", "had", "i", "me", "my", "you", "your", "we", "our", "he", "she", "it", "they", "them", "his", "her", "their",
+                                    "who", "whom", "whose", "what", "when", "where", "why", "how", "which", "that", "this", "these", "those", "to", "of", "in", "on", "at", "for", "with", "about", "from", "by", "and", "or", "not", "no",
+                                    "any", "anything", "still", "yet", "there", "here", "up", "so", "if", "can", "could", "should", "would", "will", "shall", "may", "might", "promise", "promised", "say", "said", "tell", "told", "ask", "asked", "get", "got", "last", "open", "again"]
+    public static func fts(_ query: String) -> String {
+        let words = query.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber && $0 != "'" }).map { String($0).replacingOccurrences(of: "'s", with: "").replacingOccurrences(of: "'", with: "") }.filter { !$0.isEmpty }
+        var terms = words.filter { !stop.contains($0) && $0.count > 1 }
+        if terms.isEmpty { terms = words.filter { $0.count > 1 } }
+        guard !terms.isEmpty else { return "\"\"" }
+        // longer words are more likely the name that matters; keep the query short
+        return Array(Set(terms)).sorted { $0.count != $1.count ? $0.count > $1.count : $0 < $1 }.prefix(8).map { "\"\($0)\"*" }.joined(separator: " OR ")
     }
 }

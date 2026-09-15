@@ -760,7 +760,7 @@ struct AskView: View {
                         ForEach(Array(m.asks.enumerated()), id: \.offset) { i, a in
                             AskExchange(a: a).id(i)
                         }
-                        if m.asking { HStack(spacing: 10) { DawnMark(size: 28); ProgressView().controlSize(.small); Text("Reading your notes…").font(.system(size: 12)).foregroundStyle(t.ink2) } }
+                        if m.asking { HStack(spacing: 10) { DawnMark(size: 28); ProgressView().controlSize(.small); Text(m.askStatus).font(.system(size: 12)).foregroundStyle(t.ink2) } }
                     }.padding(EdgeInsets(top: 24, leading: 28, bottom: 24, trailing: 28)).frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .onChange(of: m.asks.count) { _, n in withAnimation { proxy.scrollTo(n - 1, anchor: .bottom) } }

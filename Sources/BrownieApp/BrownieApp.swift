@@ -18,13 +18,15 @@ struct BrownieApp: App {
     }
 
     var body: some Scene {
-        WindowGroup("Brownie") {
+        Window("Brownie", id: "main") {
             Themed {
                 if model.onboardingDone { RootView() } else { OnboardingView() }
             }
             .environmentObject(model)
             .sheet(isPresented: $hands.showCommandBar) { Themed { CommandBar(controller: hands) }.environmentObject(model) }
             .onOpenURL { url in model.handle(url: url) }
+            // One window: a brownie:// link or a Dock click brings it forward instead of opening another.
+            .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
             .onReceive(NotificationCenter.default.publisher(for: .brownieAsk)) { n in if let g = n.object as? String, !g.isEmpty { NSApp.activate(ignoringOtherApps: true); if CommandIntent.isQuestion(g) { model.overlay = .none; model.screen = .ask; model.ask(g) } else { hands.run(g) } } else { hands.showCommandBar = true } }
             .onAppear {
                 hands.start(); Notifier.requestPermission(); NSApp.setActivationPolicy(.regular); NSApp.activate(ignoringOtherApps: true)

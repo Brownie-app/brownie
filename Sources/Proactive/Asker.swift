@@ -24,8 +24,14 @@ public struct Asker: Sendable {
         template = try String(contentsOf: bundle.url(forResource: "ask", withExtension: "md", subdirectory: "Prompts") ?? bundle.url(forResource: "ask", withExtension: "md")!, encoding: .utf8)
     }
 
-    public func ask(_ question: String, loops: [Loop], cards: [Card]) async throws -> (Answer, Usage) {
+    public func ask(_ question: String, loops: [Loop], cards: [Card], onProgress: @escaping @Sendable (String) -> Void = { _ in }) async throws -> (Answer, Usage) {
         var p = template
+        // The likely notes go in with the question, so most answers take one round-trip instead of four.
+        onProgress("Searching your notes…")
+        let found = (try? await knowledge.search(question, limit: 5)) ?? []
+        let foundBlock = found.isEmpty ? "(no note matched the words of the question — use search_notes with other words, or a person's name)"
+            : found.map { "### \($0.relativePath)\n\($0.body.prefix(2500))" }.joined(separator: "\n\n")
+        p = p.replacingOccurrences(of: "{{found}}", with: foundBlock)
         p = p.replacingOccurrences(of: "{{now}}", with: Judge.now(clock))
         p = p.replacingOccurrences(of: "{{question}}", with: question)
         p = p.replacingOccurrences(of: "{{loops}}", with: loops.isEmpty ? "(none)" : loops.map { "- id \($0.id): \($0.direction == .mine ? "you → \($0.person)" : "\($0.person) → you"): \($0.what) · said \($0.sourceLabel)" }.joined(separator: "\n"))
@@ -46,12 +52,18 @@ public struct Asker: Sendable {
         var payload: Data?
         let usage: Usage
         if let agentic = brain as? AgenticBrain, brain.descriptor.capabilities.contains(.tools) {
-            let r = try await agentic.run(AgentTask(system: "You answer from the user's notes with citations. Use the tools, then call finish exactly once.", input: p, effort: .medium, maxTurns: 16, timeout: 300), tools: tools, onEvent: { _ in })
+            let r = try await agentic.run(AgentTask(system: "You answer from the user's notes with citations. If the notes already given answer the question, call finish immediately; otherwise use the tools first. Call finish exactly once.", input: p, effort: .low, maxTurns: 8, timeout: 120), tools: tools, onEvent: { e in
+                switch e {
+                case .toolCall(let name, let summary):
+                    let arg = Self.firstArgument(summary)
+                    onProgress(name == "search_notes" ? "Searching for “\(arg)”…" : name == "read_note" ? "Reading \(arg)…" : "Writing the answer…")
+                default: break
+                }
+            })
             usage = r.usage; payload = await box.data ?? r.finalText.data(using: .utf8)
         } else {
-            let notes = (try? await knowledge.search(question, limit: 6)) ?? []
-            let stuffed = p + "\n\nNOTES THAT MAY HELP (you have no tools):\n" + notes.map { "## \($0.relativePath)\n\($0.body.prefix(2000))" }.joined(separator: "\n\n")
-            let r = try await brain.complete(BrainRequest(system: "You answer from the notes given, with citations, and reply with the finish JSON only.", input: stuffed, effort: .medium, maxOutputTokens: 3000, timeout: 240))
+            onProgress("Writing the answer…")
+            let r = try await brain.complete(BrainRequest(system: "You answer from the notes given, with citations, and reply with the finish JSON only. You have no tools.", input: p, effort: .low, maxOutputTokens: 3000, timeout: 240))
             usage = r.usage; payload = r.jsonData
         }
         guard let payload, let obj = try? JSONSerialization.jsonObject(with: payload) as? [String: Any], let text = obj["answer"] as? String else { throw BrainError.badResponse("ask returned no answer") }
@@ -90,4 +102,12 @@ public enum CommandIntent: Sendable, Equatable {
         "did", "do", "does", "is", "are", "am", "was", "were", "have", "has", "had",
         "will", "would", "should", "can", "could", "any", "anything", "anyone",
     ]
+}
+
+extension Asker {
+    /// The first string value in a tool's JSON arguments, for the progress line: {"query":"nayan"} → nayan.
+    static func firstArgument(_ json: String) -> String {
+        if let d = json.data(using: .utf8), let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any], let v = o.values.compactMap({ $0 as? String }).first { return v }
+        return json.trimmingCharacters(in: CharacterSet(charactersIn: "{}\" "))
+    }
 }
