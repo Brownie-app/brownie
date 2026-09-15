@@ -150,8 +150,15 @@ public actor RunCoordinator {
                 if !dueCards.isEmpty { await LoopLedger.save(loopsNow, store) }
                 // New cards replace the ones still waiting; what the user already fired, snoozed or dismissed stays.
                 let kept = try await Self.loadCards(store: store).filter { $0.state != .ready }
-                let fresh = CardDedupe.dedupe(cards + dueCards)
+                var fresh = CardDedupe.dedupe(cards + dueCards)
                 if fresh.count < cards.count + dueCards.count { log.info("\(cards.count + dueCards.count - fresh.count) duplicate card(s) folded") }
+                // The quiet check: nothing stale or already handled reaches the morning.
+                let staleDays = Int(try await store.value(SettingKey.staleDays) ?? "") ?? QuietCheck.defaultStaleDays
+                var noteDates: [String: Date] = [:]
+                for f in (try? await deps.knowledge.folders()) ?? [] { for n in f.notes { noteDates[n.relativePath] = n.updatedAt } }
+                let checked = QuietCheck.run(cards: fresh, loops: loopsNow, past: kept, noteUpdated: { noteDates[$0] }, fileExists: { FileManager.default.fileExists(atPath: $0) }, now: deps.clock.now(), staleDays: staleDays)
+                for d in checked.dropped { log.info("quiet check dropped “\(d.card.title)”: \(d.why)") }
+                fresh = checked.kept
                 try await Self.saveCards(kept + fresh, store: store)
                 try await store.setValue("brain.lastUsage", String(data: JSONEncoder().encode(usage), encoding: .utf8))
 

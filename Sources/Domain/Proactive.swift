@@ -93,11 +93,13 @@ public struct Card: Codable, Sendable, Identifiable, Equatable {
     public var loopID: String?
     /// Set on due-aware cards: the loop's date. The tile shows a "Due tomorrow" badge.
     public var dueDate: Date?
+    /// Set by the quiet check when part of the evidence is a note older than the user's setting.
+    public var staleLine: String?
     public var isComeBack: Bool { cameBack ?? false }
     public var isDue: Bool { dueDate != nil }
     public func withDueLine(_ line: String) -> Card {
         var c = Card(id: id, title: title, sourceLabel: sourceLabel, why: why, actionLabel: actionLabel, dueLine: line, urgency: urgency, draftLabel: draftLabel, draft: draft, recipe: recipe, evidence: evidence, verification: verification, verifiedLine: verifiedLine, state: state, createdAt: createdAt, cameBack: cameBack, loopID: loopID)
-        c.dueDate = dueDate; c.snoozedUntil = snoozedUntil; c.resolvedAt = resolvedAt; return c
+        c.dueDate = dueDate; c.snoozedUntil = snoozedUntil; c.resolvedAt = resolvedAt; c.staleLine = staleLine; return c
     }
 
     public init(id: String, title: String, sourceLabel: String, why: String, actionLabel: String, dueLine: String,
@@ -130,7 +132,7 @@ public struct Card: Codable, Sendable, Identifiable, Equatable {
         }
         var c = Card(id: id, title: title, sourceLabel: sourceLabel, why: why, actionLabel: actionLabel, dueLine: dueLine, urgency: urgency,
                     draftLabel: draftLabel, draft: text, recipe: r, evidence: evidence, verification: verification, verifiedLine: verifiedLine, state: state, createdAt: createdAt, cameBack: cameBack, loopID: loopID)
-        c.dueDate = dueDate; c.snoozedUntil = snoozedUntil; c.resolvedAt = resolvedAt; return c
+        c.dueDate = dueDate; c.snoozedUntil = snoozedUntil; c.resolvedAt = resolvedAt; c.staleLine = staleLine; return c
     }
 
     public var fireLabel: String {

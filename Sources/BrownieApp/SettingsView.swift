@@ -321,7 +321,8 @@ struct ProactivePane: View {
         CardBox(padding: 0) {
             VStack(spacing: 0) {
                 SettingRow(title: "Notify me when cards are ready", detail: "One notification, no sound") { Toggle2(on: Binding(get: { m.notify }, set: { m.notify = $0; m.set(SettingKey.notifyOnReady, $0 ? "true" : "false") })) }.padding(.horizontal, 16); Divider()
-                SettingRow(title: "Cards per morning", detail: "Fewer is better. It shows less if there's less.") { Segmented(options: ["3", "5", "8"], selection: Binding(get: { "\(m.cardsPerMorning)" }, set: { m.cardsPerMorning = Int($0) ?? 5; m.set(SettingKey.cardsPerMorning, $0) })) }.padding(.horizontal, 16)
+                SettingRow(title: "Cards per morning", detail: "Fewer is better. It shows less if there's less.") { Segmented(options: ["3", "5", "8"], selection: Binding(get: { "\(m.cardsPerMorning)" }, set: { m.cardsPerMorning = Int($0) ?? 5; m.set(SettingKey.cardsPerMorning, $0) })) }.padding(.horizontal, 16); Divider()
+                SettingRow(title: "A note counts as evidence for", detail: "The quiet check before cards show: a card standing only on notes older than this is dropped; one partly on them is marked. Closed loops and missing files are dropped either way.") { Segmented(options: ["3 days", "7 days", "14 days", "30 days"], selection: Binding(get: { "\(m.staleDays) days" }, set: { m.setStaleDays(Int($0.split(separator: " ").first ?? "7") ?? 7) })) }.padding(.horizontal, 16)
             }
         }
         H2(text: "Standing instructions").padding(.top, 6)

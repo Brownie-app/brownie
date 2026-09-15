@@ -130,6 +130,10 @@ final class AppModel: ObservableObject {
     @Published var askStatus = "Reading your notes…"
     @Published var panicAsked = false
     @Published var nudgeDays = 1
+    /// Notes older than this many days no longer carry a card on their own.
+    @Published var staleDays = QuietCheck.defaultStaleDays
+    /// What the quiet check took away just now, for the small line under the cards.
+    @Published var quietlyDropped: [String] = []
     let sendLogger: SendLogger
     let recorder = Recorder()
     var briefTimer: Timer?
@@ -205,6 +209,7 @@ final class AppModel: ObservableObject {
         cardsPerMorning = Int(await v(SettingKey.cardsPerMorning) ?? "5") ?? 5
         notify = (await v(SettingKey.notifyOnReady) ?? "true") == "true"
         instructions = await v(SettingKey.standingInstructions) ?? ""
+        staleDays = Int(await v(SettingKey.staleDays) ?? "") ?? QuietCheck.defaultStaleDays
         feedback = RunCoordinator.loadFeedback(await v(SettingKey.feedback))
         handsHotkey = await v(SettingKey.handsHotkey) ?? "rightCommand"
         handsSpeed = await v(SettingKey.handsSpeed) ?? "balanced"
@@ -462,6 +467,16 @@ final class AppModel: ObservableObject {
         let now = Date()
         var all = ((try? await RunCoordinator.loadCards(store: store)) ?? []).map { $0.housekept(now: now) }
         all.removeAll { c in (c.state == .expired || c.state == .dismissed || c.state == .fired) && now.timeIntervalSince(c.resolvedAt ?? c.createdAt) > 30 * 86400 }
+        // The quiet check, again, right before showing: a loop may have closed since 3 AM.
+        folders = (try? await knowledge.folders()) ?? []
+        var noteDates: [String: Date] = [:]; for f in folders { for n in f.notes { noteDates[n.relativePath] = n.updatedAt } }
+        let ledger = await LoopLedger.load(store)
+        let checked = QuietCheck.run(cards: all.filter { $0.state == .ready }, loops: ledger, past: all.filter { $0.state != .ready }, noteUpdated: { noteDates[$0] }, fileExists: { FileManager.default.fileExists(atPath: $0) }, now: now, staleDays: staleDays)
+        if !checked.dropped.isEmpty {
+            for d in checked.dropped { log.info("quiet check dropped “\(d.card.title)”: \(d.why)"); if let i = all.firstIndex(where: { $0.id == d.card.id }) { all[i].state = .dismissed; all[i].resolvedAt = now } }
+            quietlyDropped = checked.dropped.map { "“\($0.card.title)” — \($0.why)" }
+        }
+        for k in checked.kept { if let i = all.firstIndex(where: { $0.id == k.id }) { all[i].staleLine = k.staleLine } }
         try? await RunCoordinator.saveCards(all, store: store)
         cards = all.filter { $0.state == .ready }.sorted { $0.urgency > $1.urgency }
         snoozedCards = all.filter { $0.state == .snoozed }.sorted { ($0.snoozedUntil ?? .distantFuture) < ($1.snoozedUntil ?? .distantFuture) }
@@ -469,7 +484,6 @@ final class AppModel: ObservableObject {
         pastCards = all.filter { $0.state != .ready && $0.state != .snoozed }.sorted { ($0.resolvedAt ?? $0.createdAt) > ($1.resolvedAt ?? $1.createdAt) }
         lastRun = try? await store.lastRun()
         runs = (try? await store.recentRuns(limit: 7)) ?? []
-        folders = (try? await knowledge.folders()) ?? []
         drops = (try? await store.drops(since: Date().addingTimeInterval(-7 * 86400))) ?? []
         letter = try? await store.value(SettingKey.letter)
         lastSkipped = try? await store.value("run.lastSkipped")

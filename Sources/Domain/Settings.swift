@@ -27,6 +27,7 @@ public enum SettingKey {
     public static let mcpEnabled = "knowledge.mcp"               // answer other apps over MCP
     public static let mcpLog = "knowledge.mcpLog"
     public static let askHistory = "proactive.ask"
+    public static let staleDays = "proactive.staleDays"            // notes older than this many days no longer carry a card alone (default 7)
     public static let nudgeDays = "proactive.nudgeDays"            // 1 | 2 | 0 — a card this many days before a loop's due date; 0 = only when asked                // JSON [Asker.Answer], newest last, capped                // JSON [MCPAsk], newest first, capped              // h1 | h3 | off — reads during the day while idle and on power
     public static let appearance = "app.appearance"               // system | light | dark
     public static let menuBarIcon = "app.menuBarIcon"

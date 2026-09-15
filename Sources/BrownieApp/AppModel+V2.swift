@@ -71,6 +71,7 @@ extension AppModel {
         loops[i].status = .closed; loops[i].closedAt = Date(); loops[i].closedHow = how
         let ls = loops; Task { await LoopLedger.save(ls, store) }
     }
+    func setStaleDays(_ d: Int) { staleDays = d; set(SettingKey.staleDays, String(d)); Task { await reload() } }
     func setNudgeDays(_ d: Int) { nudgeDays = d; set(SettingKey.nudgeDays, String(d)) }
     func dismissLoop(_ id: String) {
         guard let i = loops.firstIndex(where: { $0.id == id }) else { return }
