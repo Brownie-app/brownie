@@ -8,6 +8,8 @@ import Pipeline
 import Agent
 import LocalSources
 import Platform
+import TelegramSource
+import CloudSources
 import CloudSources
 import Scheduling
 import Support
@@ -339,12 +341,11 @@ extension AppModel {
         case "note": if let p = c.ref.isEmpty ? nil : (c.ref.hasSuffix(".md") ? c.ref : notePath(named: c.ref)) { openNote(p) } else if let p = notePath(named: c.label.replacingOccurrences(of: "People/", with: "")) { openNote(p) } else { announcement = "That note isn't there any more." }
         case "loop": overlay = .none; screen = .loops
         case "card": if cards.contains(where: { $0.id == c.ref }) { overlay = .card(c.ref) } else { overlay = .none; screen = .forYou }
-        case "whatsapp":
+        case "whatsapp", "imessage", "telegram", "slack", "teams":
             let name = c.ref.isEmpty ? c.label : c.ref
-            if let phone = ContactLookup.phone(for: name), let u = URL(string: "whatsapp://send?phone=\(phone)") { NSWorkspace.shared.open(u) } else { NSWorkspace.shared.launchApplication("WhatsApp"); announcement = "Opened WhatsApp — Contacts has no number for \(name), so pick the chat." }
-        case "imessage": NSWorkspace.shared.launchApplication("Messages")
+            openEvidence(source: "\(c.kind) · \(EvidenceRef.cleanName(name.split(separator: "·").first.map(String.init) ?? name))", when: c.label, text: asks.last?.answer ?? "")
         case "mail": NSWorkspace.shared.launchApplication("Mail")
-        case "recording", "voicememo": openRecording(named: c.ref.isEmpty ? c.label : c.ref)
+        case "recording", "voicememo": openEvidence(source: "Recording · \(c.ref.isEmpty ? c.label : c.ref)", when: c.label, text: "")
         default: if let p = notePath(named: c.ref) { openNote(p) }
         }
     }
@@ -373,6 +374,59 @@ extension AppModel {
         stopRecipe()
         Task { await hands?.stop() }
         if !fireEvents.contains(where: { if case .finished = $0 { return true }; return false }) { fireEvents.append(.step("Stopping…", done: false)) }
+    }
+
+    // MARK: evidence
+
+    /// Clicking an evidence line or a citation chip: the original, read on demand and never stored.
+    func openEvidence(source: String, when: String, text: String) {
+        let ref = EvidenceRef.parse(source: source)
+        switch ref {
+        case .note(let path): if let p = path.hasSuffix(".md") ? path : notePath(named: path) { openNote(p) } else { announcement = "That note isn't there any more." }
+        case .loops: overlay = .none; screen = .loops
+        case .recording(let name, let seconds): evidenceShown = EvidenceShown(ref: ref, source: source, when: when, text: text, state: .clip(name: name, seconds: seconds ?? 0, url: recordingURL(named: name)))
+        case .mail: NSWorkspace.shared.launchApplication("Mail")
+        case .file(let label): announcement = "That came from \(label) — the summary is what Brownie kept; the file itself is where it was."
+        case .unknown: announcement = "Brownie can't open “\(source)” — it's the summary's own label."
+        case .chat(let app, _):
+            guard let reader = chatReader(for: app) else { announcement = "\(app.capitalized) isn't set up on this Mac."; return }
+            evidenceShown = EvidenceShown(ref: ref, source: source, when: when, text: text, state: .loading)
+            Task.detached { [weak self] in
+                do {
+                    let w = try await EvidenceResolver.resolve(ref, when: when, text: text, reader: reader)
+                    await MainActor.run { guard let self, self.evidenceShown?.source == source else { return }; self.evidenceShown?.state = w.map { .window($0) } ?? .missing("Couldn't find a chat called “\(EvidenceRef.cleanName(Self.chatName(ref)))” in \(app.capitalized).") }
+                } catch { await MainActor.run { self?.evidenceShown?.state = .missing("Couldn't read \(app.capitalized): \(error)") } }
+            }
+        }
+    }
+    static func chatName(_ r: EvidenceRef) -> String { if case .chat(_, let n) = r { return n }; return "" }
+    func chatReader(for app: String) -> (any ChatReader)? {
+        switch app {
+        case "whatsapp": return WhatsAppSource()
+        case "imessage": return iMessageSource()
+        case "telegram": return TelegramSource.isConfigured ? TelegramSource() : nil
+        case "slack": return SlackAuth.isSignedIn ? SlackSource() : nil
+        case "teams": return MicrosoftAuth.isSignedIn ? TeamsSource() : nil
+        default: return nil
+        }
+    }
+    func recordingURL(named name: String) -> URL? {
+        let wanted = (name as NSString).deletingPathExtension.lowercased()
+        for folder in [recordingsFolder, VoiceMemosSource.folder] {
+            if let f = AudioFolder.recordings(in: folder, settled: 0).first(where: { $0.url.deletingPathExtension().lastPathComponent.lowercased() == wanted }) { return f.url }
+        }
+        return nil
+    }
+    /// "Open in WhatsApp" from the evidence sheet: the app's own chat, as before.
+    func openChatApp(_ app: String, name: String) {
+        switch app {
+        case "whatsapp": if let phone = ContactLookup.phone(for: name), let u = URL(string: "whatsapp://send?phone=\(phone)") { NSWorkspace.shared.open(u) } else { NSWorkspace.shared.launchApplication("WhatsApp") }
+        case "imessage": NSWorkspace.shared.launchApplication("Messages")
+        case "telegram": NSWorkspace.shared.launchApplication("Telegram")
+        case "slack": NSWorkspace.shared.launchApplication("Slack")
+        case "teams": NSWorkspace.shared.launchApplication("Microsoft Teams")
+        default: break
+        }
     }
 
     // MARK: vault

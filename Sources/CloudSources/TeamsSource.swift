@@ -216,3 +216,10 @@ public struct TeamsSource: Source {
         return try await transport.json(URL(string: Self.graph + path.replacingOccurrences(of: "$", with: "%24"))!, headers: ["Authorization": "Bearer \(t)"])
     }
 }
+
+extension TeamsSource: ChatReader {
+    public func chats() async throws -> [BucketInfo] { try await discoverBuckets() }
+    public func messages(in bucket: BucketID, from: Date, to: Date) async throws -> [ChatMessage] {
+        try await messages(of: bucket, me: try await me(), newerThan: from).filter { $0.date <= to }
+    }
+}

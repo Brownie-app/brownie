@@ -222,3 +222,13 @@ public struct SlackSource: Source {
         return try await transport.json(c.url!, headers: ["Authorization": "Bearer \(token)"])
     }
 }
+
+extension SlackSource: ChatReader {
+    public func chats() async throws -> [BucketInfo] { try await discoverBuckets() }
+    public func messages(in bucket: BucketID, from: Date, to: Date) async throws -> [ChatMessage] {
+        guard let t = token() else { throw SourceError.cannotRead("not signed in to Slack") }
+        let names = try await users(t)
+        let me = (try await call("auth.test", t))["user_id"] as? String ?? ""
+        return try await history(channel(bucket), t, oldest: from.timeIntervalSince1970, latest: to.timeIntervalSince1970, me: me, names: names)
+    }
+}

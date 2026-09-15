@@ -86,6 +86,8 @@ final class AppModel: ObservableObject {
     @Published var feedback: [CardFeedback] = []
     /// The card whose "Something else…" sheet is open.
     @Published var feedbackNoteFor: String?
+    /// The evidence being shown in its own sheet: the chat window, or the clip.
+    @Published var evidenceShown: EvidenceShown?
     @Published var handsHotkey = "rightCommand"
     @Published var handsSpeed = "balanced"
     @Published var onboardingDone = false

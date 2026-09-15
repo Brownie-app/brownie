@@ -25,6 +25,7 @@ struct BrownieApp: App {
             .environmentObject(model)
             .sheet(isPresented: $hands.showCommandBar) { Themed { CommandBar(controller: hands) }.environmentObject(model) }
             .sheet(isPresented: Binding(get: { model.feedbackNoteFor != nil }, set: { if !$0 { model.feedbackNoteFor = nil } })) { Themed { FeedbackNoteSheet(cardID: model.feedbackNoteFor ?? "") }.environmentObject(model) }
+            .sheet(isPresented: Binding(get: { model.evidenceShown != nil }, set: { if !$0 { model.evidenceShown = nil } })) { if let e = model.evidenceShown { Themed { EvidenceSheet(shown: e) }.environmentObject(model) } }
             .onOpenURL { url in model.handle(url: url) }
             // One window: a brownie:// link or a Dock click brings it forward instead of opening another.
             .handlesExternalEvents(preferring: ["*"], allowing: ["*"])

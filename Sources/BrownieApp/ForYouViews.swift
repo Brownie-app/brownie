@@ -273,7 +273,9 @@ struct CardDetailView: View {
                             section("Evidence") {
                                 VStack(alignment: .leading, spacing: 8) {
                                     ForEach(Array(c.evidence.enumerated()), id: \.offset) { _, e in
-                                        VStack(alignment: .leading, spacing: 2) { HStack { Chip(text: e.source); Text(e.when).font(.system(size: 11)).foregroundStyle(t.ink2) }; Text(e.text).font(.system(size: 12.5)) }
+                                        Button { m.openEvidence(source: e.source, when: e.when, text: e.text) } label: {
+                                            VStack(alignment: .leading, spacing: 2) { HStack { Chip(text: e.source); Text(e.when).font(.system(size: 11)).foregroundStyle(t.ink2); Spacer(); Image(systemName: "arrow.up.forward.square").font(.system(size: 11)).foregroundStyle(t.ink3) }; Text(e.text).font(.system(size: 12.5)).multilineTextAlignment(.leading) }.contentShape(Rectangle())
+                                        }.buttonStyle(.plain).help("See the original — read from this Mac just now, never stored")
                                         Divider()
                                     }
                                     Text("Summaries were written on your Mac. Raw messages never left it.").font(.system(size: 11)).foregroundStyle(t.ink2)

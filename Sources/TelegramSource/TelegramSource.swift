@@ -97,3 +97,13 @@ public struct TelegramSource: Source {
         return all.sorted { $0.rowID < $1.rowID }
     }
 }
+
+extension TelegramSource: ChatReader {
+    public func chats() async throws -> [BucketInfo] { try await discoverBuckets() }
+    public func messages(in bucket: BucketID, from: Date, to: Date) async throws -> [ChatMessage] {
+        guard let c = Self.shared, await c.authState == .ready else { throw SourceError.notAvailable(.needsSignIn) }
+        let me = (try? await c.send(["@type": "getMe"]))?["id"] as? Int64 ?? 0
+        let chatID = Int64(bucket.rawValue.dropFirst("telegram:".count)) ?? 0
+        return try await Self.history(c, chatID: chatID, me: me, limit: 400).filter { $0.date >= from && $0.date <= to }
+    }
+}
