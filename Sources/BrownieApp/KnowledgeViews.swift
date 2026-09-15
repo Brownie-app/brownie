@@ -52,12 +52,12 @@ struct KnowledgeView: View {
                             if editing { TextEditor(text: $draft).font(.system(size: 13, design: .monospaced)).frame(minHeight: 400).scrollContentBackground(.hidden).background(t.code).cornerRadius(6) }
                             else { WikiText(body: n.body) }
                             CardBox(padding: 12) { HStack(spacing: 10) { Image(systemName: "lock").foregroundStyle(t.ink2); Text("Anything you delete here is gone from the knowledge base for good.").font(.system(size: 11)).foregroundStyle(t.ink2) } }
-                        }.padding(24).frame(maxWidth: 720, alignment: .leading)
+                        }.padding(24).frame(maxWidth: 720, alignment: .leading).frame(maxWidth: .infinity, alignment: .leading)
                     } else {
                         VStack(spacing: 8) { Text("No notes yet").font(.system(size: 17, weight: .semibold)); Text("Run an analysis with a brain configured and your knowledge base appears here as plain Markdown files.").foregroundStyle(t.ink2) }.padding(40)
                     }
-                }
-            }
+                }.frame(maxWidth: .infinity, alignment: .leading)   // the note pane takes the rest; the rail stays flush left
+            }.frame(maxWidth: .infinity, alignment: .leading)
         }
         .onAppear { if let p = m.pendingNote { jump(to: p); m.pendingNote = nil } }
         .onChange(of: m.pendingNote) { _, p in if let p { jump(to: p); m.pendingNote = nil } }
