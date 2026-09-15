@@ -144,7 +144,8 @@ struct HandsOverlay: View {
                 Text("Transcribed on this Mac · let go to start").font(.system(size: 11)).foregroundStyle(.white.opacity(0.6))
             case .running(let steps):
                 HStack { Text(m.runningRecipeName.map { "Running “\($0)”" } ?? "Hands is working").font(.system(size: 15, weight: .semibold)); Spacer(); Button("Stop") { controller.stop() }.buttonStyle(.plain).padding(.horizontal, 10).frame(height: 26).background(RoundedRectangle(cornerRadius: 6).fill(Color(hex: 0xD94F45))) }
-                ForEach(Array(steps.enumerated()), id: \.offset) { _, s in HStack(spacing: 8) { Circle().fill(accent).frame(width: 6, height: 6); Text(s).font(.system(size: 12)).lineLimit(1) } }
+                if let now = steps.last { HStack(alignment: .top, spacing: 8) { Image(systemName: "arrow.right").font(.system(size: 11, weight: .bold)).foregroundStyle(accent).padding(.top, 2); Text(now).font(.system(size: 13, weight: .medium)).lineLimit(2) } }
+                ForEach(Array(steps.dropLast().suffix(3).enumerated()), id: \.offset) { _, s in HStack(spacing: 8) { Circle().fill(.white.opacity(0.35)).frame(width: 5, height: 5); Text(s).font(.system(size: 11)).foregroundStyle(.white.opacity(0.6)).lineLimit(1) } }
                 Text("Hands never presses Send, Pay or Delete. Those stay yours.").font(.system(size: 11)).foregroundStyle(.white.opacity(0.6))
             case .paused(let w): HStack(spacing: 10) { Circle().fill(accent).frame(width: 10, height: 10); Text(w).font(.system(size: 14, weight: .medium)) }
             case .finished(let s): Text(s).font(.system(size: 14, weight: .medium))

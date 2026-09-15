@@ -274,16 +274,12 @@ struct FiringView: View {
             Spacer()
             CardBox(padding: 26) {
                 VStack(alignment: .leading, spacing: 16) {
-                    HStack(spacing: 12) { Pulse(); Text(finished ? "Done with my part" : "Doing it now").font(.system(size: 17, weight: .semibold)); Spacer(); Text(c?.recipe.channelName ?? "").font(.system(size: 11)).foregroundStyle(t.ink2) }
-                    VStack(alignment: .leading, spacing: 10) {
-                        ForEach(Array(m.fireEvents.enumerated()), id: \.offset) { _, e in
-                            switch e {
-                            case .step(let s, let done): StepRow(text: s, done: done, current: !done)
-                            case .pausedForUser(let s): StepRow(text: s, done: false, current: true).fontWeight(.medium)
-                            case .finished(let o): Text(label(o)).font(.system(size: 11)).foregroundStyle(t.ink2)
-                            }
-                        }
+                    HStack(spacing: 12) {
+                        Pulse(); Text(finished ? "Done with my part" : "Doing it now").font(.system(size: 17, weight: .semibold)); Spacer()
+                        Text(c?.recipe.channelName ?? "").font(.system(size: 11)).foregroundStyle(t.ink2)
+                        if !finished { BButton(title: "Stop", kind: .destructive) { m.stopHands() } }
                     }
+                    HandsProgress(events: m.fireEvents, finished: finished)
                     Divider()
                     Text("Nothing irreversible happens without a step you can see here. Sending, paying and deleting are always yours.").font(.system(size: 11)).foregroundStyle(t.ink2)
                 }
@@ -292,6 +288,47 @@ struct FiringView: View {
         }
     }
     var finished: Bool { m.fireEvents.contains { if case .finished = $0 { return true }; return false } }
+}
+
+/// What Hands is doing, readable at a glance: the current step on top, the trail below in a box that never grows past the screen.
+struct HandsProgress: View {
+    @Environment(\.theme) var t
+    let events: [FireEvent]
+    let finished: Bool
+    @State private var showTrail = true
+    var body: some View {
+        let steps = events.compactMap { e -> (String, Bool)? in switch e { case .step(let s, let done): return (s, done); case .pausedForUser(let s): return (s, false); default: return nil } }
+        let outcome = events.compactMap { e -> FireOutcome? in if case .finished(let o) = e { return o }; return nil }.first
+        VStack(alignment: .leading, spacing: 10) {
+            if let now = steps.last {
+                HStack(alignment: .top, spacing: 10) {
+                    ZStack { Circle().fill(outcome == nil ? t.accent : (outcome == .couldNot ? t.bad : t.ok)).frame(width: 18, height: 18); Image(systemName: outcome == nil ? "arrow.right" : (outcome == .couldNot ? "xmark" : "checkmark")).font(.system(size: 10, weight: .bold)).foregroundStyle(.white) }
+                    Text(now.0).font(.system(size: 14, weight: .medium)).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            if let outcome { Text(label(outcome)).font(.system(size: 11)).foregroundStyle(t.ink2) }
+            if steps.count > 1 {
+                Button { withAnimation { showTrail.toggle() } } label: {
+                    HStack(spacing: 6) { Image(systemName: showTrail ? "chevron.down" : "chevron.right").font(.system(size: 10, weight: .semibold)); Text("\(steps.count - 1) step\(steps.count == 2 ? "" : "s") before this").font(.system(size: 11)) }.foregroundStyle(t.ink2)
+                }.buttonStyle(.plain)
+                if showTrail {
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 6) {
+                                ForEach(Array(steps.dropLast().enumerated()), id: \.offset) { i, s in
+                                    HStack(alignment: .top, spacing: 8) { Text("\(i + 1)").font(.system(size: 10, weight: .semibold)).foregroundStyle(t.ink2).frame(width: 18, alignment: .trailing); Text(s.0).font(.system(size: 12)).foregroundStyle(t.ink2).lineLimit(2) }.id(i)
+                                }
+                            }.padding(10)
+                        }
+                        .frame(maxHeight: 180)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(t.chip.opacity(0.5)))
+                        .onChange(of: steps.count) { _, n in proxy.scrollTo(max(0, n - 2), anchor: .bottom) }
+                        .onAppear { proxy.scrollTo(max(0, steps.count - 2), anchor: .bottom) }
+                    }
+                }
+            }
+        }
+    }
     func label(_ o: FireOutcome) -> String {
         switch o { case .done: return "Done."; case .pausedAtUserStep: return "Paused at the step that's yours."; case .stopped: return "Stopped."; case .couldNot: return "Couldn't do it this time — see above." }
     }

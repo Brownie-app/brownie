@@ -62,9 +62,14 @@ public actor Hands {
         do {
             let r = try await brain.run(AgentTask(system: system, input: goal, effort: effort, maxTurns: policy.maxSteps, timeout: policy.timeout), tools: tools) { e in
                 switch e {
-                case .toolCall(let name, let summary): self.log.info("→ \(name) \(summary.prefix(60))"); onEvent(.step("\(name) \(summary)"))
+                case .toolCall(let name, let summary):
+                    self.log.info("→ \(name) \(summary.prefix(60))")
+                    Task { let line = await self.narrate(name, summary); onEvent(.step(line)) }
                 case .toolResult(let name, let summary): self.log.info("← \(name): \(summary.prefix(60))")
-                case .message(let m): self.log.info("says: \(m.prefix(100))")
+                case .message(let m):
+                    // The brain's own narration ("I'll open Gmail next") is the best context there is.
+                    self.log.info("says: \(m.prefix(100))")
+                    let line = m.trimmingCharacters(in: .whitespacesAndNewlines); if !line.isEmpty { onEvent(.step(String(line.prefix(140)))) }
                 default: break
                 }
             }
@@ -133,6 +138,7 @@ public actor Hands {
         ]
     }
 
+    private func narrate(_ tool: String, _ args: String) -> String { HandsNarrator.line(tool: tool, args: args, label: { session.titleOf($0) }) }
     private func snapshotText() -> String { session.snapshot()?.text ?? "(no frontmost window)" }
     private func endLoop() { task?.cancel() }
 

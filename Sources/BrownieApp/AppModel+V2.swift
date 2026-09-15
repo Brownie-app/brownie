@@ -368,6 +368,13 @@ extension AppModel {
         }
     }
 
+    /// Stop whatever Hands is doing — a card being fired, a goal from the bar, a recipe. Nothing irreversible has happened, so stopping is always safe.
+    func stopHands() {
+        stopRecipe()
+        Task { await hands?.stop() }
+        if !fireEvents.contains(where: { if case .finished = $0 { return true }; return false }) { fireEvents.append(.step("Stopping…", done: false)) }
+    }
+
     // MARK: vault
 
     func setICloudMode(_ mode: String) {
