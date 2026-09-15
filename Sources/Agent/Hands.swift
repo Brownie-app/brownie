@@ -23,6 +23,8 @@ public actor Hands {
     private let log = Log("hands")
     private var session = AXSession()
     private var task: Task<Outcome, Never>?
+    private var repeatGuard = HandsGuard.RepeatGuard()
+    private func repeats(_ tool: String, _ args: Data) -> Bool { repeatGuard.record(tool: tool, args: String(decoding: args, as: UTF8.self)) }
 
     public init(brain: any AgenticBrain, knowledge: any KnowledgeStore, policy: Policy = Policy(), effort: Effort = .medium) {
         self.brain = brain; self.knowledge = knowledge; self.policy = policy; self.effort = effort
@@ -47,12 +49,20 @@ public actor Hands {
         let notes = (try? await knowledge.search(goal, limit: 4)) ?? []
         let context = notes.isEmpty ? "(no matching notes)" : notes.map { "## \($0.relativePath)\n\($0.body.prefix(1200))" }.joined(separator: "\n\n")
         let box = OutcomeBox()
-        let tools = makeTools(box: box)
+        repeatGuard = HandsGuard.RepeatGuard()
+        let tools = makeTools(box: box, goal: goal).map { tool in
+            // A step repeated three times in a row is a loop, not progress.
+            Tool(name: tool.name, description: tool.description, parametersSchema: tool.parametersSchema) { d in
+                if await self.repeats(tool.name, d) { return ToolOutput("STOP: you have done exactly this three times and the screen hasn't changed. Try a different element, or call could_not with what's blocking you.") }
+                return try await tool.run(d)
+            }
+        }
         let system = """
         You are Hands, the part of Brownie that acts on the user's Mac. You see the frontmost app as a numbered accessibility tree and act with tools. Work step by step: call `screen` first, act, call `screen` again to confirm what changed. Prefer `press`/`set_value` on numbered elements over raw clicks and typing. Open apps with `open_app`. When the tree is thin (web pages, Electron apps), call `look` for a screenshot and use `click` with coordinates from it.
 
         The one rule you can never break: you do not send, pay, submit, delete, purchase, post or transfer. When the next step is one of those, stop, call `need_user` with what is ready, and let the user press it. If the user's request itself is to send something, get everything in place and then stop the same way.
 
+        Stay inside the apps the task names. Change app only with `open_app` — never ⌘Tab, Spotlight or ⌘Q. If something the task needs isn't there (an app, a chat, a page), call `could_not` and say what was missing; do not look for another way round it. Never open Terminal, System Settings or anything that changes the Mac itself.
         Never enter passwords, card numbers or codes. If a task needs them, call `need_user`.
         Call `done` with a one-line summary when the task is complete, or `could_not` with the reason if it can't be done.
 
@@ -80,7 +90,7 @@ public actor Hands {
         return await box.outcome ?? .couldNot("finished without saying so")
     }
 
-    private func makeTools(box: OutcomeBox) -> [Tool] {
+    private func makeTools(box: OutcomeBox, goal: String) -> [Tool] {
         func arg(_ d: Data) -> [String: Any] { (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] ?? [:] }
         return [
             Tool(name: "screen", description: "The frontmost app's UI as a numbered tree.", parametersSchema: #"{"type":"object","properties":{}}"#) { _ in
@@ -93,17 +103,12 @@ public actor Hands {
             Tool(name: "list_apps", description: "Running apps.", parametersSchema: #"{"type":"object","properties":{}}"#) { _ in
                 await MainActor.run { NSWorkspace.shared.runningApplications.compactMap { $0.activationPolicy == .regular ? $0.localizedName : nil }.joined(separator: ", ") }
             },
-            Tool(name: "open_app", description: "Open or activate an app by name.", parametersSchema: #"{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}"#) { d in
+            Tool(name: "open_app", description: "Open or activate an app by name (the only way to switch apps).", parametersSchema: #"{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}"#) { d in
                 let name = arg(d)["name"] as? String ?? ""
-                let ok = await MainActor.run { () -> Bool in
-                    if let app = NSWorkspace.shared.runningApplications.first(where: { $0.localizedName?.lowercased() == name.lowercased() }) { return app.activate() }
-                    if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: name) ?? NSWorkspace.shared.urlForApplication(toOpen: URL(fileURLWithPath: "/Applications/\(name).app")) {
-                        NSWorkspace.shared.openApplication(at: url, configuration: .init()); return true
-                    }
-                    return false
-                }
+                if HandsGuard.isOffLimits(app: name, goal: goal) { return "STOP: \(name) is off limits for this task — stay in the apps the task names, or call could_not." }
+                let ok = await MainActor.run { AppLauncher.open(name) }
                 try? await Task.sleep(nanoseconds: 800_000_000)
-                return ok ? "opened \(name)" : "could not find \(name)"
+                return ok ? "opened \(name)" : "could not find an app called \(name) — if it isn't on this Mac, call could_not rather than looking for other ways"
             },
             Tool(name: "press", description: "Press/activate a numbered element (buttons, menu items, links, rows).", parametersSchema: #"{"type":"object","properties":{"id":{"type":"integer"}},"required":["id"]}"#) { d in
                 let id = arg(d)["id"] as? Int ?? 0
@@ -117,6 +122,7 @@ public actor Hands {
             },
             Tool(name: "key", description: "Press a key combo, e.g. cmd+n, return, tab, escape.", parametersSchema: #"{"type":"object","properties":{"combo":{"type":"string"}},"required":["combo"]}"#) { d in
                 let c = arg(d)["combo"] as? String ?? ""
+                if HandsGuard.isContextSwitch(c) { return "STOP: \(c) switches or closes apps; Hands doesn't use it. Use open_app to change app, or press the element you need." }
                 if ["return", "enter"].contains(c.lowercased()), await self.focusLooksIrreversible() { await box.set(.pausedForUser("Ready — press Return when you want to send")); await self.endLoop(); return "STOP: Return would send; left to the user" }
                 await MainActor.run { VirtualInput.key(c) }; return "pressed \(c)"
             },
