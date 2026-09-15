@@ -26,7 +26,7 @@ public enum LoopLedger {
         return loops
     }
 
-    static func same(_ a: Loop, _ b: Loop) -> Bool {
+    public static func same(_ a: Loop, _ b: Loop) -> Bool {
         guard a.direction == b.direction, a.person.lowercased().trimmingCharacters(in: .whitespaces) == b.person.lowercased().trimmingCharacters(in: .whitespaces) else { return false }
         let wa = words(a.what), wb = words(b.what)
         guard !wa.isEmpty, !wb.isEmpty else { return a.what == b.what }

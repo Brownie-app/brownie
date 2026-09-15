@@ -126,9 +126,14 @@ public actor RunCoordinator {
                 let cal = await deps.calendarText()
                 deps.stage("Judge what matters", "\(recent.count) summaries from the last 7 days\(cal == nil ? "" : ", the calendar for 8 days"), \(openLoops.count) open loops")
                 let (findings, u1) = try await Judge(brain: brain, clock: deps.clock).judge(summaries: recent, calendar: cal, instructions: instructions, openLoops: openLoops, max: 8)
-                let candidates = findings.items
                 usage = usage + u1
-                let allLoops = LoopLedger.merge(existing: await LoopLedger.load(store), found: findings.newLoops, updates: findings.updates, items: candidates, now: deps.clock.now())
+                // Promises said out loud: parsed from transcript summaries, deterministically, so none is missed.
+                let spoken = recent.filter { $0.kind == .transcript }.flatMap { TranscriptPromises.parse(summary: $0.text, recording: $0.title.isEmpty ? $0.bucketName : $0.title, date: $0.itemDate ?? $0.createdAt, now: deps.clock.now()) }
+                if !spoken.isEmpty { deps.stage("Promises said out loud", "\(spoken.count) from \(recent.filter { $0.kind == .transcript }.count) recording(s)"); log.info("\(spoken.count) spoken promise(s) found") }
+                let already = await LoopLedger.load(store)
+                let newSpoken = spoken.filter { f in !already.contains { $0.id == f.loop.id || ($0.status == .open && LoopLedger.same($0, f.loop)) } }
+                let candidates = findings.items + TranscriptPromises.candidates(newSpoken)
+                let allLoops = LoopLedger.merge(existing: already, found: findings.newLoops + newSpoken.map(\.loop), updates: findings.updates, items: candidates, now: deps.clock.now())
                 await LoopLedger.save(allLoops, store)
                 try await store.setValue(SettingKey.candidates, String(data: JSONEncoder().encode(candidates), encoding: .utf8))
 
@@ -169,9 +174,21 @@ public actor RunCoordinator {
                 try await store.wipeSummaries()
                 let legacyMirror = try await store.value(SettingKey.icloudMirror) ?? "false"
                 let mode = try await store.value(SettingKey.icloudMode) ?? (legacyMirror == "true" ? "mirror" : "off")
+                if let root = (deps.knowledge as? FileKnowledgeStore)?.rootURL {
+                    // Today.md: the morning's cards as checkboxes, for the phone.
+                    try? TodayNote.render(cards: kept + fresh, date: deps.clock.now()).write(to: root.appendingPathComponent(TodayNote.path), atomically: true, encoding: .utf8)
+                }
                 if mode != "off", let root = (deps.knowledge as? FileKnowledgeStore)?.rootURL, let dest = Vault.icloudFolder {
                     do {
-                        if mode == "twoway" { let r = try Vault.sync(root, to: dest); try await store.setValue(SettingKey.lastSync, String(data: JSONEncoder().encode(r), encoding: .utf8)) }
+                        if mode == "twoway" {
+                            let r = try Vault.sync(root, to: dest); try await store.setValue(SettingKey.lastSync, String(data: JSONEncoder().encode(r), encoding: .utf8))
+                            // What the phone ticked since last time comes back with the sync.
+                            if let md = try? String(contentsOf: root.appendingPathComponent(TodayNote.path), encoding: .utf8) {
+                                var all = try await Self.loadCards(store: store)
+                                let done = TodayNote.apply(TodayNote.parse(md), to: &all, now: deps.clock.now())
+                                if !done.isEmpty { try await Self.saveCards(all, store: store); log.info("\(done.count) card(s) ticked on the phone") }
+                            }
+                        }
                         else { _ = try Vault.mirror(root, to: dest) }
                     } catch { log.warn("iCloud \(mode): \(error)") }
                 }

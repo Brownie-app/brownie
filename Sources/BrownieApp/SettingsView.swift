@@ -197,7 +197,7 @@ struct KnowledgePane: View {
             SettingRow(title: "Open in Obsidian", detail: Vault.obsidianInstalled ? "Adds the vault to Obsidian once; after that it's just there. Backlinks, graph and search work on Brownie's notes." : "Obsidian isn't installed. It's free — obsidian.md.") {
                 if Vault.obsidianInstalled { BButton(title: "Open in Obsidian") { Vault.openInObsidian(m.knowledge.rootURL) } } else { BButton(title: "Get Obsidian", kind: .quiet) { NSWorkspace.shared.open(URL(string: "https://obsidian.md")!) } }
             }.padding(.horizontal, 16); Divider()
-            SettingRow(title: "iCloud Drive", detail: Vault.icloudFolder == nil ? "iCloud Drive is off on this Mac." : "A copy in iCloud Drive/Brownie so Obsidian on your iPhone has it. Two-way: what you edit on the phone comes back here and Brownie merges it. Apple's sync, Apple's encryption; nothing of Brownie's online.") {
+            SettingRow(title: "iCloud Drive", detail: Vault.icloudFolder == nil ? "iCloud Drive is off on this Mac." : "A copy in iCloud Drive/Brownie so Obsidian on your iPhone has it. Two-way: what you edit on the phone comes back here and Brownie merges it, and Today.md carries the morning's cards as checkboxes — tick one on the phone and it's done here. Apple's sync, Apple's encryption; nothing of Brownie's online.") {
                 Segmented(options: ["Off", "To the phone", "Two-way"], selection: Binding(get: { m.icloudMode == "twoway" ? "Two-way" : (m.icloudMode == "mirror" ? "To the phone" : "Off") }, set: { m.setICloudMode($0 == "Two-way" ? "twoway" : ($0 == "To the phone" ? "mirror" : "off")) })).disabled(Vault.icloudFolder == nil)
             }.padding(.horizontal, 16); Divider()
             if m.icloudMode == "twoway" {

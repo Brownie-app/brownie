@@ -444,11 +444,22 @@ extension AppModel {
     func syncNow(quiet: Bool = false) {
         guard icloudMode != "off", let dest = Vault.icloudFolder else { return }
         let root = knowledge.rootURL, mode = icloudMode
+        let today = TodayNote.render(cards: cards + snoozedCards, date: Date())
+        let store = self.store
         Task.detached { [weak self] in
             do {
                 if mode == "twoway" {
+                    // Today.md goes out with the notes; what the phone ticked comes back.
+                    try? today.write(to: root.appendingPathComponent(TodayNote.path), atomically: true, encoding: .utf8)
                     let r = try Vault.sync(root, to: dest)
-                    await MainActor.run { self?.lastSync = r; self?.set(SettingKey.lastSync, self?.json(r) ?? ""); if !quiet { self?.announcement = "Synced with iCloud Drive: \(r.line)." }; Task { await self?.reload() } }
+                    var ticked = 0
+                    if let md = try? String(contentsOf: root.appendingPathComponent(TodayNote.path), encoding: .utf8) {
+                        var all = (try? await RunCoordinator.loadCards(store: store)) ?? []
+                        let done = TodayNote.apply(TodayNote.parse(md), to: &all, now: Date())
+                        if !done.isEmpty { try? await RunCoordinator.saveCards(all, store: store); ticked = done.count }
+                    }
+                    let n = ticked
+                    await MainActor.run { self?.lastSync = r; self?.set(SettingKey.lastSync, self?.json(r) ?? ""); if !quiet { self?.announcement = "Synced with iCloud Drive: \(r.line)." + (n > 0 ? " \(n) card\(n == 1 ? "" : "s") ticked on your phone — marked done." : "") } else if n > 0 { self?.announcement = "\(n) card\(n == 1 ? "" : "s") ticked on your phone — marked done." }; Task { await self?.reload() } }
                 } else {
                     let n = try Vault.mirror(root, to: dest)
                     await MainActor.run { if !quiet { self?.announcement = "Mirrored to iCloud Drive/Brownie (\(n) notes copied)." } }

@@ -89,7 +89,12 @@ struct LoopRow: View {
             ZStack { Circle().fill(t.ctl2).frame(width: 28, height: 28); Text(String(loop.person.prefix(1)).uppercased()).font(.system(size: 11, weight: .semibold)).foregroundStyle(t.ink2) }
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) { Text(loop.person).fontWeight(.semibold); Text("·").foregroundStyle(t.ink2); Text(loop.what).lineLimit(1) }
-                Text("“\(loop.quote)” · \(loop.sourceLabel)").font(.system(size: 11)).foregroundStyle(t.ink2).lineLimit(1)
+                HStack(spacing: 6) {
+                    Text("“\(loop.quote)” · \(loop.sourceLabel)").font(.system(size: 11)).foregroundStyle(t.ink2).lineLimit(1)
+                    if loop.sourceLabel.hasPrefix("Recording") || loop.sourceLabel.hasPrefix("Voice Memo") {
+                        Button { m.openEvidence(source: loop.sourceLabel, when: "", text: loop.quote) } label: { HStack(spacing: 3) { Image(systemName: "play.fill").font(.system(size: 8)); Text("Hear it") }.font(.system(size: 10.5, weight: .medium)).foregroundStyle(t.accentInk).padding(.horizontal, 7).frame(height: 18).background(Capsule().fill(t.accentSoft)) }.buttonStyle(.plain).help("Play the recording from the moment it was said")
+                    }
+                }
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
