@@ -116,7 +116,11 @@ public actor RunCoordinator {
 
                 onEvent(.progress(RunProgress(stage: .judging, stats: stats)))
                 let recent = try await store.summaries(since: deps.clock.now().addingTimeInterval(-7 * 86400))
-                let instructions = try await store.value(SettingKey.standingInstructions) ?? ""
+                let typed = try await store.value(SettingKey.standingInstructions) ?? ""
+                let feedback = Self.loadFeedback(try await store.value(SettingKey.feedback))
+                let learned = FeedbackDigest.instructions(feedback, now: deps.clock.now())
+                // What the user typed, then what their thumbs-downs taught.
+                let instructions = [typed, learned].filter { !$0.isEmpty }.joined(separator: "\n")
                 let max = Int(try await store.value(SettingKey.cardsPerMorning) ?? "5") ?? 5
                 let openLoops = await LoopLedger.load(store).filter { $0.status == .open }
                 let cal = await deps.calendarText()
@@ -216,7 +220,8 @@ public actor RunCoordinator {
         let readme = try await deps.knowledge.note(at: "README.md")?.body ?? ""
         let f = DateFormatter(); f.dateFormat = "d MMM"
         deps.stage("Write the Sunday letter", "this week's numbers, \(weekCards.count) cards, \(weekLoops.count) loops, your README")
-        let (text, u) = try await WeeklyWriter(brain: brain).write(range: "\(f.string(from: weekStart))–\(f.string(from: now))",
+        let corrections = FeedbackDigest.weekLine(Self.loadFeedback(try await store.value(SettingKey.feedback)), since: weekStart)
+        let (text, u) = try await WeeklyWriter(brain: brain).write(range: "\(f.string(from: weekStart))–\(f.string(from: now))", corrections: corrections,
             numbers: "\(runs.count) of 7 nights ran · \(read) read · \(kept) kept · \(erased) sensitive erased · \(weekCards.filter { $0.state == .fired }.count) cards fired by the user · \(weekLoops.filter { $0.status == .closed }.count) loops closed, \(weekLoops.filter { $0.status == .open && $0.openedAt >= weekStart }.count) opened",
             bytes: bytes < 1024 ? "\(bytes) bytes" : String(format: "%.0f KB", Double(bytes) / 1024), cards: weekCards, loops: weekLoops, readme: readme, calendar: calendar)
         try await store.setValue(SettingKey.weekly(week), text)
@@ -250,6 +255,10 @@ public actor RunCoordinator {
         return Set(ids.map(BucketID.init))
     }
 
+    public static func loadFeedback(_ json: String?) -> [CardFeedback] {
+        guard let j = json, let d = j.data(using: .utf8) else { return [] }
+        return (try? JSONDecoder().decode([CardFeedback].self, from: d)) ?? []
+    }
     public static func saveCards(_ cards: [Card], store: any RunStore) async throws {
         try await store.setValue(SettingKey.cards, String(data: JSONEncoder().encode(cards), encoding: .utf8))
     }

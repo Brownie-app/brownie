@@ -11,12 +11,12 @@ public struct WeeklyWriter: Sendable {
         self.brain = brain
         template = try String(contentsOf: bundle.url(forResource: "weekly", withExtension: "md", subdirectory: "Prompts") ?? bundle.url(forResource: "weekly", withExtension: "md")!, encoding: .utf8)
     }
-    public func write(range: String, numbers: String, bytes: String, cards: [Card], loops: [Loop], readme: String, calendar: String?) async throws -> (String, Usage) {
+    public func write(range: String, corrections: String = "", numbers: String, bytes: String, cards: [Card], loops: [Loop], readme: String, calendar: String?) async throws -> (String, Usage) {
         let f = DateFormatter(); f.dateFormat = "EEE"
         let cardLines = cards.isEmpty ? "(none)" : cards.map { "- \($0.title) · \($0.state.rawValue)\($0.isComeBack ? " · came back" : "") · \(f.string(from: $0.resolvedAt ?? $0.createdAt))" }.joined(separator: "\n")
         let loopLines = loops.isEmpty ? "(none)" : loops.map { l in "- [\(l.status.rawValue)] \(l.direction == .mine ? "you → \(l.person)" : "\(l.person) → you"): \(l.what) · said \(l.sourceLabel)\(l.due.map { " · due \($0)" } ?? "")\(l.closedHow.map { " · closed: \($0)" } ?? "")" }.joined(separator: "\n")
         var p = template
-        for (k, v) in [("range", range), ("numbers", numbers), ("bytes", bytes), ("cards", cardLines), ("loops", loopLines), ("readme", String(readme.prefix(6000))), ("calendar", calendar ?? "(nothing on the calendar)")] {
+        for (k, v) in [("range", range), ("corrections", corrections.isEmpty ? "(none this week)" : corrections), ("numbers", numbers), ("bytes", bytes), ("cards", cardLines), ("loops", loopLines), ("readme", String(readme.prefix(6000))), ("calendar", calendar ?? "(nothing on the calendar)")] {
             p = p.replacingOccurrences(of: "{{\(k)}}", with: v)
         }
         let r = try await brain.complete(BrainRequest(system: "You write exactly one letter in Markdown, nothing else.", input: p, effort: .low, maxOutputTokens: 8000))

@@ -14,6 +14,7 @@ public enum SettingKey {
     public static let cardsPerMorning = "proactive.cardsPerMorning"
     public static let notifyOnReady = "proactive.notify"
     public static let standingInstructions = "proactive.instructions"
+    public static let feedback = "proactive.feedback"             // JSON [CardFeedback], newest last
     public static let handsHotkey = "hands.hotkey"                // rightCommand | rightOption | off
     public static let handsSpeed = "hands.speed"                  // fast | balanced | careful
     public static let overnightEnabled = "overnight.enabled"

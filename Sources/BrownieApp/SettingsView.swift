@@ -328,6 +328,19 @@ struct ProactivePane: View {
         Sub(text: "Plain words. Read every night before it decides what to show you.")
         TextEditor(text: $m.instructions).font(.system(size: 13)).frame(minHeight: 90).padding(8).scrollContentBackground(.hidden).background(RoundedRectangle(cornerRadius: 6).fill(t.code))
             .onChange(of: m.instructions) { _, v in m.set(SettingKey.standingInstructions, v) }
+        H2(text: "What your thumbs-downs taught").padding(.top, 6)
+        Sub(text: m.feedback.isEmpty ? "Nothing yet. On any card, “Not right…” with a reason — Brownie keeps the lesson and reads it every night." : "Read every night after your standing instructions. Remove one and the lesson is forgotten.")
+        if !m.feedback.isEmpty {
+            CardBox(padding: 0) {
+                VStack(spacing: 0) {
+                    ForEach(m.feedback.reversed().prefix(30)) { fb in
+                        SettingRow(title: "\(fb.verdict.label)\(fb.person.map { " · \($0)" } ?? "")", detail: "“\(fb.cardTitle)”\(fb.note.isEmpty ? "" : " — \(fb.note)") · \(fb.at.formatted(date: .abbreviated, time: .omitted))") { BButton(title: "Remove", kind: .quiet) { m.forgetFeedback(fb.id) } }.padding(.horizontal, 16)
+                        Divider()
+                    }
+                    if !m.learnedInstructions.isEmpty { Text(m.learnedInstructions).font(.system(size: 12, design: .monospaced)).foregroundStyle(t.ink2).padding(12).frame(maxWidth: .infinity, alignment: .leading).background(t.code) }
+                }
+            }
+        }
         H2(text: "Hands").padding(.top, 10)
         CardBox(padding: 0) {
             VStack(spacing: 0) {

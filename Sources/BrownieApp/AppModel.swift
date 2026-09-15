@@ -82,6 +82,10 @@ final class AppModel: ObservableObject {
     @Published var cardsPerMorning = 5
     @Published var notify = true
     @Published var instructions = ""
+    /// Every thumbs-down, newest last. Folded into the night's instructions by FeedbackDigest.
+    @Published var feedback: [CardFeedback] = []
+    /// The card whose "Something else…" sheet is open.
+    @Published var feedbackNoteFor: String?
     @Published var handsHotkey = "rightCommand"
     @Published var handsSpeed = "balanced"
     @Published var onboardingDone = false
@@ -199,6 +203,7 @@ final class AppModel: ObservableObject {
         cardsPerMorning = Int(await v(SettingKey.cardsPerMorning) ?? "5") ?? 5
         notify = (await v(SettingKey.notifyOnReady) ?? "true") == "true"
         instructions = await v(SettingKey.standingInstructions) ?? ""
+        feedback = RunCoordinator.loadFeedback(await v(SettingKey.feedback))
         handsHotkey = await v(SettingKey.handsHotkey) ?? "rightCommand"
         handsSpeed = await v(SettingKey.handsSpeed) ?? "balanced"
         let (h, m) = OvernightScheduler.Config.parse(await v(SettingKey.overnightTime))
@@ -529,6 +534,19 @@ final class AppModel: ObservableObject {
             await reload(); overlay = .none
         }
     }
+
+    /// A thumbs-down with a reason: the card goes away and the lesson is kept for every night after.
+    func giveFeedback(_ id: String, _ verdict: CardFeedback.Verdict, note: String = "") {
+        guard let c = card(id) ?? pastCards.first(where: { $0.id == id }) else { return }
+        feedback.append(CardFeedback(cardID: id, cardTitle: c.title, person: c.person, sourceLabel: c.sourceLabel, verdict: verdict, note: note, at: Date()))
+        if feedback.count > 200 { feedback.removeFirst(feedback.count - 200) }
+        set(SettingKey.feedback, json(feedback))
+        if verdict == .alreadyDone, let loopID = c.loopID { closeLoop(loopID, how: "you said it was done") }
+        setCardState(id, .dismissed); overlay = .none
+    }
+    func forgetFeedback(_ id: String) { feedback.removeAll { $0.id == id }; set(SettingKey.feedback, json(feedback)) }
+    /// What the thumbs-downs currently teach, as the judge will read it.
+    var learnedInstructions: String { FeedbackDigest.instructions(feedback, now: Date()) }
 
     private func setCardState(_ id: String, _ s: CardState) {
         Task {

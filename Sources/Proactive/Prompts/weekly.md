@@ -5,12 +5,14 @@ Shape (use these exact headings, as Markdown `###`, in this order, skipping empt
 - ### What closed — loops that closed this week, each in one sentence with the person and how.
 - ### Still open — open loops, oldest first, one sentence each; say plainly when the user is the one who owes.
 - ### People you went quiet on — only if the notes show someone the user hasn't replied to; otherwise omit.
+- ### What you corrected — only when CORRECTIONS below has something: one short paragraph owning the misses plainly (no apology spiral) and saying what Brownie will do differently, in the user's terms.
 - ### Next week — the calendar items below that deserve preparation; say a brief will be ready ten minutes before each.
 
 Keep it under 350 words. No bullet points inside sections; short paragraphs. Sign off with a single line, "— Brownie".
 
 THE WEEK: {{range}}
 NUMBERS: {{numbers}}
+CORRECTIONS: {{corrections}}
 
 CARDS THIS WEEK (what the user fired, snoozed, or let go):
 {{cards}}

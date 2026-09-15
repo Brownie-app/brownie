@@ -159,7 +159,42 @@ struct CardTile: View {
                 HStack(spacing: 8) { Chip(text: card.actionLabel, accent: true); Text(card.dueLine).font(.system(size: 11)).foregroundStyle(t.ink2) }
             }.frame(maxWidth: .infinity, alignment: .leading)
         }.contentShape(Rectangle())
+        .contextMenu { FeedbackMenuItems(cardID: card.id) }
     }
+}
+
+/// "Not right…" — one reason, and the card is gone for good reason. The lesson goes into the next night's instructions.
+struct FeedbackMenu: View {
+    @EnvironmentObject var m: AppModel
+    let cardID: String
+    var body: some View {
+        Menu { FeedbackMenuItems(cardID: cardID) } label: { Text("Not right…") }.menuStyle(.borderlessButton).fixedSize().help("Tell Brownie why, so it learns")
+    }
+}
+struct FeedbackMenuItems: View {
+    @EnvironmentObject var m: AppModel
+    let cardID: String
+    var body: some View {
+        ForEach(CardFeedback.Verdict.allCases.filter { $0 != .other }, id: \.self) { v in Button(v.label) { m.giveFeedback(cardID, v) } }
+        Divider()
+        Button(CardFeedback.Verdict.other.label) { m.feedbackNoteFor = cardID }
+    }
+}
+/// The "Something else…" sheet: one line in the user's words.
+struct FeedbackNoteSheet: View {
+    @EnvironmentObject var m: AppModel
+    @Environment(\.theme) var t
+    let cardID: String
+    @State private var note = ""
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("What was wrong with this card?").font(.system(size: 17, weight: .semibold))
+            Text("One line, in your words. Brownie reads it every night before deciding what to show you.").font(.system(size: 12.5)).foregroundStyle(t.ink2)
+            TextField("e.g. Rohan handles the villa now, not me", text: $note).textFieldStyle(.roundedBorder).onSubmit { send() }
+            HStack { Spacer(); BButton(title: "Cancel", kind: .quiet) { m.feedbackNoteFor = nil }; BButton(title: "Teach Brownie", kind: .primary) { send() }.disabled(note.trimmingCharacters(in: .whitespaces).isEmpty) }
+        }.padding(20).frame(width: 460)
+    }
+    func send() { let n = note.trimmingCharacters(in: .whitespaces); guard !n.isEmpty else { return }; m.giveFeedback(cardID, .other, note: n); m.feedbackNoteFor = nil }
 }
 
 struct NumbersRow: View {
@@ -203,6 +238,7 @@ struct CardDetailView: View {
                 Toolbar(title: c.title, back: { m.overlay = .none }) {
                     Menu { Button("Tomorrow morning") { m.snooze(c.id, days: 1) }; Button("In 3 days") { m.snooze(c.id, days: 3) }; Button("Next week") { m.snooze(c.id, days: 7) } } label: { Text("Snooze") }.menuStyle(.borderlessButton).fixedSize()
                     BButton(title: "Not now", kind: .quiet) { m.dismiss(c.id) }
+                    FeedbackMenu(cardID: c.id)
                     BButton(title: c.fireLabel, kind: .primary, systemImage: "arrow.right") { if editing { m.updateDraft(c.id, draft); editing = false }; m.fire(c.id) }.walkthroughTarget("card")
                 }
                 TwoColumn(sideWidth: 340) {
