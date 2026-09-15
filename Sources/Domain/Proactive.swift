@@ -18,6 +18,8 @@ public struct ActionItem: Codable, Sendable, Equatable {
     public var cameBack: Bool?
     /// The loop this item is about, when it is.
     public var loopID: String?
+    /// Household items only: "me", a member's first name, or "either" — who the chat shows is on it.
+    public var owner: String?
     public init(title: String, action: String, importance: String, dueDate: String?, sources: [String], urgency: Urgency, cameBack: Bool? = nil, loopID: String? = nil) {
         self.title = title; self.action = action; self.importance = importance; self.dueDate = dueDate; self.sources = sources; self.urgency = urgency; self.cameBack = cameBack; self.loopID = loopID
     }
@@ -95,11 +97,16 @@ public struct Card: Codable, Sendable, Identifiable, Equatable {
     public var dueDate: Date?
     /// Set by the quiet check when part of the evidence is a note older than the user's setting.
     public var staleLine: String?
+    /// Household cards: "me", a member's first name, or "either". Nil for the user's own cards.
+    public var owner: String?
+    /// Set when another member's Brownie reports the same loop closed — the card shows dimmed, "Priya did this".
+    public var handledBy: String?
+    public var isHousehold: Bool { owner != nil }
     public var isComeBack: Bool { cameBack ?? false }
     public var isDue: Bool { dueDate != nil }
     public func withDueLine(_ line: String) -> Card {
         var c = Card(id: id, title: title, sourceLabel: sourceLabel, why: why, actionLabel: actionLabel, dueLine: line, urgency: urgency, draftLabel: draftLabel, draft: draft, recipe: recipe, evidence: evidence, verification: verification, verifiedLine: verifiedLine, state: state, createdAt: createdAt, cameBack: cameBack, loopID: loopID)
-        c.dueDate = dueDate; c.snoozedUntil = snoozedUntil; c.resolvedAt = resolvedAt; c.staleLine = staleLine; return c
+        c.dueDate = dueDate; c.snoozedUntil = snoozedUntil; c.resolvedAt = resolvedAt; c.staleLine = staleLine; c.owner = owner; c.handledBy = handledBy; return c
     }
 
     public init(id: String, title: String, sourceLabel: String, why: String, actionLabel: String, dueLine: String,
@@ -132,7 +139,7 @@ public struct Card: Codable, Sendable, Identifiable, Equatable {
         }
         var c = Card(id: id, title: title, sourceLabel: sourceLabel, why: why, actionLabel: actionLabel, dueLine: dueLine, urgency: urgency,
                     draftLabel: draftLabel, draft: text, recipe: r, evidence: evidence, verification: verification, verifiedLine: verifiedLine, state: state, createdAt: createdAt, cameBack: cameBack, loopID: loopID)
-        c.dueDate = dueDate; c.snoozedUntil = snoozedUntil; c.resolvedAt = resolvedAt; c.staleLine = staleLine; return c
+        c.dueDate = dueDate; c.snoozedUntil = snoozedUntil; c.resolvedAt = resolvedAt; c.staleLine = staleLine; c.owner = owner; c.handledBy = handledBy; return c
     }
 
     public var fireLabel: String {

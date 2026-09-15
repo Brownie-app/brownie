@@ -28,6 +28,8 @@ public struct Loop: Codable, Sendable, Identifiable, Equatable {
     /// Card ids fired for this loop; a fired card with the loop still open at the next read comes back.
     public var firedCardIDs: [String]
     public var cameBackCount: Int
+    /// Household loops: who is on it — "me", a member's first name, or "either". Nil for the user's own loops.
+    public var owner: String?
 
     public init(id: String = UUID().uuidString, direction: LoopDirection, person: String, what: String, quote: String, sourceLabel: String,
                 due: String?, dueDate: Date? = nil, status: LoopStatus = .open, openedAt: Date, closedAt: Date? = nil, closedHow: String? = nil,

@@ -19,11 +19,21 @@ struct ForYouView: View {
                     if m.modelPath == nil { ReaderMissing() }
                     if let letter = m.letter, !m.letterOpened, !letter.isEmpty { LetterTeaser() }
                     if let w = m.weekly, !w.isEmpty, !m.weeklySeen { WeeklyTeaser() }
-                    HStack { Text(headline).font(.system(size: 17, weight: .semibold)); Spacer(); Text("Ranked by urgency · nothing is sent until you tap").font(.system(size: 11)).foregroundStyle(t.ink2) }
-                    if m.cards.isEmpty { EmptyCards() }
+                    if let h = m.household, !ours.isEmpty {
+                        HStack(spacing: 10) {
+                            MemberAvatars(household: h)
+                            Text("Ours").font(.system(size: 17, weight: .semibold))
+                            Text("From the chats you're both in · who's handling what").font(.system(size: 11)).foregroundStyle(t.ink2)
+                        }
+                        LazyVGrid(columns: [GridItem(.flexible(), spacing: 14), GridItem(.flexible())], spacing: 14) {
+                            ForEach(ours) { c in CardTile(card: c).onTapGesture { m.overlay = .card(c.id) } }
+                        }
+                    }
+                    HStack { Text(headline).font(.system(size: 17, weight: .semibold)); Spacer(); Text(m.household == nil ? "Ranked by urgency · nothing is sent until you tap" : "Only on this Mac · \(m.household?.othersLine ?? "") never sees these").font(.system(size: 11)).foregroundStyle(t.ink2) }
+                    if own.isEmpty { if ours.isEmpty { EmptyCards() } }
                     else {
                         LazyVGrid(columns: [GridItem(.flexible(), spacing: 14), GridItem(.flexible())], spacing: 14) {
-                            ForEach(Array(m.cards.enumerated()), id: \.element.id) { i, c in
+                            ForEach(Array(own.enumerated()), id: \.element.id) { i, c in
                                 CardTile(card: c).walkthroughTarget(i == 0 ? "foryou" : nil)
                                     .onTapGesture { m.markWalkthrough("foryou"); m.overlay = .card(c.id) }
                             }
@@ -61,7 +71,12 @@ struct ForYouView: View {
         }
     }
 
-    var headline: String { m.cards.isEmpty ? "Nothing needs you this morning" : "\(m.cards.count) thing\(m.cards.count == 1 ? "" : "s") worth your attention" }
+    var ours: [Card] { m.household == nil ? [] : m.cards.filter { $0.isHousehold } }
+    var own: [Card] { m.household == nil ? m.cards : m.cards.filter { !$0.isHousehold } }
+    var headline: String {
+        if m.household != nil { return own.isEmpty ? "Nothing of your own this morning" : "\(own.count) thing\(own.count == 1 ? "" : "s") of your own" }
+        return m.cards.isEmpty ? "Nothing needs you this morning" : "\(m.cards.count) thing\(m.cards.count == 1 ? "" : "s") worth your attention"
+    }
 
     var bannerText: String? {
         guard !m.isRunning, let o = m.lastRun?.outcome else { return nil }
@@ -162,10 +177,31 @@ struct CardTile: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) { UrgencyDot(urgency: card.urgency); Text(card.title).font(.system(size: 14, weight: .semibold)).lineLimit(1); Spacer(); if card.isComeBack { CameBackChip() }; if card.isDue { Chip(text: card.dueLine, accent: true) }; if card.staleLine != nil { Chip(text: "Older note").help(card.staleLine ?? "") }; Chip(text: card.sourceLabel) }
                 Text(card.why).font(.system(size: 12.5)).foregroundStyle(t.ink2).lineLimit(3)
-                HStack(spacing: 8) { Chip(text: card.actionLabel, accent: true); Text(card.dueLine).font(.system(size: 11)).foregroundStyle(t.ink2) }
+                HStack(spacing: 8) {
+                    if let who = card.handledBy { HStack(spacing: 4) { Image(systemName: "checkmark").font(.system(size: 9, weight: .bold)); Text("\(who) did this") }.font(.system(size: 11, weight: .medium)).foregroundStyle(Color(hex: 0x3B5BB5)).padding(.horizontal, 8).frame(height: 20).background(Capsule().fill(Color(hex: 0x5878C8).opacity(0.12))); Chip(text: "Nothing to do") }
+                    else { Chip(text: card.actionLabel, accent: true) }
+                    if let o = card.owner, card.handledBy == nil { OwnerChip(owner: o) }
+                    Text(card.dueLine).font(.system(size: 11)).foregroundStyle(t.ink2)
+                }
             }.frame(maxWidth: .infinity, alignment: .leading)
-        }.contentShape(Rectangle())
+        }.contentShape(Rectangle()).opacity(card.handledBy == nil ? 1 : 0.62)
         .contextMenu { FeedbackMenuItems(cardID: card.id) }
+    }
+}
+
+/// Who is on a household card: you, the other person, or either.
+struct OwnerChip: View {
+    @EnvironmentObject var m: AppModel
+    @Environment(\.theme) var t
+    let owner: String
+    var body: some View {
+        HStack(spacing: 5) {
+            if let h = m.household {
+                if owner == "either" { MemberAvatars(household: h, size: 16) }
+                else { Text(String((owner == "me" ? (h.me?.firstName ?? "V") : owner).prefix(1)).uppercased()).font(.system(size: 7, weight: .semibold)).frame(width: 16, height: 16).background(Circle().fill(owner == "me" ? t.accentSoft : Color(hex: 0x5878C8).opacity(0.16))).foregroundStyle(owner == "me" ? t.accentInk : Color(hex: 0x3B5BB5)) }
+            }
+            Text(owner == "me" ? "Yours" : (owner == "either" ? "Either of you" : "\(owner)'s")).font(.system(size: 11, weight: .medium)).foregroundStyle(t.ink2)
+        }
     }
 }
 
@@ -249,6 +285,14 @@ struct CardDetailView: View {
                 }
                 TwoColumn(sideWidth: 340) {
                         VStack(alignment: .leading, spacing: 18) {
+                            if let who = c.handledBy {
+                                CardBox(padding: 14) {
+                                    HStack(alignment: .top, spacing: 12) {
+                                        Image(systemName: "checkmark.circle").foregroundStyle(Color(hex: 0x3B5BB5)).padding(.top, 2)
+                                        VStack(alignment: .leading, spacing: 2) { Text("\(who) did this").fontWeight(.semibold); Text("\(who)'s Brownie reported this loop closed. Nothing for you to do — it stays here today so you know, then goes.").font(.system(size: 12.5)).foregroundStyle(t.ink2) }
+                                    }.frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                            }
                             if c.isComeBack {
                                 CardBox(padding: 14) {
                                     HStack(alignment: .top, spacing: 12) {

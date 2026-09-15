@@ -430,6 +430,56 @@ extension AppModel {
         }
     }
 
+    // MARK: household
+
+    /// Start sharing with one person now; the model holds a list, so more can join later.
+    func startHousehold(with name: String, phone: String, folder: URL?) {
+        let dest = folder ?? HouseholdVault.defaultFolder ?? knowledge.rootURL.deletingLastPathComponent().appendingPathComponent(HouseholdVault.defaultFolderName)
+        let meName = (try? FileManager.default.attributesOfItem(atPath: NSHomeDirectory()))?[.ownerAccountName] as? String ?? NSFullUserName()
+        let h = Household(members: [HouseholdMember(name: NSFullUserName().isEmpty ? meName : NSFullUserName(), isMe: true), HouseholdMember(name: name.trimmingCharacters(in: .whitespaces), isMe: false, phone: phone.isEmpty ? nil : HouseholdEligibility.digits(phone))], folderPath: dest.path, since: Date())
+        try? FileManager.default.createDirectory(at: dest.appendingPathComponent("Household"), withIntermediateDirectories: true)
+        household = h; set(SettingKey.household, json(h))
+        Task { await refreshEligibleChats(); householdSyncNow(quiet: true) }
+    }
+    func leaveHousehold() { household = nil; eligibleChats = []; householdLastSync = nil; set(SettingKey.household, nil); set(SettingKey.householdLastSync, nil); set(SettingKey.householdBucketNames, nil) }
+    func setHouseholdMemberPhone(_ id: String, _ phone: String) {
+        guard var h = household, let i = h.members.firstIndex(where: { $0.id == id }) else { return }
+        h.members[i].phone = phone.isEmpty ? nil : HouseholdEligibility.digits(phone); household = h; set(SettingKey.household, json(h))
+        Task { await refreshEligibleChats() }
+    }
+    func toggleSharedChat(_ b: BucketInfo) {
+        guard var h = household else { return }
+        if let i = h.sharedBuckets.firstIndex(of: b.id.rawValue) { h.sharedBuckets.remove(at: i) } else { h.sharedBuckets.append(b.id.rawValue) }
+        household = h; set(SettingKey.household, json(h))
+        // the pipeline needs the chat's name to find its Groups/ note
+        var names = (try? JSONDecoder().decode([String: String].self, from: Data((UserDefaults.standard.string(forKey: "household.bucketNames") ?? "{}").utf8))) ?? [:]
+        names[b.id.rawValue] = b.name
+        let j = json(names); UserDefaults.standard.set(j, forKey: "household.bucketNames"); set(SettingKey.householdBucketNames, j)
+    }
+    /// Which group chats every other member is in — asks each source for its members.
+    func refreshEligibleChats() async {
+        guard let h = household, !h.others.isEmpty else { eligibleChats = []; return }
+        checkingEligible = true; defer { checkingEligible = false }
+        var out: [BucketInfo] = []
+        for (s, members) in [("whatsapp", { (b: BucketID) async throws -> [String] in try await WhatsAppSource().members(of: b) }), ("imessage", { (b: BucketID) async throws -> [String] in try await iMessageSource().members(of: b) })] {
+            guard availability[SourceID(s)] == .available, let chats = discovered[SourceID(s)] else { continue }
+            for c in chats where c.isGroup {
+                if let m = try? await members(c.id), HouseholdEligibility.isEligible(chatMembers: m, others: h.others) { out.append(c) }
+            }
+        }
+        eligibleChats = out.sorted { (h.isShared($0.id) ? 0 : 1, -$0.count) < (h.isShared($1.id) ? 0 : 1, -$1.count) }
+    }
+    func householdSyncNow(quiet: Bool = false) {
+        guard let h = household else { return }
+        let root = knowledge.rootURL, store = self.store
+        Task.detached { [weak self] in
+            do {
+                let r = try await RunCoordinator.syncHousehold(h, root: root, store: store, now: Date())
+                await MainActor.run { self?.householdLastSync = r; self?.set(SettingKey.householdLastSync, self?.json(r) ?? ""); if !quiet { self?.announcement = "Household synced: \(r.line)." }; Task { await self?.reload() } }
+            } catch { await MainActor.run { if !quiet { self?.announcement = "Couldn't sync the household: \(error.localizedDescription)" } } }
+        }
+    }
+
     // MARK: vault
 
     func setICloudMode(_ mode: String) {
@@ -439,7 +489,7 @@ extension AppModel {
     /// Two-way sync every 15 minutes while the app is open, so a note edited on the phone comes back the same afternoon.
     func startSyncTimer() {
         syncTimer?.invalidate()
-        syncTimer = Timer.scheduledTimer(withTimeInterval: 15 * 60, repeats: true) { [weak self] _ in Task { @MainActor in if self?.icloudMode == "twoway" { self?.syncNow(quiet: true) } } }
+        syncTimer = Timer.scheduledTimer(withTimeInterval: 15 * 60, repeats: true) { [weak self] _ in Task { @MainActor in if self?.icloudMode == "twoway" { self?.syncNow(quiet: true) }; if self?.household != nil { self?.householdSyncNow(quiet: true) } } }
     }
     func syncNow(quiet: Bool = false) {
         guard icloudMode != "off", let dest = Vault.icloudFolder else { return }

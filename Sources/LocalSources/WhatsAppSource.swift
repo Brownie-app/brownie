@@ -25,6 +25,17 @@ public struct WhatsAppSource: Source {
 
     private let log = Log("source.whatsapp")
 
+    /// The members of a group chat — names where WhatsApp has them, else the phone from the JID — for the household's eligibility check.
+    public func members(of bucket: BucketID) async throws -> [String] {
+        let pk = Int64(bucket.rawValue.dropFirst("whatsapp:".count)) ?? 0
+        return try WALSafeCopy.withCopy(of: Self.database) { db in
+            try db.query("SELECT ZCONTACTNAME AS n, ZMEMBERJID AS j FROM ZWAGROUPMEMBER WHERE ZCHATSESSION=?", [.int(pk)]).flatMap { r -> [String] in
+                let jid = r["j"].text ?? "", phone = String(jid.split(separator: "@").first ?? "")
+                return [r["n"].text, phone.isEmpty ? nil : "+" + phone].compactMap { $0 }
+            }
+        }
+    }
+
     public func discoverBuckets() async throws -> [BucketInfo] {
         try WALSafeCopy.withCopy(of: Self.database) { db in
             do { return try Self.sessions(db) }

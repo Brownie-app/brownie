@@ -14,7 +14,7 @@ import TelegramSource
 struct SettingsView: View {
     @EnvironmentObject var m: AppModel
     @Environment(\.theme) var t
-    let tabs = ["Sources", "Knowledge", "Brain", "Proactive & Hands", "Privacy & Cloud", "Overnight", "About"]
+    let tabs = ["Sources", "Knowledge", "Brain", "Proactive & Hands", "Privacy & Cloud", "Overnight", "Household", "About"]
     @State private var tab = "Sources"
 
     var body: some View {
@@ -28,6 +28,7 @@ struct SettingsView: View {
                     case "Proactive & Hands": ProactivePane()
                     case "Privacy & Cloud": PrivacyPane()
                     case "Overnight": OvernightPane()
+                    case "Household": HouseholdPane()
                     case "About": AboutPane()
                     default: SourcesPane()
                     }
@@ -680,5 +681,84 @@ struct SlackTokenSheet: View {
             SecureField("xoxp-…", text: $token).textFieldStyle(.roundedBorder)
             HStack { Spacer(); BButton(title: "Cancel", kind: .quiet) { dismiss() }; BButton(title: "Use token", kind: .primary) { m.useSlackToken(token); dismiss() }.disabled(!token.hasPrefix("xoxp-")) }
         }.padding(20).frame(width: 460)
+    }
+}
+
+
+// MARK: Household
+
+/// Two people, two Macs, one shared memory of what they do together. Built for one other person now; the model holds a list.
+struct HouseholdPane: View {
+    @EnvironmentObject var m: AppModel
+    @Environment(\.theme) var t
+    @State private var name = ""
+    @State private var phone = ""
+    @State private var folder: URL? = nil
+    var body: some View {
+        H2(text: "A household"); Sub(text: "Two people, two Macs, one shared memory of the things you do together. Each of you keeps your own Brownie; only the chats you are both in are shared.")
+        if let h = m.household {
+            CardBox(padding: 18) {
+                HStack(spacing: 14) {
+                    MemberAvatars(household: h, size: 34)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Sharing with \(h.othersLine)").font(.system(size: 15, weight: .semibold))
+                        Text("Since \(h.since.formatted(date: .abbreviated, time: .omitted)) · \(m.householdLastSync.map { "synced \($0.at.formatted(date: .omitted, time: .shortened)) · \($0.line)" } ?? "not synced yet") · folder \(h.folderPath.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~"))").font(.system(size: 11)).foregroundStyle(t.ink2)
+                    }
+                    Spacer()
+                    BButton(title: "Sync now", kind: .quiet) { m.householdSyncNow() }
+                    BButton(title: "Leave the household", kind: .destructive) { m.leaveHousehold() }
+                }
+            }
+            ForEach(h.others) { o in
+                SettingRow(title: o.name, detail: "Their number, so Brownie can tell which group chats they're in") {
+                    TextField("+91 …", text: Binding(get: { o.phone.map { "+" + $0 } ?? "" }, set: { m.setHouseholdMemberPhone(o.id, $0) })).textFieldStyle(.roundedBorder).frame(width: 170)
+                }
+            }
+            H2(text: "Shared chats").padding(.top, 6)
+            Sub(text: "Only group chats \(h.othersLine) is also in can be shared — Brownie checks the members. Turn one on and both Macs write to the same note; nothing from a chat they aren't in ever crosses over.")
+            CardBox(padding: 0) {
+                VStack(spacing: 0) {
+                    if m.checkingEligible { HStack(spacing: 8) { ProgressView().controlSize(.small); Text("Checking who is in which chat…").font(.system(size: 12)).foregroundStyle(t.ink2) }.padding(14) }
+                    else if m.eligibleChats.isEmpty { Text(h.others.allSatisfy { $0.phone == nil } ? "Add \(h.othersLine)'s number above — group chats are matched by it." : "No group chat has \(h.othersLine) in it yet, or WhatsApp / Messages aren't on and read. Settings → Sources.").font(.system(size: 12)).foregroundStyle(t.ink2).padding(14) }
+                    ForEach(m.eligibleChats) { b in
+                        SettingRow(title: b.name, detail: "\(b.id.rawValue.hasPrefix("whatsapp") ? "WhatsApp" : "Messages") · \(b.detail) · \(h.othersLine) is in it" + (h.isShared(b.id) ? " · shared as Groups/\(b.name).md" : "")) { Toggle2(on: Binding(get: { h.isShared(b.id) }, set: { _ in m.toggleSharedChat(b) })) }.padding(.horizontal, 16)
+                        Divider()
+                    }
+                    SettingRow(title: "Shared calendar", detail: "Events on a calendar you both subscribe to: briefs and due nudges for both of you") { Toggle2(on: Binding(get: { h.calendarShared }, set: { v in var hh = h; hh.calendarShared = v; m.household = hh; m.set(SettingKey.household, m.json(hh)) })) }.padding(.horizontal, 16)
+                }
+            }
+            HStack(alignment: .top, spacing: 14) {
+                CardBox(padding: 16) { VStack(alignment: .leading, spacing: 6) { HStack(spacing: 8) { Image(systemName: "lock").foregroundStyle(t.ok); Text("Never shared").fontWeight(.semibold) }; Text("Your direct messages, your mail, your files, your Voice Memos, your People/ notes, your loops with anyone outside the household, and every card about them. \(h.othersLine)'s Brownie never sees them, and yours never sees theirs.").font(.system(size: 12.5)).foregroundStyle(t.ink2) }.frame(maxWidth: .infinity, alignment: .leading) }
+                CardBox(padding: 16) { VStack(alignment: .leading, spacing: 6) { HStack(spacing: 8) { Image(systemName: "person.2").foregroundStyle(t.accentInk); Text("What crosses over").fontWeight(.semibold) }; Text("Notes about the shared chats, plans you both are part of (Household/), who is handling what, and one line when the other of you already dealt with something — so you don't both reply to the school.").font(.system(size: 12.5)).foregroundStyle(t.ink2) }.frame(maxWidth: .infinity, alignment: .leading) }
+            }
+        } else {
+            CardBox(padding: 18) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Start a household").font(.system(size: 15, weight: .semibold))
+                    Text("Give the person's name and, so Brownie can tell which group chats they're in, their number. The shared folder lives in iCloud Drive — share it with them through Files › Share so their Mac syncs it too.").font(.system(size: 12.5)).foregroundStyle(t.ink2)
+                    HStack(spacing: 10) {
+                        TextField("Their name", text: $name).textFieldStyle(.roundedBorder).frame(width: 200)
+                        TextField("+91 98450 67890", text: $phone).textFieldStyle(.roundedBorder).frame(width: 170)
+                        BButton(title: folder.map { $0.lastPathComponent } ?? "Folder: iCloud Drive/Brownie Household", kind: .quiet) { let p = NSOpenPanel(); p.canChooseDirectories = true; p.canChooseFiles = false; p.canCreateDirectories = true; if p.runModal() == .OK { folder = p.url } }
+                    }
+                    HStack { Spacer(); BButton(title: "Start sharing", kind: .primary) { m.startHousehold(with: name, phone: phone, folder: folder) }.disabled(name.trimmingCharacters(in: .whitespaces).isEmpty) }
+                }
+            }
+        }
+    }
+}
+
+struct MemberAvatars: View {
+    @Environment(\.theme) var t
+    let household: Household
+    var size: CGFloat = 22
+    var body: some View {
+        HStack(spacing: -size * 0.3) {
+            ForEach(household.members) { mm in
+                Text(String(mm.firstName.prefix(1)).uppercased()).font(.system(size: size * 0.42, weight: .semibold))
+                    .frame(width: size, height: size).background(Circle().fill(mm.isMe ? t.accentSoft : Color(hex: 0x5878C8).opacity(0.16))).foregroundStyle(mm.isMe ? t.accentInk : Color(hex: 0x3B5BB5))
+                    .overlay(Circle().stroke(t.side, lineWidth: 2))
+            }
+        }
     }
 }

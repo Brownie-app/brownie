@@ -12,6 +12,11 @@ The first public build.
 - Two-way vault sync with iCloud Drive: edits on the phone come back, Brownie's work goes out, a conflict keeps both under a heading.
 - Ask from ⌘⇧Space: a question is answered inline with citations; anything else is a goal for Hands.
 - Due-aware nudges the morning before a deadline; recipes that run when a file arrives in a folder.
+- Cards that learn: “Not right…” with a reason becomes a standing instruction; the Sunday letter owns the week's corrections.
+- The evidence viewer: the original chat window or the recording behind any card line or citation, read on demand and never stored.
+- The quiet check before cards show: closed loops, fired twins, missing files and old notes (Settings: how old is too old).
+- Meeting follow-ups: promises said out loud become loops with a timestamp and “Hear it”. Today.md carries the cards to your phone; a tick there marks the card done.
+- A household: share only the group chats you're both in with the person you live with; an “Ours” band says who's on what and when they already did it.
 - Loops — promises both ways, came-back cards, nudges. Pre-meeting briefs. The Sunday letter.
 - Teach Hands: recipes by demonstration with an editor; replay verifies the right chat before typing.
 - Ask, with citations that open the original. The knowledge base as an Obsidian vault, with an iCloud Drive mirror.

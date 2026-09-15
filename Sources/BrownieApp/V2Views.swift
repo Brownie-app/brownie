@@ -15,6 +15,7 @@ struct LoopsView: View {
         switch tab {
         case "You owe": return m.loops.filter { $0.status == .open && $0.direction == .mine }.sorted { $0.openedAt < $1.openedAt }
         case "Owed to you": return m.loops.filter { $0.status == .open && $0.direction == .theirs }.sorted { $0.openedAt < $1.openedAt }
+        case "Ours": return m.loops.filter { $0.owner != nil }.sorted { ($0.status == .open ? 0 : 1, $0.openedAt) < ($1.status == .open ? 0 : 1, $1.openedAt) }
         default: return m.loops.filter { $0.status != .open }.sorted { ($0.closedAt ?? .distantPast) > ($1.closedAt ?? .distantPast) }
         }
     }
@@ -24,7 +25,7 @@ struct LoopsView: View {
         let closed = m.loops.filter { $0.status != .open }.count
         VStack(spacing: 0) {
             Toolbar(title: "Loops", subtitle: "Promises in both directions, found in your chats and mail") {
-                Segmented(options: ["You owe", "Owed to you", "Closed"], selection: $tab)
+                Segmented(options: m.household == nil ? ["You owe", "Owed to you", "Closed"] : ["You owe", "Owed to you", "Ours", "Closed"], selection: $tab)
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
@@ -88,7 +89,7 @@ struct LoopRow: View {
         HStack(alignment: .center, spacing: 12) {
             ZStack { Circle().fill(t.ctl2).frame(width: 28, height: 28); Text(String(loop.person.prefix(1)).uppercased()).font(.system(size: 11, weight: .semibold)).foregroundStyle(t.ink2) }
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) { Text(loop.person).fontWeight(.semibold); Text("·").foregroundStyle(t.ink2); Text(loop.what).lineLimit(1) }
+                HStack(spacing: 6) { Text(loop.person).fontWeight(.semibold); Text("·").foregroundStyle(t.ink2); Text(loop.what).lineLimit(1); if let o = loop.owner { OwnerChip(owner: o) } }
                 HStack(spacing: 6) {
                     Text("“\(loop.quote)” · \(loop.sourceLabel)").font(.system(size: 11)).foregroundStyle(t.ink2).lineLimit(1)
                     if loop.sourceLabel.hasPrefix("Recording") || loop.sourceLabel.hasPrefix("Voice Memo") {

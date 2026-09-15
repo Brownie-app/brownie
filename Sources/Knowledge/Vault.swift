@@ -78,13 +78,13 @@ extension Vault {
     /// - changed only on the Mac → copied to the phone (Brownie's night's work goes out);
     /// - changed on both → the phone's text stays on top, Brownie's version goes under its own heading — nothing you wrote is overwritten;
     /// - new on the phone → added; deleted on the phone → restored from the Mac (the Mac is the truth for deletions).
-    public static func sync(_ root: URL, to dest: URL, now: Date = Date()) throws -> SyncReport {
+    public static func sync(_ root: URL, to dest: URL, now: Date = Date(), base baseName: String = ".sync", include: (String) -> Bool = { _ in true }) throws -> SyncReport {
         let fm = FileManager.default
         try fm.createDirectory(at: dest, withIntermediateDirectories: true)
-        let base = root.appendingPathComponent(".sync")
+        let base = root.appendingPathComponent(baseName)
         try fm.createDirectory(at: base, withIntermediateDirectories: true)
         var report = SyncReport(at: now)
-        let macNotes = notes(under: root), phoneNotes = notes(under: dest)
+        let macNotes = notes(under: root).filter { include($0.key) }, phoneNotes = notes(under: dest).filter { include($0.key) }
         for rel in Set(macNotes.keys).union(phoneNotes.keys) {
             let macURL = root.appendingPathComponent(rel), phoneURL = dest.appendingPathComponent(rel), baseURL = base.appendingPathComponent(rel)
             let mac = macNotes[rel], phone = phoneNotes[rel]
@@ -136,5 +136,19 @@ extension Vault {
     static func copy(_ from: URL, to: URL) throws {
         try FileManager.default.createDirectory(at: to.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? FileManager.default.removeItem(at: to); try FileManager.default.copyItem(at: from, to: to)
+    }
+}
+
+/// The household's shared folder: `Household/` notes and the group-chat notes every member is in, two-way,
+/// with its own base copies so it never confuses the phone sync. `People/` and everything else stay home.
+public enum HouseholdVault {
+    public static let defaultFolderName = "Brownie Household"
+    public static var defaultFolder: URL? { Vault.icloudFolder?.deletingLastPathComponent().appendingPathComponent(defaultFolderName) }
+    /// Which vault paths cross over: the Household folder, plus the notes of the shared group chats.
+    public static func isShared(_ rel: String, sharedGroupNotes: Set<String>) -> Bool {
+        rel.hasPrefix("Household/") || sharedGroupNotes.contains(rel)
+    }
+    public static func sync(_ root: URL, to shared: URL, sharedGroupNotes: Set<String>, now: Date = Date()) throws -> SyncReport {
+        try Vault.sync(root, to: shared, now: now, base: ".household-sync", include: { isShared($0, sharedGroupNotes: sharedGroupNotes) })
     }
 }

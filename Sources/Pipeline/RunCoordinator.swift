@@ -125,7 +125,8 @@ public actor RunCoordinator {
                 let openLoops = await LoopLedger.load(store).filter { $0.status == .open }
                 let cal = await deps.calendarText()
                 deps.stage("Judge what matters", "\(recent.count) summaries from the last 7 days\(cal == nil ? "" : ", the calendar for 8 days"), \(openLoops.count) open loops")
-                let (findings, u1) = try await Judge(brain: brain, clock: deps.clock).judge(summaries: recent, calendar: cal, instructions: instructions, openLoops: openLoops, max: 8)
+                let household = Self.loadHousehold(try await store.value(SettingKey.household))
+                let (findings, u1) = try await Judge(brain: brain, clock: deps.clock).judge(summaries: recent, calendar: cal, instructions: instructions, openLoops: openLoops, max: 8, household: household)
                 usage = usage + u1
                 // Promises said out loud: parsed from transcript summaries, deterministically, so none is missed.
                 let spoken = recent.filter { $0.kind == .transcript }.flatMap { TranscriptPromises.parse(summary: $0.text, recording: $0.title.isEmpty ? $0.bucketName : $0.title, date: $0.itemDate ?? $0.createdAt, now: deps.clock.now()) }
@@ -174,6 +175,14 @@ public actor RunCoordinator {
                 try await store.wipeSummaries()
                 let legacyMirror = try await store.value(SettingKey.icloudMirror) ?? "false"
                 let mode = try await store.value(SettingKey.icloudMode) ?? (legacyMirror == "true" ? "mirror" : "off")
+                // The household: shared notes go to the shared folder; what the others closed comes back.
+                if let household, let root = (deps.knowledge as? FileKnowledgeStore)?.rootURL {
+                    deps.stage("Sync the household", "Household/ notes and \(household.sharedBuckets.count) shared chat(s) with \(household.othersLine)")
+                    do {
+                        let r = try await Self.syncHousehold(household, root: root, store: store, now: deps.clock.now())
+                        try await store.setValue(SettingKey.householdLastSync, String(data: JSONEncoder().encode(r), encoding: .utf8))
+                    } catch { log.warn("household sync: \(error)") }
+                }
                 if let root = (deps.knowledge as? FileKnowledgeStore)?.rootURL {
                     // Today.md: the morning's cards as checkboxes, for the phone.
                     try? TodayNote.render(cards: kept + fresh, date: deps.clock.now()).write(to: root.appendingPathComponent(TodayNote.path), atomically: true, encoding: .utf8)
@@ -279,6 +288,34 @@ public actor RunCoordinator {
         return Set(ids.map(BucketID.init))
     }
 
+    public static func loadHousehold(_ json: String?) -> Household? {
+        guard let j = json, let d = j.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(Household.self, from: d)
+    }
+    /// Notes out, ledger merged, closures by the others applied to my loops and cards. Returns the notes' sync report.
+    public static func syncHousehold(_ h: Household, root: URL, store: any RunStore, now: Date) async throws -> SyncReport {
+        let shared = URL(fileURLWithPath: h.folderPath, isDirectory: true)
+        let groupNotes = Set(h.sharedBuckets.compactMap { b -> String? in nil }) // group-note paths are matched by name below
+        let names = Set(try await Self.sharedGroupNotePaths(h, store: store))
+        let report = try HouseholdVault.sync(root, to: shared, sharedGroupNotes: names.union(groupNotes), now: now)
+        // the ledger
+        var loops = await LoopLedger.load(store)
+        let mine = HouseholdLedger.entries(from: loops, me: h.me?.id ?? "me", now: now)
+        let ledgerURL = shared.appendingPathComponent(HouseholdLedger.file)
+        let merged = HouseholdLedger.merge(HouseholdLedger.read(ledgerURL), mine)
+        try HouseholdLedger.write(merged, to: ledgerURL)
+        let closed = HouseholdLedger.closures(for: loops, ledger: merged, household: h, now: now)
+        if closed != loops { loops = closed; await LoopLedger.save(loops, store) }
+        var cards = try await loadCards(store: store)
+        let marked = HouseholdLedger.markHandled(cards, ledger: merged, household: h)
+        if marked != cards { cards = marked; try await saveCards(cards, store: store) }
+        return report
+    }
+    /// The vault paths of the shared chats' notes: `Groups/<chat name>.md`, by the names the sources report.
+    static func sharedGroupNotePaths(_ h: Household, store: any RunStore) async throws -> [String] {
+        guard let json = try await store.value(SettingKey.householdBucketNames), let d = json.data(using: .utf8), let names = try? JSONDecoder().decode([String: String].self, from: d) else { return [] }
+        return h.sharedBuckets.compactMap { names[$0] }.map { "Groups/\($0).md" }
+    }
     public static func loadFeedback(_ json: String?) -> [CardFeedback] {
         guard let j = json, let d = j.data(using: .utf8) else { return [] }
         return (try? JSONDecoder().decode([CardFeedback].self, from: d)) ?? []

@@ -7,7 +7,7 @@ One card is ONE action in ONE app. If a candidate needs two things — a message
 
 Recipe shapes (pick one): {"kind":"imessage","to":"<name>","body":"<draft>","attachments":[]} · {"kind":"whatsapp","chat":"<name>","phone":"<digits from the summary label, e.g. 4915551234567, if shown>","body":"<draft>"} · {"kind":"mail","to":"<name or address>","subject":"…","body":"…","attachments":[]} · {"kind":"calendar","title":"…","startISO":"…","endISO":"…","notes":"…"} · {"kind":"note","relativePath":"Work/Brief.md","body":"…"} · {"kind":"browser","url":"…"} · {"kind":"computerUse","goal":"…"}.
 
-A candidate marked "came back" is a nudge: the user already wrote once and got nothing; the draft is short, warm and easy to answer, never a repeat of the first message and never a reproach. Carry each candidate's `loopID` and `cameBack` into its card unchanged.
+A candidate marked "came back" is a nudge: the user already wrote once and got nothing; the draft is short, warm and easy to answer, never a repeat of the first message and never a reproach. Carry each candidate's `loopID`, `cameBack` and `owner` into its card unchanged. A candidate marked HOUSEHOLD is from a chat the user shares with the people they live with: its `why` may say who is on it ("Priya is doing the cake; the booking is still open").
 
 Never fire anything. You stage; the user presses Send. Keep at most {{max}} cards, strongest first, and never add an item the judge did not list.
 
@@ -21,4 +21,4 @@ CANDIDATES:
 SUMMARIES FROM THE LAST 7 DAYS:
 {{summaries}}
 
-When you have verified and prepared everything, call `finish` with the JSON: {"cards":[{"title","sourceLabel","why","actionLabel","dueLine","urgency","draftLabel","draft","recipe":{…},"evidence":[{"source","when","text"}],"verification":"verified|unverified","verifiedLine","loopID":"<from the candidate or null>","cameBack":true|false}],"dropped":[{"title","reason"}]}
+When you have verified and prepared everything, call `finish` with the JSON: {"cards":[{"title","sourceLabel","why","actionLabel","dueLine","urgency","draftLabel","draft","recipe":{…},"evidence":[{"source","when","text"}],"verification":"verified|unverified","verifiedLine","loopID":"<from the candidate or null>","cameBack":true|false,"owner":"<from the candidate or null>"}],"dropped":[{"title","reason"}]}

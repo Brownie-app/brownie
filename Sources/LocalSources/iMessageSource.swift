@@ -19,6 +19,18 @@ public struct iMessageSource: Source {
         return WALSafeCopy.isReadable(Self.database) ? .available : .needsPermission(.fullDiskAccess)
     }
 
+    /// The handles (numbers, addresses) and their contact names in a chat, for the household's eligibility check.
+    public func members(of bucket: BucketID) async throws -> [String] {
+        let chatID = Int64(bucket.rawValue.dropFirst("imessage:".count)) ?? 0
+        return try WALSafeCopy.withCopy(of: Self.database) { db in
+            let names = ContactNames()
+            return try db.query("SELECT h.id AS id FROM chat_handle_join j JOIN handle h ON h.ROWID=j.handle_id WHERE j.chat_id=?", [.int(chatID)]).flatMap { r -> [String] in
+                guard let id = r["id"].text else { return [] }
+                return [id, names.resolve(id)]
+            }
+        }
+    }
+
     public func discoverBuckets() async throws -> [BucketInfo] {
         try WALSafeCopy.withCopy(of: Self.database) { db in
             let rows = try db.query("""

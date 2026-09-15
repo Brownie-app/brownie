@@ -14,6 +14,9 @@ public enum SettingKey {
     public static let cardsPerMorning = "proactive.cardsPerMorning"
     public static let notifyOnReady = "proactive.notify"
     public static let standingInstructions = "proactive.instructions"
+    public static let household = "household.config"              // JSON Household
+    public static let householdLastSync = "household.lastSync"    // JSON SyncReport
+    public static let householdBucketNames = "household.bucketNames"  // JSON [bucket raw value: chat name], kept by the app
     public static let feedback = "proactive.feedback"             // JSON [CardFeedback], newest last
     public static let handsHotkey = "hands.hotkey"                // rightCommand | rightOption | off
     public static let handsSpeed = "hands.speed"                  // fast | balanced | careful

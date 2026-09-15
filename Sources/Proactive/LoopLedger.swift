@@ -33,7 +33,7 @@ public enum LoopLedger {
         let inter = wa.intersection(wb).count
         return Double(inter) / Double(min(wa.count, wb.count)) >= 0.5
     }
-    static func words(_ s: String) -> Set<String> {
+    public static func words(_ s: String) -> Set<String> {
         Set(s.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init).filter { $0.count > 2 && !["the", "and", "for", "with", "about", "that", "this", "you", "your"].contains($0) })
     }
 

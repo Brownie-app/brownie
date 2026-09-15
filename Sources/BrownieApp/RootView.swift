@@ -90,6 +90,11 @@ struct Sidebar: View {
                         Text(s.requests == 0 ? "0 bytes left your Mac" : "\(s.bytes.formattedBytes) left your Mac · \(s.requests) request\(s.requests == 1 ? "" : "s")").font(.system(size: 11)).foregroundStyle(t.ink2).underline()
                     }.buttonStyle(.plain)
                 }
+                if let h = m.household {
+                    Button { m.openSettings(.household) } label: {
+                        HStack(spacing: 8) { MemberAvatars(household: h, size: 18); Text("Household with \(h.othersLine)" + (m.householdLastSync.map { " · synced \($0.at.formatted(date: .omitted, time: .shortened))" } ?? "")).font(.system(size: 11)).foregroundStyle(t.ink2).lineLimit(1) }
+                    }.buttonStyle(.plain)
+                }
                 Wordmark().padding(.top, 6)
                 HStack(spacing: 6) { Image(systemName: "sparkle").font(.system(size: 10)); Text("Brain: \(m.brainName)") }.font(.system(size: 11)).foregroundStyle(t.ink2)
             }.padding(16).overlay(alignment: .top) { Rectangle().fill(t.sep).frame(height: 1) }

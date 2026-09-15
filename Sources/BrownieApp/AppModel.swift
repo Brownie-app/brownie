@@ -45,7 +45,7 @@ final class AppModel: ObservableObject {
     func openNote(_ relativePath: String) { pendingNote = relativePath; overlay = .none; screen = .notes }
     @Published var overlay: Overlay = .none
     @Published var settingsTab = 0
-    enum SettingsTab: Int { case sources = 0, knowledge, brain, hands, privacy, overnight, about }
+    enum SettingsTab: Int { case sources = 0, knowledge, brain, hands, privacy, overnight, household, about }
     func openSettings(_ t: SettingsTab) { overlay = .none; screen = .settings; settingsTab = t.rawValue }
     @Published var appearance: String = "system"
 
@@ -84,6 +84,12 @@ final class AppModel: ObservableObject {
     @Published var instructions = ""
     /// Every thumbs-down, newest last. Folded into the night's instructions by FeedbackDigest.
     @Published var feedback: [CardFeedback] = []
+    /// The household, when there is one: members, the shared folder, the chats shared.
+    @Published var household: Household?
+    @Published var householdLastSync: SyncReport?
+    /// Group chats every other member is in — the only ones that can be shared.
+    @Published var eligibleChats: [BucketInfo] = []
+    @Published var checkingEligible = false
     /// The card whose "Something else…" sheet is open.
     @Published var feedbackNoteFor: String?
     /// The evidence being shown in its own sheet: the chat window, or the clip.
@@ -211,6 +217,8 @@ final class AppModel: ObservableObject {
         instructions = await v(SettingKey.standingInstructions) ?? ""
         staleDays = Int(await v(SettingKey.staleDays) ?? "") ?? QuietCheck.defaultStaleDays
         feedback = RunCoordinator.loadFeedback(await v(SettingKey.feedback))
+        household = RunCoordinator.loadHousehold(await v(SettingKey.household))
+        if let j = await v(SettingKey.householdLastSync), let d = j.data(using: .utf8) { householdLastSync = try? JSONDecoder().decode(SyncReport.self, from: d) }
         handsHotkey = await v(SettingKey.handsHotkey) ?? "rightCommand"
         handsSpeed = await v(SettingKey.handsSpeed) ?? "balanced"
         let (h, m) = OvernightScheduler.Config.parse(await v(SettingKey.overnightTime))
