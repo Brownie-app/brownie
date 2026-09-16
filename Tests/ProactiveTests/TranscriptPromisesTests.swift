@@ -44,6 +44,22 @@ import Domain
         #expect(TranscriptPromises.parse(summary: #"At [03:12] the user says "I'll send it by Thursday" to Meera."#, recording: "Other call", date: date, now: now)[0].loop.id != a)
     }
 
+    @Test func aPromiseFromAnOldRecordingIsNotBornLapsed() throws {
+        // "Read further back", or a four-month-old memo dropped in the folder: the recording is 95 days old, the promise is news tonight
+        let old = now.addingTimeInterval(-95 * 86400)
+        let f = TranscriptPromises.parse(summary: #"At [03:12] the user says "I'll send Meera the villa share" to Meera."#, recording: "Old memo", date: old, now: now)
+        #expect(f.count == 1 && f[0].loop.openedAt == old && f[0].loop.noticedAt == now, "dated by the recording, noticed tonight")
+        let merged = LoopLedger.merge(existing: [], found: [f[0].loop], updates: [], items: [], now: now)
+        #expect(merged.count == 1 && merged[0].status == .open, "the night it is found it is open, so its card reaches the morning")
+        #expect(StatusRules.lapse(loops: merged, now: now.addingTimeInterval(89 * 86400))[0].status == .open, "its term runs from the night Brownie learned of it")
+        #expect(StatusRules.lapse(loops: merged, now: now.addingTimeInterval(90 * 86400))[0].status == .lapsed)
+        // a ledger written before the field existed: no noticedAt, and the day it was said still decides
+        var bare = try JSONSerialization.jsonObject(with: JSONEncoder().encode(f[0].loop)) as! [String: Any]
+        #expect(bare["noticedAt"] != nil); bare["noticedAt"] = nil
+        let decoded = try JSONDecoder().decode(Loop.self, from: JSONSerialization.data(withJSONObject: bare))
+        #expect(decoded.noticedAt == nil && StatusRules.lapse(loops: [decoded], now: now)[0].status == .lapsed)
+    }
+
     @Test func onlyTheUsersPromisesBecomeCards() {
         let f = parse(#"At [03:12] the user says "I'll send it by Thursday" to Meera. At [05:40] Meera says "I'll share the deck"."#)
         let c = TranscriptPromises.candidates(f)

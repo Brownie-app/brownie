@@ -48,8 +48,32 @@ import Domain
         let judged = [first[0].id: first[0].answeredAt!]
         #expect(AskDetector.detect([ask, lol], person: "Nitesh", bucket: b, since: since, judged: judged) == first, "nothing after it yet: the judged reply stands, so the ask still says the user wrote but not about it")
         let later = AskDetector.detect([ask, lol, sent], person: "Nitesh", bucket: b, since: since, judged: judged)
-        #expect(later.count == 1 && later[0].id == first[0].id && later[0].answeredAt == sent.date && later[0].reply == "here are the estimates", "the user's next message after the judged one is the reply now")
+        #expect(later.count == 1 && later[0].id == first[0].id && later[0].answeredAt == sent.date && later[0].reply == "lol\nhere are the estimates", "the user's next message after the judged one is the reply now, with the judged one before it for the judge to read")
         #expect(AskDetector.detect([ask, lol, sent], person: "Nitesh", bucket: b, since: since)[0].reply == "lol", "unjudged, the first reply is still the one offered")
+    }
+
+    @Test func oneNightMovesPastEveryMessageAfterTheJudgedReply() {
+        // Monday the question, "ha" judged off-topic; six unrelated messages over two days; Wednesday the answer
+        let day = 1440.0, since = t0.addingTimeInterval(-4 * 86400), b = BucketID("whatsapp:507")
+        let ask = m(1, "can you send the estimates?", mins: -3 * day), ha = m(2, "ha", me: true, mins: -3 * day + 30)
+        let chatter = ["see you at the ground", "traffic is mad today", "did you watch the match", "lunch at 1", "running late", "call you after"].enumerated().map { m(10 + $0.offset, $0.element, me: true, mins: -2 * day + Double($0.offset) * 60) }
+        let sent = m(30, "here are the estimates, sorry for the wait", me: true, mins: -30)
+        let judged = [AskDetector.detect([ask, ha], person: "Nitesh", bucket: b, since: since)[0].id: ha.date]
+        let night = AskDetector.detect([ask, ha] + chatter + [sent], person: "Nitesh", bucket: b, since: since, judged: judged)
+        #expect(night.count == 1 && night[0].answeredAt == sent.date, "paired with the newest message, not the first after the judged one")
+        let lines = night[0].reply!.split(separator: "\n").map(String.init)
+        #expect(lines.count == 6 && lines.last == "here are the estimates, sorry for the wait" && lines.first == "traffic is mad today", "the judge reads the last six, newest last")
+        #expect(night[0].reply!.count <= 400, "within the judge's prompt")
+        // nothing new the night after: the same message is paired with the same text, so the judgement about it is kept
+        let again = AskDetector.detect([ask, ha] + chatter + [sent], person: "Nitesh", bucket: b, since: since, judged: [night[0].id: sent.date])
+        #expect(again[0].answeredAt == sent.date && again[0].reply == night[0].reply)
+        // the same six unrelated messages with no answer yet: paired with the newest, all six shown, and the one before them left behind
+        let quiet = AskDetector.detect([ask, ha] + chatter, person: "Nitesh", bucket: b, since: since, judged: judged)
+        #expect(quiet[0].answeredAt == chatter.last!.date && quiet[0].reply == chatter.map(\.text).joined(separator: "\n"))
+        // a long message keeps its share of the room, so the newest is never cut away by the ones before it
+        let long = m(40, String(repeating: "estimates ", count: 60), me: true, mins: -20)
+        let cut = AskDetector.detect([ask, ha] + chatter + [long], person: "Nitesh", bucket: b, since: since, judged: judged)[0].reply!
+        #expect(cut.split(separator: "\n").count == 6 && cut.split(separator: "\n").last!.count == 65 && cut.split(separator: "\n").last!.hasPrefix("estimates estimates"))
     }
 
     /// A source of two direct chats that remembers how far back each was read.

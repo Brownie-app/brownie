@@ -109,11 +109,12 @@ public enum StatusRules {
         }
     }
     /// An open loop nobody touched — no card fired, never came back — is let go 90 days after its last news: the day it
-    /// was opened, or its due date when it has one, so a dated loop is never let go before its date.
+    /// was opened or the night Brownie learned of it, whichever is later (a promise from an old recording read late is
+    /// news from that night, not born lapsed), or its due date when it has one, so a dated loop is never let go before its date.
     public static func lapse(loops: [Loop], now: Date) -> [Loop] {
         loops.map { l in
             guard l.status == .open, l.firedCardIDs.isEmpty, l.cameBackCount == 0 else { return l }
-            let lastNews = max(l.openedAt, l.dueDate ?? l.openedAt)
+            let lastNews = max(max(l.openedAt, l.noticedAt ?? l.openedAt), l.dueDate ?? l.openedAt)
             guard now.timeIntervalSince(lastNews) >= loopLapse else { return l }
             var l = l; l.status = .lapsed; l.lapsedAt = now; l.closedAt = now; l.closedBy = "lapsed"; return l
         }

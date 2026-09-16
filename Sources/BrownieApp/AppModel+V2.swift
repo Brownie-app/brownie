@@ -652,7 +652,8 @@ extension AppModel {
         Task {
             let registry = PersonRegistry(vault: knowledge.rootURL); await registry.load()
             guard let k = await registry.person(keep), let d = await registry.person(drop), keep != drop else { await reloadPeople(); return }
-            let dropKeys = Set(d.keys)
+            // The roster as it stood: a row is renamed only when it resolved to the dropped person, never for sharing their key alone.
+            let before = await registry.people()
             await registry.merge(keep: keep, drop: drop)
             if let dp = d.notePath, let dn = try? await knowledge.note(at: dp) {
                 if let kp = k.notePath, let kn = try? await knowledge.note(at: kp) {
@@ -667,10 +668,10 @@ extension AppModel {
                 // No kept note: the dropped note is now theirs, and the registry already points at it.
             }
             var ls = await LoopLedger.load(store); var changed = false
-            for i in ls.indices where dropKeys.contains(PersonKey.normalise(ls[i].person)) && !PersonKey.sameKey(ls[i].person, k.name) { ls[i] = ls[i].renamed(to: k.name); changed = true }
+            for i in ls.indices where PersonRegistry.belonged(label: ls[i].person, handle: nil, to: drop, among: before) && !PersonKey.sameKey(ls[i].person, k.name) { ls[i] = ls[i].renamed(to: k.name); changed = true }
             if changed { await LoopLedger.save(ls, store) }
             var asks = RunCoordinator.loadAsks(try? await store.value(SettingKey.asks)); changed = false
-            for i in asks.indices where dropKeys.contains(PersonKey.normalise(asks[i].person)) && !PersonKey.sameKey(asks[i].person, k.name) { asks[i] = asks[i].renamed(to: k.name); changed = true }
+            for i in asks.indices where PersonRegistry.belonged(label: asks[i].person, handle: asks[i].handle, to: drop, among: before) && !PersonKey.sameKey(asks[i].person, k.name) { asks[i] = asks[i].renamed(to: k.name); changed = true }
             if changed { try? await store.setValue(SettingKey.asks, json(asks)) }
             do { try await registry.save() } catch { announcement = "The people registry couldn't be saved: \(error)" }
             await reload()
