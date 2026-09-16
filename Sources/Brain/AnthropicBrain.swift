@@ -60,6 +60,9 @@ public struct AnthropicBrain: AgenticBrain {
                 var result = ToolOutput("unknown tool \(name)"), isError = false
                 if let tool = byName[name] { do { result = try await tool.run(input) } catch { result = ToolOutput("\(error)"); isError = true } } else { isError = true }
                 onEvent(.toolResult(name: name, summary: String(result.text.prefix(120))))
+                // A tool that ends the run (finish) makes this the last turn: nothing after it in the same
+                // turn runs, and the model is not asked again — the result carries the usage so far.
+                if result.endsRun { return AgentResult(finalText: text, usage: usage, turns: turn) }
                 var content: [[String: Any]] = [["type": "text", "text": result.text]]
                 if let img = result.imageJPEG { content.append(["type": "image", "source": ["type": "base64", "media_type": "image/jpeg", "data": img.base64EncodedString()]]) }
                 var block: [String: Any] = ["type": "tool_result", "tool_use_id": id, "content": content]

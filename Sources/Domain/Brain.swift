@@ -50,11 +50,14 @@ public struct BrainResult: Sendable {
     }
 }
 
-/// What a tool hands back: text, and optionally an image the brain should look at (a screenshot).
+/// What a tool hands back: text, optionally an image the brain should look at (a screenshot), and
+/// whether the run is over. A "finish" tool sets `endsRun`, so the loop returns after that call with
+/// its usage and turn count intact instead of asking the model for another turn or being cancelled.
 public struct ToolOutput: Sendable {
     public let text: String
     public let imageJPEG: Data?
-    public init(_ text: String, imageJPEG: Data? = nil) { self.text = text; self.imageJPEG = imageJPEG }
+    public let endsRun: Bool
+    public init(_ text: String, imageJPEG: Data? = nil, endsRun: Bool = false) { self.text = text; self.imageJPEG = imageJPEG; self.endsRun = endsRun }
 }
 
 /// A tool the agentic brain may call. Implementations are plain closures owned by the caller.

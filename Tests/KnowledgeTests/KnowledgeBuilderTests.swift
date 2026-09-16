@@ -174,25 +174,27 @@ import Platform
         #expect(try await w.store.unmergedSummaries().map(\.id) == [older[0].id, older[1].id, newer[0].id, newer[1].id])
     }
 
-    // MARK: (d) finish ends the loop
+    // MARK: (d) finish ends the loop, as a normal result with its usage
 
-    @Test func finishEndsTheLoopEvenWhenTheBrainWouldKeepGoing() async throws {
+    @Test func finishEndsTheLoopAndThePartReportsItsUsage() async throws {
         let w = try Self.world()
         let rows = try await w.seed(3, from: 0)
-        let after = Counter()
+        let landed = Counter()
         let brain = ScriptedBrain { _, tools in
             try await Self.write(tools, "README.md", "# Done before finish")
-            _ = try await Self.call(tools, "finish", ["summary": "all written"])
-            for i in 0..<500 {
-                try Task.checkCancellation()   // a real brain stops at its next await once its task is cancelled
-                try await Self.write(tools, "Notes/after\(i).md", "# should not land")
-                await after.bump()
+            let out = try await tools.first { $0.name == "finish" }!.run(try JSONSerialization.data(withJSONObject: ["summary": "all written"]))
+            #expect(out.endsRun, "finish tells the brain's loop this turn is the last")
+            #expect(out.text == "finished: all written")
+            // A model that still emits writes in the same turn is refused; nothing lands after finish.
+            for i in 0..<3 {
+                do { try await Self.write(tools, "Notes/after\(i).md", "# should not land"); await landed.bump() } catch {}
             }
         }
         let usage = try await w.builder(brain).sync(summaries: rows, progress: { _ in }, onEvent: { _ in })
-        #expect(usage == .zero, "a part ended by finish reports no usage")
-        #expect(await after.count == 0)
+        #expect(usage == Usage(inputTokens: 10, outputTokens: 1), "a part ended by finish returns normally, usage and all — no cancellation to swallow")
+        #expect(await landed.count == 0)
         #expect(w.read("README.md") == "# Done before finish")
+        #expect(w.read("Notes/after0.md") == nil)
         #expect(try await w.token() == nil)
         #expect(try await w.store.unmergedSummaries().isEmpty, "the part counts as merged")
     }
@@ -204,6 +206,69 @@ import Platform
         let brain = ScriptedBrain { _, tools in try await Self.write(tools, "README.md", "# x"); throw CancellationError() }
         await #expect(throws: CancellationError.self) { try await w.builder(brain).sync(summaries: rows, progress: { _ in }, onEvent: { _ in }) }
         #expect(try await w.store.unmergedSummaries().count == 3, "nothing is marked merged")
+    }
+
+    /// Stop on For You cancels the run's task; that cancellation must reach the brain mid-part, not be
+    /// lost in an unstructured task that runs the whole sync to the end on the user's key.
+    @Test func stopReachesTheBrainMidPartAndTheSyncEndsCancelled() async throws {
+        let w = try Self.world()
+        try await w.seed(3, from: 0)
+        let brain = ScriptedBrain { _, tools in
+            try await Self.write(tools, "README.md", "# started")
+            // A real brain checks its task at every turn; this one polls for up to ten seconds.
+            for _ in 0..<1000 { try Task.checkCancellation(); try await Task.sleep(nanoseconds: 10_000_000) }
+            throw BrainError.badResponse("the cancellation never arrived")
+        }
+        let builder = try w.builder(brain)
+        let run = Task { try await builder.sync(summaries: try await w.store.unmergedSummaries(), progress: { _ in }, onEvent: { _ in }) }
+        try await Task.sleep(nanoseconds: 100_000_000)
+        run.cancel()
+        await #expect(throws: CancellationError.self) { try await run.value }
+        #expect(try await w.store.unmergedSummaries().count == 3, "a part that was stopped is not marked merged")
+        #expect(!FileManager.default.fileExists(atPath: w.live.path), "nothing was swapped live")
+    }
+
+    // MARK: a brain that writes nothing never wedges the next sync
+
+    @Test func aBuildWhoseBrainWritesNothingKeepsItsRowsAndIsRetriedNotWedged() async throws {
+        let w = try Self.world()
+        let first = try await w.seed(4, from: 0)
+        let silent = ScriptedBrain { _, _ in }   // ends every part without a single write
+        await #expect(throws: KnowledgeBuilder.Failure.self) { try await w.builder(silent).sync(summaries: first, progress: { _ in }, onEvent: { _ in }) }
+        #expect(try await w.store.unmergedSummaries().count == 4, "rows are marked merged only once notes exist for them")
+        let t = try #require(try await w.token())
+        #expect(t.nextPart == 0, "the part is still owed")
+
+        // Next night: 150 more arrive and the brain writes. The frozen part lands first; the new rows follow on the sync after.
+        let late = try await w.seed(150, from: 10, tag: "b")
+        let writing = ScriptedBrain { n, tools in try await Self.write(tools, "Notes/call\(n).md", "# \(n)") }
+        _ = try await w.builder(writing).sync(summaries: try await w.store.unmergedSummaries(), progress: { _ in }, onEvent: { _ in })
+        #expect(try await w.token() == nil)
+        #expect(w.read("Notes/call1.md") == "# 1", "the notes are live")
+        #expect(Self.sids(in: writing.recorded[0].input) == first.map { $0.sid! }, "the frozen part is what was fed")
+        #expect(Set(try await w.store.unmergedSummaries().map(\.id)) == Set(late.map(\.id)), "the new rows wait for the next sync")
+        _ = try await w.builder(writing).sync(summaries: try await w.store.unmergedSummaries(), progress: { _ in }, onEvent: { _ in })
+        #expect(try await w.store.unmergedSummaries().isEmpty, "and are fed on it")
+    }
+
+    @Test func aTokenWithNothingLeftToFeedAndNoNotesIsDroppedAndTheSyncPlansAfresh() async throws {
+        // The state an earlier build could leave behind: every frozen row marked merged, staging empty, nextPart at the end.
+        let w = try Self.world()
+        let frozen = try await w.seed(3, from: 0)
+        let staging = w.dir.appendingPathComponent(".brownie-kb-staging-wedged", isDirectory: true)
+        try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
+        try await w.store.markMerged(ids: frozen.map(\.id), at: Self.today)
+        let wedged = KnowledgeBuilder.ResumeToken(stagingPath: staging.path, parts: [frozen.map(\.id)], nextPart: 1, fingerprint: "", isBuild: true, seeded: [:])
+        try await w.store.setValue(SettingKey.kbResume, String(data: JSONEncoder().encode(wedged), encoding: .utf8))
+
+        let fresh = try await w.seed(5, from: 10, tag: "n")
+        let brain = ScriptedBrain { _, tools in try await Self.write(tools, "README.md", "# Portrait") }
+        _ = try await w.builder(brain).sync(summaries: fresh, progress: { _ in }, onEvent: { _ in })
+        #expect(Self.sids(in: try #require(brain.recorded.first?.input)) == fresh.map { $0.sid! }, "tonight's rows were fed, not nothing")
+        #expect(w.read("README.md") == "# Portrait")
+        #expect(try await w.token() == nil)
+        #expect(!FileManager.default.fileExists(atPath: staging.path), "the wedged staging dir is gone")
+        #expect(try await w.store.unmergedSummaries().isEmpty)
     }
 
     // MARK: (e) the header: Today, coverage, ISO dates, stable ids

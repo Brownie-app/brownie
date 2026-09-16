@@ -103,17 +103,24 @@ public actor RunCoordinator {
             // 2–4. CLOUD
             // Only summaries the notes have not absorbed yet, oldest first; a resumed sync feeds the ids it froze.
             let summaries = try await store.unmergedSummaries()
-            if let brain = deps.brain, !summaries.isEmpty {
-                onEvent(.progress(RunProgress(stage: .synthesising, stats: stats)))
-                deps.stage("Update your notes", "\(summaries.count) summaries and the notes they touch")
-                let builder = try KnowledgeBuilder(brain: brain, store: deps.knowledge, runStore: store, now: { [clock = deps.clock] in clock.now() }, timeZone: deps.clock.timeZone,
-                                                   coverage: { [tz = deps.clock.timeZone] in let all = SourceCoverage.decode(try? await store.value(SettingKey.coverage)); return all.isEmpty ? nil : CoverageLine.render(all, timeZone: tz) })
-                let readStats = stats
-                var usage = try await builder.sync(summaries: summaries, progress: { p in var p = p; p.stats = readStats; onEvent(.progress(p)) }, onEvent: { e in if case .message(let m) = e { onEvent(.thought(m)) } })
-                // The judge and the preparer take this week's summaries now, in memory; the rows the notes
-                // absorbed go at once, so nothing later in the chain failing can feed them to the notes twice.
-                let recent = try await store.summaries(since: deps.clock.now().addingTimeInterval(-7 * 86400))
-                try await store.deleteMerged()
+            let weekAgo = deps.clock.now().addingTimeInterval(-7 * 86400)
+            // Rows the notes already hold are kept until FINISH, so a night whose chain broke after the sync
+            // still has them judged the next night — even one on which nothing new was read.
+            let unjudged = try await store.summaries(since: weekAgo).contains { $0.mergedAt != nil }
+            if let brain = deps.brain, !summaries.isEmpty || unjudged {
+                var usage = Usage.zero
+                if !summaries.isEmpty {
+                    onEvent(.progress(RunProgress(stage: .synthesising, stats: stats)))
+                    deps.stage("Update your notes", "\(summaries.count) summaries and the notes they touch")
+                    let builder = try KnowledgeBuilder(brain: brain, store: deps.knowledge, runStore: store, now: { [clock = deps.clock] in clock.now() }, timeZone: deps.clock.timeZone,
+                                                       coverage: { [tz = deps.clock.timeZone] in let all = SourceCoverage.decode(try? await store.value(SettingKey.coverage)); return all.isEmpty ? nil : CoverageLine.render(all, timeZone: tz) })
+                    let readStats = stats
+                    usage = try await builder.sync(summaries: summaries, progress: { p in var p = p; p.stats = readStats; onEvent(.progress(p)) }, onEvent: { e in if case .message(let m) = e { onEvent(.thought(m)) } })
+                }
+                // The judge and the preparer see only what the notes hold: the rows merged tonight, or on an
+                // earlier night whose chain broke before the judge. A row that arrived since and waits for the
+                // next sync is not judged before the notes know it — and never twice, as merged rows go at FINISH.
+                let recent = try await store.summaries(since: weekAgo).filter { $0.mergedAt != nil }
 
                 // welcome letter, once
                 if (try await store.value(SettingKey.letter) ?? "").isEmpty, let readme = try await deps.knowledge.note(at: "README.md") {
@@ -187,7 +194,8 @@ public actor RunCoordinator {
                 // Sunday: the week in a letter, once per week
                 if let u = try await writeWeeklyIfDue(brain: brain, store: store, cards: cards, loops: allLoops, calendar: cal) { usage = usage + u }
 
-                // 5. FINISH — the merged summaries were deleted right after the swap; what is left waits for the next sync
+                // 5. FINISH — the judge has seen the merged summaries, so they go now; what is unmerged waits for the next sync
+                try await store.deleteMerged()
                 let legacyMirror = try await store.value(SettingKey.icloudMirror) ?? "false"
                 let mode = try await store.value(SettingKey.icloudMode) ?? (legacyMirror == "true" ? "mirror" : "off")
                 // The household: shared notes go to the shared folder; what the others closed comes back.
@@ -232,6 +240,7 @@ public actor RunCoordinator {
             if deps.reader == nil { outcome = .failedReader("the reader isn't downloaded yet") }
         } catch is CancellationError { outcome = .cancelled }
         catch IngestRun.Failure.cancelled { outcome = .cancelled }
+        catch BrainError.cancelled { outcome = .cancelled }   // Stop pressed while the brain was mid-loop
         catch IngestRun.Failure.readerStuck { outcome = .failedReader("the reader stopped responding") }
         catch let e as LocalModelError { outcome = .failedReader("\(e)") }
         catch BrainError.usageLimit { outcome = .failedBrain(.usageLimit) }

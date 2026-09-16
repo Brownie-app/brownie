@@ -93,6 +93,8 @@ public struct OpenAICompatibleBrain: AgenticBrain {
                 var result = ToolOutput("error: unknown tool \(name)")
                 if let tool = byName[name] { do { result = try await tool.run(args) } catch { result = ToolOutput("error: \(error)") } }
                 onEvent(.toolResult(name: name, summary: String(result.text.prefix(120))))
+                // finish ends the run here, with the usage so far; the model is not asked for another turn.
+                if result.endsRun { return AgentResult(finalText: text, usage: usage, turns: turn) }
                 outputs.append(["type": "function_call_output", "call_id": callID, "output": result.text])
                 if let img = result.imageJPEG {
                     outputs.append(["role": "user", "content": [["type": "input_text", "text": "Screenshot from \(name):"], ["type": "input_image", "image_url": "data:image/jpeg;base64," + img.base64EncodedString(), "detail": "high"]]])
@@ -135,6 +137,7 @@ public struct OpenAICompatibleBrain: AgenticBrain {
                 var result = ToolOutput("error: unknown tool \(name)")
                 if let tool = byName[name] { do { result = try await tool.run(args) } catch { result = ToolOutput("error: \(error)") } }
                 onEvent(.toolResult(name: name, summary: String(result.text.prefix(120))))
+                if result.endsRun { return AgentResult(finalText: content, usage: usage, turns: turn) }
                 messages.append(["role": "tool", "tool_call_id": id, "content": result.text])
                 if let img = result.imageJPEG {
                     messages.append(["role": "user", "content": [["type": "text", "text": "Screenshot from \(name):"], ["type": "image_url", "image_url": ["url": "data:image/jpeg;base64," + img.base64EncodedString(), "detail": "high"]]]])
