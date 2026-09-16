@@ -54,7 +54,7 @@ public struct Preparer: Sendable {
         guard let payload, let obj = try? JSONSerialization.jsonObject(with: payload) as? [String: Any] else { throw BrainError.badResponse("prepare returned no JSON") }
         let raw = obj["cards"] as? [[String: Any]] ?? []
         let made = raw.prefix(max).compactMap { d -> (Card, [String: Any])? in Self.card(from: d, now: clock.now()).map { ($0, d) } }
-        let cards = Self.withOwners(made.map(\.0), from: made.map(\.1), candidates: candidates).sorted { $0.urgency > $1.urgency }
+        let cards = Self.withOwners(made.map(\.0), from: made.map(\.1), candidates: candidates).map { Self.groundSources($0, candidates: candidates, summaries: summaries) }.sorted { $0.urgency > $1.urgency }
         log.info("prepared \(cards.count) cards from \(candidates.count) candidates")
         return (cards, usage)
     }
@@ -67,6 +67,35 @@ public struct Preparer: Sendable {
                     draftLabel: d["draftLabel"] as? String ?? "Draft", draft: d["draft"] as? String ?? "", recipe: recipe, evidence: ev,
                     verification: (d["verification"] as? String) == "verified" ? .verified : .unverified, verifiedLine: d["verifiedLine"] as? String ?? "", createdAt: now,
                     cameBack: d["cameBack"] as? Bool, loopID: (d["loopID"] as? String).flatMap { $0.isEmpty || $0 == "null" ? nil : $0 })
+    }
+    /// Where a card's evidence came from is a fact, not the brain's to word: "Summary #1" becomes "WhatsApp · Nitesh",
+    /// and the card's source label is the channel the person actually wrote in — never the place the reply is meant to go.
+    static func groundSources(_ c: Card, candidates: [ActionItem], summaries: [SummaryRecord]) -> Card {
+        func record(_ ref: String) -> SummaryRecord? {
+            let r = ref.lowercased()
+            guard let m = r.range(of: #"#\s*(\d+)"#, options: .regularExpression) ?? r.range(of: #"summary\s+(\d+)"#, options: .regularExpression) ?? (r.allSatisfy(\.isNumber) && !r.isEmpty ? r.startIndex..<r.endIndex : nil) else { return nil }
+            let digits = r[m].filter(\.isNumber)
+            guard let n = Int(digits), n >= 1, n <= summaries.count else { return nil }
+            return summaries[n - 1]
+        }
+        let evidence = c.evidence.map { e -> Evidence in
+            guard let s = record(e.source), e.source.lowercased().contains("summary") || e.source.hasPrefix("#") else { return e }
+            return Evidence(source: "\(appName(s.source)) · \(s.bucketName)", when: e.when, text: e.text)
+        }
+        // the card's label: the first summary its candidate relied on; else the first summary its evidence names; else the brain's word
+        let cand = candidates.first { $0.loopID != nil && $0.loopID == c.loopID } ?? candidates.first { $0.title == c.title }
+        let from = cand?.sources.compactMap(record).first ?? c.evidence.compactMap { record($0.source) }.first
+        let label = from.map { "\(appName($0.source)) · \($0.bucketName)" } ?? c.sourceLabel
+        var out = Card(id: c.id, title: c.title, sourceLabel: label, why: c.why, actionLabel: c.actionLabel, dueLine: c.dueLine, urgency: c.urgency, draftLabel: c.draftLabel, draft: c.draft, recipe: c.recipe, evidence: evidence, verification: c.verification, verifiedLine: c.verifiedLine, state: c.state, createdAt: c.createdAt, cameBack: c.cameBack, loopID: c.loopID)
+        out.dueDate = c.dueDate; out.staleLine = c.staleLine; out.owner = c.owner; out.handledBy = c.handledBy
+        return out
+    }
+    public static func appName(_ s: SourceID) -> String {
+        switch s.rawValue {
+        case "whatsapp": return "WhatsApp"; case "imessage": return "Messages"; case "telegram": return "Telegram"; case "slack": return "Slack"; case "teams": return "Teams"
+        case "gmail": return "Gmail"; case "files": return "Files"; case "notes": return "Notes"; case "calendar": return "Calendar"; case "voicememos": return "Voice Memo"; case "recordings": return "Recording"
+        default: return s.rawValue.hasPrefix("mcp:") ? String(s.rawValue.dropFirst(4)).capitalized : s.rawValue.capitalized
+        }
     }
     /// The candidate's owner rides onto its card: the preparer is told to copy it, and if it forgets, the candidate's own value stands.
     static func withOwners(_ cards: [Card], from raw: [[String: Any]], candidates: [ActionItem]) -> [Card] {
