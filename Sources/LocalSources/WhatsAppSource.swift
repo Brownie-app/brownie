@@ -74,7 +74,7 @@ public struct WhatsAppSource: Source {
         return try WALSafeCopy.withCopy(of: Self.database) { db in
             try infos.map { info in
                 let pk = Int64(info.id.rawValue.dropFirst("whatsapp:".count)) ?? 0
-                // Future-dated rows are dropped inside ChatWindowing.windows; the first-read policy bounds a chat never read to the bottom.
+                // Future-dated rows are dropped inside ChatWindowing.windows and by the first-read slice, which bounds a chat never read to the bottom.
                 var msgs = try Self.messages(db, session: pk)
                 var deferred = 0
                 if marks[info.id] == nil {

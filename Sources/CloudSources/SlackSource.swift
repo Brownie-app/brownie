@@ -126,8 +126,9 @@ public struct SlackSource: Source {
     public static let descriptor = SourceDescriptor(
         id: "slack", name: "Slack", detail: "Signed in as you · DMs and channels you choose",
         door: .userCloud, permissions: [], supportsPerBucketOptIn: true, isWork: true)
-    /// Pages of 200 one listing fetches at most. The first-read caps are smaller, so only a busy channel between
-    /// runs can hit it; when it does, the bucket says so instead of losing the rest quietly.
+    /// Pages of 200 a first read or an evidence lookup fetches at most; the first-read caps are smaller, so a first
+    /// read that hits it is one the cap would have cut anyway, and the bucket says so. A read since the mark is not
+    /// capped: the mark bounds it, and stopping short would move the mark past messages never fetched.
     public static let pageCap = 5
     let transport: any JSONTransport
     let token: @Sendable () -> String?
@@ -174,9 +175,9 @@ public struct SlackSource: Source {
         for info in infos {
             var msgs: [ChatMessage], deferred: Int
             if let mark = marks[info.id] {
-                // Read to the bottom before: everything since the last message seen.
-                let h = try await historyPaged(channel(info.id), t, oldest: mark.order, latest: nil, me: me, names: names)
-                msgs = h.messages; deferred = h.hitPageCap ? 1 : 0
+                // Read to the bottom before: everything since the last message seen, paged all the way down to the mark.
+                let h = try await historyPaged(channel(info.id), t, oldest: mark.order, latest: nil, me: me, names: names, pageCap: nil)
+                msgs = h.messages; deferred = 0
             } else {
                 // A first read: the policy's window, then only its cap of newest messages.
                 let oldest = policy.window(for: Self.descriptor.id, now: now).timeIntervalSince1970
@@ -211,7 +212,8 @@ public struct SlackSource: Source {
     }
 
     /// Ascending messages in the range, and whether the page cap stopped the listing with more still to fetch.
-    func historyPaged(_ channel: String, _ t: String, oldest: Double, latest: Double?, me: String, names: [String: String]) async throws -> History {
+    /// `pageCap` nil pages until Slack has no more to give — the shape of a read bounded by the mark.
+    func historyPaged(_ channel: String, _ t: String, oldest: Double, latest: Double?, me: String, names: [String: String], pageCap: Int? = SlackSource.pageCap) async throws -> History {
         var all: [ChatMessage] = []
         var cursor: String? = nil, pages = 0
         repeat {
@@ -222,7 +224,7 @@ public struct SlackSource: Source {
             all += SlackParsing.messages(r, me: me, names: names)
             cursor = (r["response_metadata"] as? [String: Any])?["next_cursor"] as? String; if cursor?.isEmpty == true { cursor = nil }
             pages += 1
-        } while cursor != nil && pages < Self.pageCap
+        } while cursor != nil && pages < (pageCap ?? Int.max)
         return History(messages: all.sorted { $0.date < $1.date }, hitPageCap: cursor != nil)
     }
 

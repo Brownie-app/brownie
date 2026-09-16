@@ -35,6 +35,17 @@ import Foundation
         #expect(p.days(for: "whatsapp") == 270 && p.days(for: "files") == 270 && p.days(for: "notes") == 365)
     }
 
+    @Test func readFurtherBackGrowsTheChatCapWithTheDays() {
+        var p = FirstRead()
+        #expect(p.chatCap(isGroup: false, for: "whatsapp") == 600 && p.chatCap(isGroup: true, for: "whatsapp") == 300)
+        p.readFurtherBack("whatsapp")
+        #expect(p.chatCap(isGroup: false, for: "whatsapp") == 1_200 && p.chatCap(isGroup: true, for: "whatsapp") == 600, "one press: one more base cap, so older messages are reached")
+        #expect(p.chatCap(isGroup: false, for: "telegram") == 600, "the other chats are untouched")
+        p.readFurtherBack("whatsapp")
+        #expect(p.chatCap(isGroup: false, for: "whatsapp") == 1_800)
+        #expect(p.describe(for: "whatsapp") == "first read: last 270 days, up to 1800 messages per direct chat and 900 per group", "Settings says what the press really reaches")
+    }
+
     @Test func theSettingsLineSaysWhatAFirstReadCovers() {
         var p = FirstRead()
         #expect(p.describe(for: "whatsapp") == "first read: last 90 days, up to 600 messages per direct chat and 300 per group")

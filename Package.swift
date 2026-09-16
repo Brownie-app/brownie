@@ -85,6 +85,7 @@ let package = Package(
         .testTarget(name: "IngestTests", dependencies: ["Ingest", "Domain", "Platform"]),
         .testTarget(name: "LocalSourcesTests", dependencies: ["LocalSources", "Platform"]),
         .testTarget(name: "CloudSourcesTests", dependencies: ["CloudSources", "LocalSources", "Domain", "Platform"]),
+        .testTarget(name: "TelegramSourceTests", dependencies: ["TelegramSource", "LocalSources", "Domain"]),
         .testTarget(name: "ProactiveTests", dependencies: ["Proactive", "Domain"]),
         .testTarget(name: "AgentTests", dependencies: ["Agent", "Domain"]),
         .testTarget(name: "KnowledgeTests", dependencies: ["Knowledge", "Domain", "Platform"]),

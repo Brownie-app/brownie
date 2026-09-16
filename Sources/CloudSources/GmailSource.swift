@@ -11,8 +11,13 @@ public struct GmailSource: Source {
 
     private let log = Log("source.gmail")
     static let bucket = BucketID("gmail:inbox")
+    let transport: any JSONTransport
+    let token: @Sendable () async throws -> String
     let policy: @Sendable () -> FirstRead
-    public init(policy: @escaping @Sendable () -> FirstRead = { FirstRead.current }) { self.policy = policy }
+    public init(transport: any JSONTransport = URLSessionTransport(), token: @escaping @Sendable () async throws -> String = { try await GoogleAuth.shared.accessToken() },
+                policy: @escaping @Sendable () -> FirstRead = { FirstRead.current }) {
+        self.transport = transport; self.token = token; self.policy = policy
+    }
 
     public func availability() async -> Availability {
         guard GoogleAuth.isConfigured else { return .unavailable("Needs a Google OAuth client (docs/launch-setup.md)") }
@@ -28,7 +33,7 @@ public struct GmailSource: Source {
     }
 
     public func buckets(since marks: [BucketID: ItemKey], enabled: Set<BucketID>?) async throws -> [Bucket] {
-        let token = try await GoogleAuth.shared.accessToken()
+        let token = try await token()
         let listing = Self.listing(firstRead: marks[Self.bucket] == nil, policy: policy())
         let q = listing.query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? listing.query
         var threads: [[String: Any]] = []
@@ -36,11 +41,15 @@ public struct GmailSource: Source {
         // Gmail hands back at most 500 threads a page; keep asking until the cap or the end of the window.
         repeat {
             let page = "https://gmail.googleapis.com/gmail/v1/users/me/threads?q=\(q)&maxResults=\(min(500, listing.maxThreads - threads.count))" + (pageToken.map { "&pageToken=\($0)" } ?? "")
-            let list = try await Self.get(page, token)
+            let list = try await get(page, token)
             threads += (list["threads"] as? [[String: Any]]) ?? []
             pageToken = list["nextPageToken"] as? String
         } while pageToken != nil && threads.count < listing.maxThreads
+        // What the cap left behind: threads a page handed over past it, counted exactly, and a page never
+        // asked for, counted as one — so the run never shows a silent gap.
+        let deferred = max(0, threads.count - listing.maxThreads) + (pageToken != nil ? 1 : 0)
         threads = Array(threads.prefix(listing.maxThreads))
+        if deferred > 0 { log.info("inbox: \(deferred) threads set aside past the cap of \(listing.maxThreads)") }
         var items: [Candidate] = []
         for (i, t) in threads.enumerated() {
             guard let id = t["id"] as? String else { continue }
@@ -49,12 +58,12 @@ public struct GmailSource: Source {
             items.append(Candidate(source: Self.descriptor.id, bucket: Self.bucket, key: ItemKey(order: order, tiebreak: id), kind: .mail, id: id, itemDate: nil,
                                    metadata: ["name": "thread \(id)", "displayPath": "Gmail/inbox"]))
         }
-        return [Bucket(id: Self.bucket, name: "Inbox", items: items.sorted { $0.key > $1.key })]
+        return [Bucket(id: Self.bucket, name: "Inbox", items: items.sorted { $0.key > $1.key }, deferred: deferred)]
     }
 
     public func load(_ c: Candidate) async throws -> Artifact {
-        let token = try await GoogleAuth.shared.accessToken()
-        let t = try await Self.get("https://gmail.googleapis.com/gmail/v1/users/me/threads/\(c.id)?format=full", token)
+        let token = try await token()
+        let t = try await get("https://gmail.googleapis.com/gmail/v1/users/me/threads/\(c.id)?format=full", token)
         let msgs = (t["messages"] as? [[String: Any]]) ?? []
         var out = ""
         var date: Date?
@@ -82,13 +91,12 @@ public struct GmailSource: Source {
         return (payload["mimeType"] as? String) == "text/html" ? s.replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression) : s
     }
 
-    static func get(_ url: String, _ token: String) async throws -> [String: Any] {
-        var req = URLRequest(url: URL(string: url)!); req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        let (data, resp) = try await URLSession.shared.data(for: req)
-        guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
+    func get(_ url: String, _ token: String) async throws -> [String: Any] {
+        let (data, status) = try await transport.request(URL(string: url)!, method: "GET", headers: ["Authorization": "Bearer \(token)"], body: nil)
+        guard status == 200 else {
             let msg = ((try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? [String: Any])?["message"] as? String ?? String(decoding: data.prefix(160), as: UTF8.self)
             if msg.contains("has not been used in project") || msg.contains("is disabled") { throw SourceError.cannotRead("the Gmail API isn't enabled for your Google project yet — enable it in Google Cloud Console, then run again") }
-            if (resp as? HTTPURLResponse)?.statusCode == 401 { throw SourceError.cannotRead("Google sign-in expired — sign in again in Settings → Sources") }
+            if status == 401 { throw SourceError.cannotRead("Google sign-in expired — sign in again in Settings → Sources") }
             throw SourceError.cannotRead(msg)
         }
         return (try JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]

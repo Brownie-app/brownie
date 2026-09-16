@@ -129,8 +129,9 @@ public struct TeamsSource: Source {
     public static let descriptor = SourceDescriptor(
         id: "teams", name: "Microsoft Teams", detail: "Sign in with your work account · chats and channels you choose · needs your admin's consent once",
         door: .userCloud, permissions: [], supportsPerBucketOptIn: true, isWork: true)
-    /// Pages of 50 one listing fetches at most: enough to cover the first-read caps, so only a busy chat between
-    /// runs can hit it; when it does, the bucket says so instead of losing the rest quietly.
+    /// Pages of 50 a first read or an evidence lookup fetches at most: enough to cover the first-read caps, so a
+    /// first read that hits it is one the cap would have cut anyway, and the bucket says so. A read since the mark
+    /// is not capped: the mark bounds it, and stopping short would move the mark past messages never fetched.
     public static let pageCap = 14
     static let graph = "https://graph.microsoft.com/v1.0"
     let transport: any JSONTransport
@@ -173,9 +174,9 @@ public struct TeamsSource: Source {
         for info in infos {
             var msgs: [ChatMessage], deferred: Int
             if let mark = marks[info.id] {
-                // Read to the bottom before: everything since the last message seen.
-                let h = try await messagesPaged(of: info.id, me: myID, newerThan: Date(timeIntervalSince1970: mark.order))
-                msgs = h.messages; deferred = h.hitPageCap ? 1 : 0
+                // Read to the bottom before: everything since the last message seen, paged all the way down to the mark.
+                let h = try await messagesPaged(of: info.id, me: myID, newerThan: Date(timeIntervalSince1970: mark.order), pageCap: nil)
+                msgs = h.messages; deferred = 0
             } else {
                 // A first read: the policy's window, then only its cap of newest messages.
                 let h = try await messagesPaged(of: info.id, me: myID, newerThan: policy.window(for: Self.descriptor.id, now: now))
@@ -212,11 +213,12 @@ public struct TeamsSource: Source {
     }
 
     /// Newest-first pages until one is older than `newerThan`, capped; says whether the cap stopped it with more still to fetch.
-    func messagesPaged(of b: BucketID, me: String, newerThan: Date) async throws -> History {
+    /// `pageCap` nil pages until that message or the start of the chat — the shape of a read bounded by the mark.
+    func messagesPaged(of b: BucketID, me: String, newerThan: Date, pageCap: Int? = TeamsSource.pageCap) async throws -> History {
         var all: [ChatMessage] = []
         var next: String? = Self.graph + Self.path(for: b)
         var pages = 0, done = false
-        while let url = next, !done, pages < Self.pageCap {
+        while let url = next, !done, pages < (pageCap ?? Int.max) {
             let t = try await token()
             let r = try await transport.json(URL(string: url)!, headers: ["Authorization": "Bearer \(t)"])
             let page = TeamsParsing.messages(r, me: me)

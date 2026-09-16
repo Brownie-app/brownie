@@ -12,12 +12,14 @@ public struct FirstReadCut: Sendable, Equatable {
 
 public extension ChatWindowing {
     /// The first read of a chat: only messages newer than the policy's window for this source, and of those only
-    /// the newest `directChatMessages` or `groupChatMessages`. Older history rarely makes a card and would cost
-    /// an hour on a big group, so it is left unread and counted, never silently dropped. Ascending in, ascending out.
+    /// the newest up to the policy's cap for this chat and source. Older history rarely makes a card and would cost
+    /// an hour on a big group, so it is left unread and counted, never silently dropped. Rows dated in the future
+    /// are gated out first, the same way `windows` drops them, so a bogus row never takes a real message's place
+    /// under the cap. Ascending in, ascending out.
     static func firstReadSlice(_ msgs: [ChatMessage], isGroup: Bool, policy: FirstRead, source: SourceID, now: Date) -> FirstReadCut {
         let edge = policy.window(for: source, now: now)
-        let inWindow = msgs.filter { $0.date >= edge }
-        let cap = policy.chatCap(isGroup: isGroup)
+        let inWindow = sane(msgs, now: now).filter { $0.date >= edge }
+        let cap = policy.chatCap(isGroup: isGroup, for: source)
         guard inWindow.count > cap else { return FirstReadCut(messages: inWindow, deferred: 0) }
         return FirstReadCut(messages: Array(inWindow.suffix(cap)), deferred: inWindow.count - cap)
     }
