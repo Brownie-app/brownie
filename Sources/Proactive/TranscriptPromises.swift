@@ -15,9 +15,11 @@ public enum TranscriptPromises {
     static let iWill = try! NSRegularExpression(pattern: #"^(i['’]ll|i will|i can|let me|i['’]m going to|i['’]d)\b"#, options: .caseInsensitive)
     static let youCan = try! NSRegularExpression(pattern: #"^(can you|could you|will you|would you|please)\b"#, options: .caseInsensitive)
 
-    /// Loops from one transcript summary. `recording` names the file; `date` is when it was recorded.
+    /// Loops from one transcript summary. `recording` names the file; `date` is when it was recorded. A file stamped
+    /// in the future or absurdly far back still holds real promises, so they are kept but opened as of `now`.
     public static func parse(summary: String, recording: String, date: Date, now: Date) -> [Found] {
         let ns = summary as NSString
+        let date = DateSanity.item(date, now: now) ?? now
         var out: [Found] = []
         for m in pattern.matches(in: summary, range: NSRange(location: 0, length: ns.length)) {
             let stamp = ns.substring(with: m.range(at: 1))

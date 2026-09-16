@@ -4,9 +4,10 @@ import Foundation
 public enum Verdict: String, Codable, Sendable { case keep, drop, sensitive }
 
 /// Why an item landed where it did. Counted separately so diagnostics can tell "the model dropped
-/// it" from "the model garbled it".
+/// it" from "the model garbled it". `badDate` is an item whose own date could not be believed (years
+/// ahead or absurdly far back); it is dropped before the reader ever sees it.
 public enum VerdictReason: String, Codable, Sendable, CaseIterable {
-    case kept, modelDrop, emptySummary, parseFailed, modelSensitive, piiBackstop, loadFailed, readerFailed
+    case kept, modelDrop, emptySummary, parseFailed, modelSensitive, piiBackstop, loadFailed, readerFailed, badDate
     public var verdict: Verdict {
         switch self {
         case .kept: return .keep

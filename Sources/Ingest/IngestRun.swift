@@ -23,6 +23,11 @@ public actor IngestRun {
     private let clock: Clock
     private let limits: Limits
     private let log = Log("ingest")
+    /// What each source read this run, by source, for the coverage line the user sees. Overwritten per `read`.
+    private var coverages: [SourceID: SourceCoverage] = [:]
+
+    /// How far this run got with a source: the date range and count of what was read, and what was left.
+    public func coverage(of source: SourceID) -> SourceCoverage? { coverages[source] }
 
     public init(store: RunStore, reader: LocalModel, triage: Triage, policy: SensitivityPolicy, clock: Clock = SystemClock(), limits: Limits = Limits()) {
         self.store = store; self.reader = reader; self.triage = triage; self.policy = policy; self.clock = clock; self.limits = limits
@@ -39,12 +44,25 @@ public actor IngestRun {
         let buckets = try await source.buckets(since: marks, enabled: enabledBuckets)
         var itemsSinceReload = 0, failureStreak = 0, reloadsWithoutProgress = 0
         var lastTitle: String?, lastSummary: String?
+        var oldest: Date?, newest: Date?, itemsRead = 0, notRead = 0
+        defer { coverages[source.id] = SourceCoverage(source: source.id, oldestRead: oldest, newestRead: newest, itemsRead: itemsRead, notRead: notRead + stats.deferred, lastRun: clock.now(), buckets: buckets.count) }
 
         for (bi, bucket) in buckets.enumerated() {
             let existing = try await store.cursor(bucket.id)
             var cursor = existing ?? BucketCursor(bucket: bucket.id, source: source.id, mark: nil, floor: nil)
             if mode == .initial { cursor = BucketCursor(bucket: bucket.id, source: source.id, mark: nil, floor: nil) }
-            let plan = Self.plan(bucket.items, cursor: cursor, mode: mode, limits: limits, now: clock.now())
+            // The date gate, before any planning: an item dated years ahead or absurdly far back is never read and never
+            // becomes a cursor mark. The ones this pass would otherwise have read are logged as drops, against the stored
+            // cursor as it stands, so the log shows they went and nothing else moves.
+            let (dated, undated) = Self.gate(bucket.items, now: clock.now())
+            for item in Self.plan(undated, cursor: cursor, mode: mode, limits: limits, now: clock.now()).items {
+                stats.record(.badDate); notRead += 1
+                log.warn("\(name)/\(bucket.name): \(item.id) dated \(item.itemDate.map { "\($0)" } ?? "?") is not believable — dropped before reading")
+                try await store.commit(runID: runID, cursor: existing ?? cursor, bucketName: bucket.name, candidate: item, outcome: Outcome(reason: .badDate), at: clock.now())
+            }
+            let plan = Self.plan(dated, cursor: cursor, mode: mode, limits: limits, now: clock.now())
+            for d in plan.items.compactMap(\.itemDate) { oldest = min(oldest ?? d, d); newest = max(newest ?? d, d) }
+            itemsRead += plan.items.count
             if plan.kind == .incremental, let m = cursor.mark, Self.isFutureDateKey(m, now: clock.now()) { log.warn("\(bucket.name): cursor mark was in the future (\(m.order)) — re-reading the newest item to heal it") }
             stats.deferred += plan.deferred
             log.info("\(name)/\(bucket.name): \(plan.items.count) items (\(plan.kind)), deferred \(plan.deferred)")
@@ -118,6 +136,17 @@ public actor IngestRun {
             }
         }
         return stats
+    }
+
+    // MARK: the date gate
+
+    /// Splits a bucket into the items whose dates can be believed (or that carry none) and the ones that cannot.
+    static func gate(_ items: [Candidate], now: Date) -> (dated: [Candidate], undated: [Candidate]) {
+        var dated: [Candidate] = [], undated: [Candidate] = []
+        for c in items {
+            if let d = c.itemDate, DateSanity.item(d, now: now) == nil { undated.append(c) } else { dated.append(c) }
+        }
+        return (dated, undated)
     }
 
     // MARK: planning
