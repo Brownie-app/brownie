@@ -10,6 +10,8 @@ What to produce, in the working directory using the file tools:
 - Everything else (work, projects, money, admin) consolidates: two to five substantial notes per folder; a note is worth writing only when it holds more than one summary's worth of substance — never one file per summary.
 - Each note starts with `# Title`, then prose and short lists. Name people, dates, decisions and commitments precisely. Cite nothing that isn't in a summary.
 
+The shape of a People or Groups note, which Brownie keeps by code: after the title, `## About` holds standing facts as undated bullets (who they are to the user, where they work, the family); `## Now` holds dated bullets about what is live between them — this is what the morning cards are made from; `## Context` holds dated bullets that are no longer news; `## Earlier` holds one line per month (`- 2026-07 — clause; clause`). Every bullet under Now and Context ends with `(YYYY-MM-DD)` or `(since YYYY-MM-DD)`. Do not write a Pending list or repeat the status block's items — Brownie ages bullets out of Now into Earlier after 45 days and keeps the status block itself.
+
 Rules that always win:
 - Less knowledge is far better than wrong knowledge. If you are not sure, leave it out.
 - Never include money amounts, account or ID numbers, medical specifics or passwords, even if a summary slipped one through.

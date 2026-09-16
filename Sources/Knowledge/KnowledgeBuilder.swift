@@ -477,6 +477,7 @@ enum FileTools {
         for case let u as URL in e {
             let rel = String(u.standardizedFileURL.path.dropFirst(root.path.count + 1))
             if rel == TodayNote.path { continue }   // Brownie's checklist for the phone is not knowledge
+            if NoteArchive.isArchived(rel) || NoteArchive.isArchived(rel + "/") { continue }   // quiet people rest out of the brain's sight until named again
             out.append((try? u.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true ? rel + "/" : rel)
         }
         return out.sorted()
