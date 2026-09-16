@@ -639,6 +639,7 @@ extension AppModel {
     /// since is gone. Without a saved list (no run yet), the registry's own view is shown.
     func reloadPeople() async {
         let registry = PersonRegistry(vault: knowledge.rootURL); await registry.load()
+        people = await registry.people()
         let live = await registry.suspects()
         guard let j = try? await store.value(SettingKey.duplicatePeople), let d = j.data(using: .utf8), let stored = try? JSONDecoder().decode([[String]].self, from: d) else { duplicatePeople = live; return }
         duplicatePeople = stored.compactMap { ids in live.first { Set(ids) == Set([$0.0.id, $0.1.id]) } }

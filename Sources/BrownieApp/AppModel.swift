@@ -120,6 +120,15 @@ final class AppModel: ObservableObject {
     @Published var duplicatePeople: [(Person, Person)] = []
     /// Last night's measure of the vault, for the Settings → Knowledge card.
     @Published var vaultHealth: VaultHealth?
+    /// The Notes screen's rail: what was opened lately and what the user pinned, kept in UserDefaults (AppModel+Notes).
+    @Published var recentNotes = RecentNotes(paths: UserDefaults.standard.stringArray(forKey: "notes.recent") ?? [])
+    @Published var pinnedNotes = PinnedNotes(paths: UserDefaults.standard.stringArray(forKey: "notes.pinned") ?? [])
+    /// The registry's people, for the header of a People note.
+    @Published var people: [Person] = []
+    /// A question waiting in the Ask box ("about Meera: ") when the user arrives there from a note.
+    @Published var askPrefill: String?
+    @Published var quickOpenShown = false
+    let vaultWatcher = VaultWatcher()
     @Published var sendLog: [SendRecord] = []
     @Published var weekly: String?
     @Published var weeklyWeek: String?
@@ -185,7 +194,7 @@ final class AppModel: ObservableObject {
         helperInstalled = WakeHelper.Client().isInstalled
         loginItem = OvernightScheduler.isLoginItem
         startScheduler()
-        startBriefs(); startRecipeSchedule(); startTriggers(); startSyncTimer()
+        startBriefs(); startRecipeSchedule(); startTriggers(); startSyncTimer(); startVaultWatcher()
         if TelegramSource.isConfigured { watchTelegram() }
         if CommandLine.arguments.contains("--request-permissions") { await requestAllPermissions() }
     }

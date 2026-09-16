@@ -786,7 +786,7 @@ struct AskView: View {
                 BButton(title: "Ask", kind: .primary) { send() }.disabled(m.asking)
             }.padding(12).background(RoundedRectangle(cornerRadius: 12).fill(t.card)).overlay(RoundedRectangle(cornerRadius: 12).stroke(t.cardBorder)).shadow(color: .black.opacity(0.08), radius: 12, y: 6)
             .padding(EdgeInsets(top: 8, leading: 28, bottom: 20, trailing: 28))
-        }.onAppear { focused = true }
+        }.onAppear { focused = true; if let p = m.askPrefill { question = p; m.askPrefill = nil } }
     }
     func send() { let q = question; question = ""; m.ask(q) }
 }
