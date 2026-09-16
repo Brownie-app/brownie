@@ -42,11 +42,7 @@ public enum AskLedger {
         return "ASKS IN DIRECT CHATS (read from the chats themselves; a reply means it is answered — do not make an item to answer or update that person again unless they wrote after the reply):\n" + lines.joined(separator: "\n") + "\n"
     }
 
-    public static func samePerson(_ a: String, _ b: String) -> Bool {
-        func key(_ s: String) -> String { var t = s; if let r = t.range(of: "(") { t = String(t[..<r.lowerBound]) }; return t.lowercased().split(whereSeparator: { !$0.isLetter }).prefix(2).joined(separator: " ") }
-        let ka = key(a), kb = key(b)
-        return ka == kb || (ka.split(separator: " ").first == kb.split(separator: " ").first && !ka.isEmpty)
-    }
+    public static func samePerson(_ a: String, _ b: String) -> Bool { PersonKey.same(a, b) }
     static func when(_ d: Date, now: Date) -> String {
         let s = now.timeIntervalSince(d)
         if s < 3600 { return "\(max(1, Int(s / 60))) min ago" }

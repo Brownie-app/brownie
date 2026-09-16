@@ -32,14 +32,16 @@ public actor KnowledgeBuilder {
     private let now: @Sendable () -> Date
     private let timeZone: TimeZone
     private let coverage: @Sendable () async -> String?
+    private let people: @Sendable () async -> [Person]
 
     /// `coverage` renders the "how far back each source has been read" lines for the brain's header; nil skips them.
+    /// `people` is the registry's roster, so the brain knows which file each person already has.
     public init(brain: any Brain, store: any KnowledgeStore, runStore: any RunStore, bundle: Bundle? = nil,
                 partBudget: Int = BrainLimits.corpusPartBudget, now: @escaping @Sendable () -> Date = { Date() }, timeZone: TimeZone = .current,
-                coverage: @escaping @Sendable () async -> String? = { nil }) throws {
+                coverage: @escaping @Sendable () async -> String? = { nil }, people: @escaping @Sendable () async -> [Person] = { [] }) throws {
         let bundle = bundle ?? Bundle.module
         self.brain = brain; self.store = store; self.runStore = runStore
-        self.partBudget = partBudget; self.now = now; self.timeZone = timeZone; self.coverage = coverage
+        self.partBudget = partBudget; self.now = now; self.timeZone = timeZone; self.coverage = coverage; self.people = people
         buildPrompt = try String(contentsOf: bundle.url(forResource: "build", withExtension: "md", subdirectory: "Prompts") ?? bundle.url(forResource: "build", withExtension: "md")!, encoding: .utf8)
         updatePrompt = try String(contentsOf: bundle.url(forResource: "update", withExtension: "md", subdirectory: "Prompts") ?? bundle.url(forResource: "update", withExtension: "md")!, encoding: .utf8)
     }
@@ -104,15 +106,22 @@ public actor KnowledgeBuilder {
     // MARK: agent turn
 
     /// What the brain is told before the summaries: the date, so nothing in the notes is relative to an
-    /// unknown "today", and how far back each source has been read, when the app knows.
+    /// unknown "today"; how far back each source has been read, when the app knows; and who exists, with the
+    /// one file each person is written in, so a name in a new spelling never opens a second file.
     func header() async -> String {
         let today = now()
         var lines = ["Today: \(CorpusSlicer.isoDay(today, timeZone)) (\(Self.weekday(today, timeZone)))"]
         if let c = await coverage()?.trimmingCharacters(in: .whitespacesAndNewlines), !c.isEmpty {
             lines.append("Coverage (how far back each source has been read):\n" + c.split(separator: "\n").map { "  " + $0 }.joined(separator: "\n"))
         }
+        let roster = PersonRegistry.headerLines(await people(), cap: Self.peopleCap)
+        if !roster.isEmpty {
+            lines.append("PEOPLE (one file per person; write about each only in the file listed, whatever spelling the summaries use):\n" + roster.map { "  " + $0 }.joined(separator: "\n"))
+        }
         return lines.joined(separator: "\n") + "\n\n"
     }
+    /// The roster stops here: past it, the header would crowd out the summaries.
+    static let peopleCap = 200
 
     static func weekday(_ d: Date, _ tz: TimeZone) -> String {
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = tz; f.dateFormat = "EEEE"

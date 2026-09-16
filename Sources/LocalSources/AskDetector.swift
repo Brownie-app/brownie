@@ -17,14 +17,14 @@ public enum AskDetector {
     }
 
     /// Asks in one direct chat (ascending messages), each with the user's first reply after it.
-    public static func detect(_ messages: [ChatMessage], person: String, bucket: BucketID, since: Date) -> [Ask] {
+    public static func detect(_ messages: [ChatMessage], person: String, bucket: BucketID, since: Date, handle: String? = nil) -> [Ask] {
         var out: [Ask] = []
         let recent = messages.filter { $0.date >= since }.sorted { $0.date < $1.date }
         for (i, m) in recent.enumerated() where !m.isMe && isAsk(m.text) {
             // a burst of their messages with a question in the middle: the reply that counts is the first "Me" after the burst
             let reply = recent[(i + 1)...].first { $0.isMe }
             let id = "ask-" + String("\(bucket.rawValue)|\(m.rowID)".utf8.reduce(into: UInt64(1469598103934665603)) { $0 = ($0 ^ UInt64($1)) &* 1099511628211 }, radix: 16)
-            out.append(Ask(id: id, person: person, bucket: bucket, askedAt: m.date, question: String(m.text.prefix(200)), answeredAt: reply?.date, reply: reply.map { String($0.text.prefix(300)) }))
+            out.append(Ask(id: id, person: person, bucket: bucket, askedAt: m.date, question: String(m.text.prefix(200)), answeredAt: reply?.date, reply: reply.map { String($0.text.prefix(300)) }, handle: handle))
         }
         return out
     }
@@ -37,7 +37,7 @@ extension ChatReader where Self: Source {
         var out: [Ask] = []
         for c in chats {
             let msgs = try await messages(in: c.id, from: since, to: now.addingTimeInterval(3600))
-            out += AskDetector.detect(msgs, person: c.name, bucket: c.id, since: since)
+            out += AskDetector.detect(msgs, person: c.name, bucket: c.id, since: since, handle: c.handle)
         }
         return out
     }

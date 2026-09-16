@@ -116,6 +116,8 @@ final class AppModel: ObservableObject {
 
     // ── v2: loops, what left, briefs, the Sunday letter, taught recipes ─────────────
     @Published var loops: [Loop] = []
+    /// Registry people who look like one person twice, the better one to keep first in each pair; the Knowledge screen's banner.
+    @Published var duplicatePeople: [(Person, Person)] = []
     @Published var sendLog: [SendRecord] = []
     @Published var weekly: String?
     @Published var weeklyWeek: String?
@@ -502,6 +504,7 @@ final class AppModel: ObservableObject {
         lastSkipped = try? await store.value("run.lastSkipped")
         lastError = try? await store.value("run.lastError")
         await reloadV2()
+        await reloadPeople()
     }
 
     // MARK: cards

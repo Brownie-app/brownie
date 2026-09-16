@@ -63,7 +63,7 @@ public actor MicrosoftAuth {
 // MARK: - Parsing (pure)
 
 public enum TeamsParsing {
-    public struct Conversation: Sendable, Equatable { public let id: BucketID; public let name: String; public let isGroup: Bool; public let members: Int; public let detail: String }
+    public struct Conversation: Sendable, Equatable { public let id: BucketID; public let name: String; public let isGroup: Bool; public let members: Int; public let detail: String; public var handle: String? = nil }
 
     static let iso: ISO8601DateFormatter = { let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return f }()
     static let isoPlain = ISO8601DateFormatter()
@@ -77,11 +77,11 @@ public enum TeamsParsing {
                 guard let n = m["displayName"] as? String else { return nil }
                 return (m["userId"] as? String ?? "", n)
             }
-            let others = members.filter { $0.id != me }.map(\.name)
+            let others = members.filter { $0.id != me }
             let type = c["chatType"] as? String ?? "group"
-            if type == "oneOnOne" { return Conversation(id: BucketID("teams:chat:\(id)"), name: others.first ?? "Chat", isGroup: false, members: 2, detail: "Direct") }
+            if type == "oneOnOne" { return Conversation(id: BucketID("teams:chat:\(id)"), name: others.first?.name ?? "Chat", isGroup: false, members: 2, detail: "Direct", handle: others.first.flatMap { $0.id.isEmpty ? nil : PersonHandle.teams(userID: $0.id) }) }
             let topic = (c["topic"] as? String).flatMap { $0.isEmpty ? nil : $0 }
-            let name = topic ?? (type == "meeting" ? "Meeting chat" : "Group · " + others.prefix(3).joined(separator: ", "))
+            let name = topic ?? (type == "meeting" ? "Meeting chat" : "Group · " + others.prefix(3).map(\.name).joined(separator: ", "))
             return Conversation(id: BucketID("teams:chat:\(id)"), name: name, isGroup: true, members: members.count, detail: type == "meeting" ? "Meeting chat" : "Group chat · \(members.count) people")
         }
     }
@@ -153,7 +153,7 @@ public struct TeamsSource: Source {
     public func discoverBuckets() async throws -> [BucketInfo] {
         let myID = try await me()
         var out: [BucketInfo] = []
-        for c in TeamsParsing.chats(try await get("/me/chats?$expand=members&$top=50"), me: myID) { out.append(BucketInfo(id: c.id, name: c.name, detail: c.detail, isGroup: c.isGroup, count: c.members)) }
+        for c in TeamsParsing.chats(try await get("/me/chats?$expand=members&$top=50"), me: myID) { out.append(BucketInfo(id: c.id, name: c.name, detail: c.detail, isGroup: c.isGroup, count: c.members, handle: c.handle)) }
         for team in (try await get("/me/joinedTeams"))["value"] as? [[String: Any]] ?? [] {
             guard let tid = team["id"] as? String else { continue }
             let tname = team["displayName"] as? String ?? "Team"

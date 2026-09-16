@@ -46,7 +46,7 @@ public enum HouseholdLedger {
     }
 
     static func sameLoop(_ a: HouseholdEntry, _ b: HouseholdEntry) -> Bool {
-        guard a.direction == b.direction, a.person.lowercased() == b.person.lowercased() else { return false }
+        guard a.direction == b.direction, PersonKey.same(a.person, b.person) else { return false }
         let wa = LoopLedger.words(a.what), wb = LoopLedger.words(b.what)
         guard !wa.isEmpty, !wb.isEmpty else { return a.what == b.what }
         return Double(wa.intersection(wb).count) / Double(min(wa.count, wb.count)) >= 0.5

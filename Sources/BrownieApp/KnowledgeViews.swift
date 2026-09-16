@@ -44,6 +44,7 @@ struct KnowledgeView: View {
                 ScrollView {
                     if let n = note {
                         VStack(alignment: .leading, spacing: 12) {
+                            PeopleMergeBanner()
                             HStack { Text("\(folder?.name ?? "") / \(n.title)").font(.system(size: 11)).foregroundStyle(t.ink2); Spacer()
                                 if n.userEdited { Chip(text: "edited by you") }
                                 if editing { BButton(title: "Save", kind: .primary) { save(n) }; BButton(title: "Cancel", kind: .quiet) { editing = false } }

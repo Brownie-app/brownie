@@ -36,7 +36,8 @@ public struct iMessageSource: Source {
             let rows = try db.query("""
             SELECT c.ROWID AS id, c.chat_identifier AS ident, c.display_name AS name, c.room_name AS room,
                    (SELECT COUNT(*) FROM chat_message_join j WHERE j.chat_id=c.ROWID) AS n,
-                   (SELECT COUNT(*) FROM chat_handle_join h WHERE h.chat_id=c.ROWID) AS members
+                   (SELECT COUNT(*) FROM chat_handle_join h WHERE h.chat_id=c.ROWID) AS members,
+                   (SELECT h.id FROM chat_handle_join j JOIN handle h ON h.ROWID=j.handle_id WHERE j.chat_id=c.ROWID ORDER BY h.ROWID LIMIT 1) AS handle
             FROM chat c ORDER BY n DESC
             """)
             let names = ContactNames()
@@ -45,7 +46,9 @@ public struct iMessageSource: Source {
                 let ident = r["ident"].text ?? ""
                 let isGroup = (r["room"].text ?? "").isEmpty == false || (r["members"].int ?? 0) > 1
                 let name = (r["name"].text ?? "").isEmpty ? (isGroup ? "Group (\(r["members"].int ?? 0))" : names.resolve(ident)) : r["name"].text!
-                return BucketInfo(id: BucketID("imessage:\(id)"), name: name, detail: isGroup ? "Group · \(r["members"].int ?? 0) people" : "Direct", isGroup: isGroup, count: Int(n))
+                // The other person's number or address, from the same join ContactNames resolves — a direct chat has exactly one.
+                let handle = isGroup ? nil : (r["handle"].text ?? (ident.isEmpty ? nil : ident)).map(PersonHandle.imessage)
+                return BucketInfo(id: BucketID("imessage:\(id)"), name: name, detail: isGroup ? "Group · \(r["members"].int ?? 0) people" : "Direct", isGroup: isGroup, count: Int(n), handle: handle)
             }
         }
     }

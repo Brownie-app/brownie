@@ -42,8 +42,8 @@ import Platform
         let kb: FileKnowledgeStore
         let store: SQLiteRunStore
         var live: URL { kb.rootURL }
-        func builder(_ brain: any Brain, budget: Int = BrainLimits.corpusPartBudget, coverage: @escaping @Sendable () async -> String? = { nil }) throws -> KnowledgeBuilder {
-            try KnowledgeBuilder(brain: brain, store: kb, runStore: store, partBudget: budget, now: { KnowledgeBuilderTests.today }, timeZone: KnowledgeBuilderTests.utc, coverage: coverage)
+        func builder(_ brain: any Brain, budget: Int = BrainLimits.corpusPartBudget, coverage: @escaping @Sendable () async -> String? = { nil }, people: @escaping @Sendable () async -> [Person] = { [] }) throws -> KnowledgeBuilder {
+            try KnowledgeBuilder(brain: brain, store: kb, runStore: store, partBudget: budget, now: { KnowledgeBuilderTests.today }, timeZone: KnowledgeBuilderTests.utc, coverage: coverage, people: people)
         }
         func token() async throws -> KnowledgeBuilder.ResumeToken? {
             guard let s = try await store.value(SettingKey.kbResume) else { return nil }
@@ -220,6 +220,22 @@ import Platform
         #expect(input.contains("· 2026-09-03\n"))
         #expect(!input.contains("Sep 1,") && !input.contains("1 Sep"), "no locale dates")
         #expect(Self.sids(in: input) == rows.sorted { $0.effectiveDate < $1.effectiveDate }.map { $0.sid! }, "oldest first")
+    }
+
+    @Test func headerListsWhoExistsAndWhereTheyAreWritten() async throws {
+        let w = try Self.world()
+        let rows = try await w.seed(1, from: 0)
+        let brain = ScriptedBrain { _, tools in try await Self.write(tools, "README.md", "# x") }
+        let t = Self.today
+        let people = [Person(id: "p-1", name: "Kanika Pandey", aliases: ["Kanika Pandey Loadmill"], notePath: "People/Kanika Pandey.md", firstSeen: t, lastSeen: t),
+                      Person(id: "p-2", name: "Nitesh", aliases: ["Nitesh (+919540752593)"], firstSeen: t, lastSeen: t)]
+        _ = try await w.builder(brain, people: { people }).sync(summaries: rows, progress: { _ in }, onEvent: { _ in })
+        let input = try #require(brain.recorded.first?.input)
+        #expect(input.contains("\nPEOPLE (one file per person; write about each only in the file listed, whatever spelling the summaries use):\n  Kanika Pandey — People/Kanika Pandey.md (also: Kanika Pandey Loadmill)\n  Nitesh — no note yet\n\nWorking directory:"))
+        #expect(!input.contains("+919540752593"), "an alias is shown as a name, never as a number")
+        let none = ScriptedBrain { _, tools in try await Self.write(tools, "README.md", "# x") }
+        _ = try await w.builder(none).sync(summaries: try await w.seed(1, from: 5, tag: "b"), progress: { _ in }, onEvent: { _ in })
+        #expect(!(try #require(none.recorded.first?.input)).contains("PEOPLE"), "no registry, no roster")
     }
 
     @Test func headerSkipsCoverageWhenThereIsNone() async throws {

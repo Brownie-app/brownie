@@ -56,14 +56,10 @@ public enum QuietCheck {
         return r
     }
 
+    /// One matcher for the whole app: "Nitesh (+919540752593)" and "Nitesh" are one person, by `PersonKey`.
     static func samePerson(_ a: String?, _ b: String) -> Bool {
         guard let a else { return false }
-        // "Nitesh (+919540752593)" and "Nitesh" are one person: drop the number, compare the first two words
-        func key(_ s: String) -> String {
-            var t = s; if let r = t.range(of: "(") { t = String(t[..<r.lowerBound]) }
-            return t.lowercased().split(whereSeparator: { !$0.isLetter }).prefix(2).joined(separator: " ")
-        }
-        return key(a) == key(b)
+        return PersonKey.same(a, b)
     }
     static func ago(_ t: TimeInterval) -> String {
         let m = Int(t / 60)

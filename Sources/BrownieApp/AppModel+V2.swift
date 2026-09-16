@@ -627,6 +627,82 @@ extension AppModel {
     }
 }
 
+// MARK: - People: one identity each
+
+extension AppModel {
+    /// The night's suspect pairs, read back against the registry as it is now: a pair the user merged or split
+    /// since is gone. Without a saved list (no run yet), the registry's own view is shown.
+    func reloadPeople() async {
+        let registry = PersonRegistry(vault: knowledge.rootURL); await registry.load()
+        let live = await registry.suspects()
+        guard let j = try? await store.value(SettingKey.duplicatePeople), let d = j.data(using: .utf8), let stored = try? JSONDecoder().decode([[String]].self, from: d) else { duplicatePeople = live; return }
+        duplicatePeople = stored.compactMap { ids in live.first { Set(ids) == Set([$0.0.id, $0.1.id]) } }
+    }
+
+    /// Merge two registry people: the kept one takes every alias and handle; the dropped note's body goes under a
+    /// "Merged from" heading in the kept note, every `[[link]]` to it now points at the kept note, loops and asks
+    /// spelled the dropped way carry the kept name, and the dropped file is deleted.
+    func mergePeople(keep: String, drop: String) {
+        Task {
+            let registry = PersonRegistry(vault: knowledge.rootURL); await registry.load()
+            guard let k = await registry.person(keep), let d = await registry.person(drop), keep != drop else { await reloadPeople(); return }
+            let dropKeys = Set(d.keys)
+            await registry.merge(keep: keep, drop: drop)
+            if let dp = d.notePath, let dn = try? await knowledge.note(at: dp) {
+                if let kp = k.notePath, let kn = try? await knowledge.note(at: kp) {
+                    let body = PersonNotes.appendMerged(into: kn.body, droppedBody: dn.body, droppedName: d.name, date: Date())
+                    try? await knowledge.save(Note(relativePath: kp, title: kn.title, body: body, sources: Array(Set(kn.sources + dn.sources)).sorted(), updatedAt: Date(), userEdited: true))
+                    await rewriteLinks(from: [Self.fileName(dp), dn.title], to: Self.fileName(kp))
+                    try? await knowledge.delete(relativePath: dp)
+                    log.info("merged \(dp) into \(kp)")
+                }
+                // No kept note: the dropped note is now theirs, and the registry already points at it.
+            }
+            var ls = await LoopLedger.load(store); var changed = false
+            for i in ls.indices where dropKeys.contains(PersonKey.normalise(ls[i].person)) && !PersonKey.sameKey(ls[i].person, k.name) { ls[i] = Self.renamed(ls[i], to: k.name); changed = true }
+            if changed { await LoopLedger.save(ls, store) }
+            var asks = RunCoordinator.loadAsks(try? await store.value(SettingKey.asks)); changed = false
+            for i in asks.indices where dropKeys.contains(PersonKey.normalise(asks[i].person)) && !PersonKey.sameKey(asks[i].person, k.name) { asks[i] = Self.renamed(asks[i], to: k.name); changed = true }
+            if changed { try? await store.setValue(SettingKey.asks, json(asks)) }
+            do { try await registry.save() } catch { announcement = "The people registry couldn't be saved: \(error)" }
+            await reload()
+        }
+    }
+
+    func keepPeopleSeparate(_ a: String, _ b: String) {
+        Task {
+            let registry = PersonRegistry(vault: knowledge.rootURL); await registry.load()
+            await registry.keepSeparate(a, b)
+            do { try await registry.save() } catch { announcement = "The people registry couldn't be saved: \(error)" }
+            await reloadPeople()
+        }
+    }
+
+    /// `[[Old]]` → `[[New]]` in every note, written straight to the files so no note counts as the user's edit.
+    private func rewriteLinks(from olds: [String], to new: String) async {
+        for f in (try? await knowledge.folders()) ?? [] {
+            for n in f.notes {
+                let url = knowledge.rootURL.appendingPathComponent(n.relativePath)
+                guard var text = try? String(contentsOf: url, encoding: .utf8) else { continue }
+                var touched = false
+                for old in Set(olds) where old != new { if let t = PersonNotes.rewriteLinks(in: text, from: old, to: new) { text = t; touched = true } }
+                if touched { try? text.write(to: url, atomically: true, encoding: .utf8) }
+            }
+        }
+    }
+    static func fileName(_ relativePath: String) -> String { ((relativePath as NSString).lastPathComponent as NSString).deletingPathExtension }
+    /// The same loop under the kept name: `person` is fixed at creation, so the record is rebuilt around it.
+    static func renamed(_ l: Loop, to person: String) -> Loop {
+        var n = Loop(id: l.id, direction: l.direction, person: person, what: l.what, quote: l.quote, sourceLabel: l.sourceLabel, due: l.due, dueDate: l.dueDate, status: l.status,
+                     openedAt: l.openedAt, closedAt: l.closedAt, closedHow: l.closedHow, firedCardIDs: l.firedCardIDs, cameBackCount: l.cameBackCount)
+        n.nudgedForDue = l.nudgedForDue; n.owner = l.owner
+        return n
+    }
+    static func renamed(_ a: Ask, to person: String) -> Ask {
+        Ask(id: a.id, person: person, bucket: a.bucket, askedAt: a.askedAt, question: a.question, answeredAt: a.answeredAt, reply: a.reply, addressed: a.addressed, handle: a.handle)
+    }
+}
+
 extension Notification.Name {
     static let brownieAsk = Notification.Name("brownie.ask")
     static let brownieRecipeRunning = Notification.Name("brownie.recipe.running")

@@ -106,8 +106,13 @@ public actor RunCoordinator {
             if let brain = deps.brain, !summaries.isEmpty {
                 onEvent(.progress(RunProgress(stage: .synthesising, stats: stats)))
                 deps.stage("Update your notes", "\(summaries.count) summaries and the notes they touch")
+                // Who exists, from the People notes and every earlier run: the brain is told, so it writes each person in one file.
+                let registry = PersonRegistry(vault: deps.knowledge.rootURL, now: { [clock = deps.clock] in clock.now() })
+                await registry.load()
+                await registry.seed(from: (try? await deps.knowledge.folders()) ?? [])
                 let builder = try KnowledgeBuilder(brain: brain, store: deps.knowledge, runStore: store, now: { [clock = deps.clock] in clock.now() }, timeZone: deps.clock.timeZone,
-                                                   coverage: { [tz = deps.clock.timeZone] in let all = SourceCoverage.decode(try? await store.value(SettingKey.coverage)); return all.isEmpty ? nil : CoverageLine.render(all, timeZone: tz) })
+                                                   coverage: { [tz = deps.clock.timeZone] in let all = SourceCoverage.decode(try? await store.value(SettingKey.coverage)); return all.isEmpty ? nil : CoverageLine.render(all, timeZone: tz) },
+                                                   people: { await registry.people() })
                 let readStats = stats
                 var usage = try await builder.sync(summaries: summaries, progress: { p in var p = p; p.stats = readStats; onEvent(.progress(p)) }, onEvent: { e in if case .message(let m) = e { onEvent(.thought(m)) } })
                 // The judge and the preparer take this week's summaries now, in memory; the rows the notes
@@ -151,7 +156,15 @@ public actor RunCoordinator {
                 let candidates = findings.items + TranscriptPromises.candidates(newSpoken)
                 let allLoops = LoopLedger.merge(existing: already, found: findings.newLoops + newSpoken.map(\.loop), updates: findings.updates, items: candidates, now: deps.clock.now())
                 await LoopLedger.save(allLoops, store)
-                await Self.writeBetweenYou(asks: asks, loops: allLoops, knowledge: deps.knowledge, now: deps.clock.now())
+                // Every ask and loop names someone: the registry learns each spelling and handle (the sync may have added
+                // People notes, so it is seeded again first), and the app is told who looks like one person twice.
+                await registry.seed(from: (try? await deps.knowledge.folders()) ?? [])
+                for a in asks { await registry.register(label: a.person, handle: a.handle) }
+                for l in allLoops { await registry.register(label: l.person, handle: nil) }
+                do { try await registry.save() } catch { log.warn("people registry not saved: \(error)") }
+                let suspects = await registry.suspects().map { [$0.0.id, $0.1.id] }
+                try? await store.setValue(SettingKey.duplicatePeople, String(data: JSONEncoder().encode(suspects), encoding: .utf8))
+                await Self.writeBetweenYou(asks: asks, loops: allLoops, knowledge: deps.knowledge, registry: registry, now: deps.clock.now())
                 try await store.setValue(SettingKey.candidates, String(data: JSONEncoder().encode(candidates), encoding: .utf8))
 
                 onEvent(.progress(RunProgress(stage: .preparing, stats: stats)))
@@ -327,10 +340,19 @@ public actor RunCoordinator {
         return (try? JSONDecoder().decode([Ask].self, from: d)) ?? []
     }
     /// The "Between you" block on every People note that has asks or loops: written straight to the file, so it never counts as the user's edit.
-    public static func writeBetweenYou(asks: [Ask], loops: [Loop], knowledge: any KnowledgeStore, now: Date) async {
+    /// Each ask and loop goes to exactly one note — the registry's, or failing that a title with the very same key.
+    /// A first name alone never claims a note by its title; that is how "Arjun" once leaked into "Arjun Mehta".
+    public static func writeBetweenYou(asks: [Ask], loops: [Loop], knowledge: any KnowledgeStore, registry: PersonRegistry?, now: Date) async {
         guard let people = (try? await knowledge.folders())?.first(where: { $0.name == "People" }) else { return }
+        func pick(_ label: String, _ handle: String?) async -> String? {
+            if let registry { return await registry.notePath(forLabel: label, handle: handle, amongNotes: people.notes) }
+            return people.notes.first { PersonKey.sameKey($0.title, label) }?.relativePath
+        }
+        var asksFor: [String: [Ask]] = [:], loopsFor: [String: [Loop]] = [:]
+        for a in asks { if let p = await pick(a.person, a.handle) { asksFor[p, default: []].append(a) } }
+        for l in loops { if let p = await pick(l.person, nil) { loopsFor[p, default: []].append(l) } }
         for n in people.notes {
-            let block = BetweenYou.render(person: n.title, asks: asks, loops: loops, now: now)
+            let block = BetweenYou.render(person: n.title, asks: asksFor[n.relativePath] ?? [], loops: loopsFor[n.relativePath] ?? [], now: now)
             let url = knowledge.rootURL.appendingPathComponent(n.relativePath)
             guard let raw = try? String(contentsOf: url, encoding: .utf8) else { continue }
             // keep the front-matter, work on the body
