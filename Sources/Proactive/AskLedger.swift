@@ -33,6 +33,15 @@ public enum AskLedger {
         guard let oldest = open.filter(\.isOpen).map(\.askedAt).min() else { return recent }
         return max(floor, min(recent, oldest.addingTimeInterval(-3600)))
     }
+    /// The night's scan, from the ledger: every chat is read three days back, except that a chat with an ask still
+    /// waiting is read back to that ask — its own, not the source's oldest — and an ask whose reply was judged to be
+    /// about something else names that reply, so the scan pairs it with the user's next message instead.
+    public static func scan(existing: [Ask], now: Date) -> AskScan {
+        let open = existing.filter(\.isOpen)
+        let byBucket = Dictionary(grouping: open, by: \.bucket).mapValues { scanSince(open: $0, now: now) }
+        let judged = Dictionary(open.filter { $0.addressed == false }.compactMap { a in a.answeredAt.map { (a.id, $0) } }, uniquingKeysWith: { a, _ in a })
+        return AskScan(since: scanSince(open: [], now: now), sinceByBucket: byBucket, judgedReplies: judged)
+    }
 
     static let answering = ["answer", "reply", "respond", "get back", "question", "guidance", "tell", "let", "confirm", "share", "send"]
     /// Loops the user owed someone that their reply settled: a `mine` loop about answering that person, opened before the reply.

@@ -105,6 +105,24 @@ import Support
         #expect(try await w.rows().isEmpty)
     }
 
+    @Test func aLoopThatLapsesTonightIsLetGoBeforeTheJudgeSeesIt() async throws {
+        let w = try Self.world()
+        try await w.seed(2, tag: "a")
+        let old = Loop(id: "LETGO001-x", direction: .mine, person: "Karan", what: "send the villa share", quote: "q", sourceLabel: "WhatsApp · Fri", due: nil, openedAt: Self.today.addingTimeInterval(-91 * 86400))
+        let young = Loop(id: "YOUNG001-x", direction: .mine, person: "Karan", what: "cricket tickets", quote: "q", sourceLabel: "WhatsApp · Fri", due: nil, openedAt: Self.today.addingTimeInterval(-10 * 86400))
+        try await w.store.setValue(SettingKey.loops, String(data: try JSONEncoder().encode([old, young]), encoding: .utf8))
+        let brain = Fake()
+        #expect(await Self.night(w, brain) == .ran(cards: 0))
+        #expect(brain.judged.count == 1)
+        let input = brain.judged.first ?? ""
+        #expect(input.contains("loop YOUNG001 · the user → Karan · cricket tickets · said WhatsApp"), "the loop with time left is handed over as open")
+        #expect(!input.contains("loop LETGO001 · the user → Karan · send the villa share · said"), "the one that lapses tonight is not")
+        #expect(input.contains("loop LETGO001 · the user → Karan · send the villa share · let go"), "it is listed as let go instead, so the judge neither reports it nor finds it again")
+        let after = try JSONDecoder().decode([Loop].self, from: Data((try await w.store.value(SettingKey.loops) ?? "").utf8))
+        #expect(after.first { $0.id == old.id }?.status == .lapsed && after.first { $0.id == old.id }?.lapsedAt == Self.today, "let go, dated tonight, before the judge ran")
+        #expect(after.first { $0.id == young.id }?.status == .open)
+    }
+
     @Test func mergedRowsSurviveAJudgeThatFailsAndAreJudgedTheNextNightEvenWithNothingNew() async throws {
         let w = try Self.world()
         try await w.seed(6, tag: "a")

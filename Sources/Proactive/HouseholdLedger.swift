@@ -23,10 +23,14 @@ public struct HouseholdEntry: Codable, Sendable, Equatable, Identifiable {
 public enum HouseholdLedger {
     public static let file = "ledger.json"
 
-    /// My household loops as ledger lines.
+    /// My household loops as ledger lines. A loop let go is written as closed, "let go", with nobody's name on it: the
+    /// shared file keeps to the words every build reads (a status one Mac cannot decode empties the whole ledger there),
+    /// and letting go is nobody's doing — the other Mac neither closes its copy over it nor marks a card handled.
     public static func entries(from loops: [Loop], me: String, now: Date) -> [HouseholdEntry] {
         loops.filter { $0.owner != nil }.map { l in
-            HouseholdEntry(loopID: l.id, memberID: me, person: l.person, what: l.what, direction: l.direction, owner: l.owner, status: l.status, closedBy: l.status == .closed ? me : nil, closedHow: l.closedHow, updatedAt: l.closedAt ?? l.openedAt)
+            let letGo = l.status == .lapsed
+            return HouseholdEntry(loopID: l.id, memberID: me, person: l.person, what: l.what, direction: l.direction, owner: l.owner, status: letGo ? .closed : l.status,
+                                  closedBy: l.status == .closed ? me : nil, closedHow: letGo ? "let go" : l.closedHow, updatedAt: l.closedAt ?? l.openedAt)
         }
     }
 

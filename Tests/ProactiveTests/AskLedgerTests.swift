@@ -32,6 +32,20 @@ import Domain
         #expect(AskLedger.scanSince(open: [gone], now: now) == now.addingTimeInterval(-3 * day), "nor one let go")
     }
 
+    @Test func theScanIsPlannedPerChatAndNamesTheRepliesAlreadyJudged() {
+        let day = 86400.0
+        let deep = ask("a", askedAgo: 40 * day)   // whatsapp:507, still waiting
+        let off = Ask(id: "o", person: "Kanika", bucket: BucketID("whatsapp:9"), askedAt: now.addingTimeInterval(-5 * day), question: "q?", answeredAt: now.addingTimeInterval(-4 * day), reply: "lol", addressed: false)
+        let done = Ask(id: "d", person: "Rohan", bucket: BucketID("whatsapp:3"), askedAt: now.addingTimeInterval(-20 * day), question: "q?", answeredAt: now.addingTimeInterval(-19 * day), reply: "done", addressed: true)
+        let s = AskLedger.scan(existing: [deep, off, done], now: now)
+        #expect(s.since == now.addingTimeInterval(-3 * day), "a chat with nothing waiting: three days")
+        #expect(s.since(BucketID("whatsapp:507")) == now.addingTimeInterval(-40 * day - 3600), "back to its own ask")
+        #expect(s.since(BucketID("whatsapp:9")) == now.addingTimeInterval(-5 * day - 3600), "not to another chat's older one")
+        #expect(s.since(BucketID("whatsapp:3")) == now.addingTimeInterval(-3 * day) && s.since(BucketID("slack:D1")) == now.addingTimeInterval(-3 * day), "an answered ask widens nothing; nor does a chat with no ask")
+        #expect(s.judgedReplies == ["o": off.answeredAt!], "only the reply judged to be about something else is named")
+        #expect(AskLedger.scan(existing: [], now: now) == AskScan(since: now.addingTimeInterval(-3 * day)))
+    }
+
     @Test func yourReplyClosesTheLoopAboutAnswering() {
         let loop = Loop(id: "L", direction: .mine, person: "Nitesh", what: "Answer Nitesh's PostgreSQL question", quote: "", sourceLabel: "WhatsApp", due: nil, openedAt: now.addingTimeInterval(-900))
         let promise = Loop(id: "P", direction: .mine, person: "Nitesh", what: "share the exact steps once confirmed", quote: "", sourceLabel: "WhatsApp", due: nil, openedAt: now.addingTimeInterval(-100))
