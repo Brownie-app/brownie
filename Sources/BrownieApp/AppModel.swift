@@ -94,6 +94,8 @@ final class AppModel: ObservableObject {
     @Published var feedbackNoteFor: String?
     /// What Hands is doing right now, as steps a person can follow (the floating panel and the card view read it).
     @Published var journey: HandsJourney?
+    /// Sign what Brownie drafts with "— via my personal assistant Brownie · usebrownie.com".
+    @Published var signMessages = false
     /// The evidence being shown in its own sheet: the chat window, or the clip.
     @Published var evidenceShown: EvidenceShown?
     @Published var handsHotkey = "rightCommand"
@@ -217,6 +219,7 @@ final class AppModel: ObservableObject {
         cardsPerMorning = Int(await v(SettingKey.cardsPerMorning) ?? "5") ?? 5
         notify = (await v(SettingKey.notifyOnReady) ?? "true") == "true"
         instructions = await v(SettingKey.standingInstructions) ?? ""
+        signMessages = (await v(SettingKey.signature)) == "true"
         staleDays = Int(await v(SettingKey.staleDays) ?? "") ?? QuietCheck.defaultStaleDays
         feedback = RunCoordinator.loadFeedback(await v(SettingKey.feedback))
         household = RunCoordinator.loadHousehold(await v(SettingKey.household))
@@ -519,8 +522,10 @@ final class AppModel: ObservableObject {
     }
 
     func fire(_ id: String) {
-        guard let card = card(id) else { return }
+        guard var card = card(id) else { return }
         markWalkthrough("card")
+        // The sign-off rides on the message itself, so what you see in the box is what goes.
+        if signMessages, card.person != nil { card = card.withDraft(Signature.apply(card.draft, enabled: true)) }
         overlay = .firing(id); fireEvents = []
         if case .computerUse = card.recipe {
             if !Hands.hasAccessibility { fireEvents = [.step("Hands needs Accessibility — System Settings → Privacy & Security → Accessibility → add Brownie", done: false), .finished(.couldNot)]; PermissionProbe.openSettings(for: .accessibility); return }

@@ -18,6 +18,7 @@ public enum SettingKey {
     public static let householdLastSync = "household.lastSync"    // JSON SyncReport
     public static let householdBucketNames = "household.bucketNames"  // JSON [bucket raw value: chat name], kept by the app
     public static let feedback = "proactive.feedback"             // JSON [CardFeedback], newest last
+    public static let signature = "hands.signature"              // "true" → drafts end with the Brownie sign-off
     public static let handsHotkey = "hands.hotkey"                // rightCommand | rightOption | off
     public static let handsSpeed = "hands.speed"                  // fast | balanced | careful
     public static let overnightEnabled = "overnight.enabled"

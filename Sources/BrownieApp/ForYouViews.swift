@@ -311,8 +311,11 @@ struct CardDetailView: View {
                                         TextEditor(text: $draft).font(.system(size: 13.5)).frame(minHeight: 120).padding(8).scrollContentBackground(.hidden).background(RoundedRectangle(cornerRadius: 6).fill(t.code))
                                         HStack { BButton(title: "Save draft", kind: .primary) { m.updateDraft(c.id, draft); editing = false }; BButton(title: "Cancel", kind: .quiet) { editing = false } }
                                     } else {
-                                        Text(c.draft).font(.system(size: 13.5)).padding(14).frame(maxWidth: .infinity, alignment: .leading).background(RoundedRectangle(cornerRadius: 6).fill(t.code))
-                                        HStack { Text("You can edit this before it goes. Brownie never sends on its own.").font(.system(size: 11)).foregroundStyle(t.ink2); Spacer(); BButton(title: "Edit draft", kind: .quiet) { draft = c.draft; editing = true } }
+                                        VStack(alignment: .leading, spacing: 8) {
+                                            Text(Signature.strip(c.draft)).font(.system(size: 13.5))
+                                            if m.signMessages, c.person != nil { Text(Signature.line).font(.system(size: 12.5)).foregroundStyle(t.ink2) }
+                                        }.padding(14).frame(maxWidth: .infinity, alignment: .leading).background(RoundedRectangle(cornerRadius: 6).fill(t.code))
+                                        HStack { Text("You can edit this before it goes. Brownie never sends on its own.").font(.system(size: 11)).foregroundStyle(t.ink2); Spacer(); BButton(title: "Edit draft", kind: .quiet) { draft = Signature.strip(c.draft); editing = true } }
                                     }
                                 }
                             }
