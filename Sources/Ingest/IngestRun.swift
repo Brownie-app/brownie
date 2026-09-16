@@ -44,7 +44,8 @@ public actor IngestRun {
             let existing = try await store.cursor(bucket.id)
             var cursor = existing ?? BucketCursor(bucket: bucket.id, source: source.id, mark: nil, floor: nil)
             if mode == .initial { cursor = BucketCursor(bucket: bucket.id, source: source.id, mark: nil, floor: nil) }
-            let plan = Self.plan(bucket.items, cursor: cursor, mode: mode, limits: limits)
+            let plan = Self.plan(bucket.items, cursor: cursor, mode: mode, limits: limits, now: clock.now())
+            if plan.kind == .incremental, let m = cursor.mark, Self.isFutureDateKey(m, now: clock.now()) { log.warn("\(bucket.name): cursor mark was in the future (\(m.order)) — re-reading the newest item to heal it") }
             stats.deferred += plan.deferred
             log.info("\(name)/\(bucket.name): \(plan.items.count) items (\(plan.kind)), deferred \(plan.deferred)")
 
@@ -124,9 +125,12 @@ public actor IngestRun {
     enum PlanKind: String { case initial, resume, incremental, none }
     struct Plan { let items: [Candidate]; let kind: PlanKind; let deferred: Int }
 
+    /// A key that reads as a Unix date more than a day ahead. Row-id keys (Messages) are far too small to trip this.
+    static func isFutureDateKey(_ k: ItemKey, now: Date) -> Bool { k.order > now.timeIntervalSince1970 + 86400 && k.order < 4_000_000_000 }
+
     /// Newest-first input. Initial (and resume): walk newest→oldest below the floor. Incremental:
     /// items above the mark, oldest→newest.
-    static func plan(_ newestFirst: [Candidate], cursor: BucketCursor, mode: Mode, limits: Limits) -> Plan {
+    static func plan(_ newestFirst: [Candidate], cursor: BucketCursor, mode: Mode, limits: Limits, now: Date? = nil) -> Plan {
         let wantInitial = mode == .initial || (mode == .auto && !cursor.isComplete)
         if wantInitial {
             var items = newestFirst
@@ -135,6 +139,11 @@ public actor IngestRun {
             return Plan(items: Array(items.prefix(limits.initialPerBucket)), kind: cursor.floor == nil ? .initial : .resume, deferred: deferred)
         }
         guard let mark = cursor.mark else { return Plan(items: [], kind: .none, deferred: 0) }
+        // A mark that sits in the future (a source once keyed by a bogus date) would hide every real item for good:
+        // heal by re-reading the newest item, whose key then becomes the mark.
+        if let now, Self.isFutureDateKey(mark, now: now), let newest = newestFirst.first, newest.key < mark {
+            return Plan(items: [newest], kind: .incremental, deferred: 0)
+        }
         let fresh = newestFirst.filter { $0.key > mark }.reversed()   // oldest → newest
         let deferred = max(0, fresh.count - limits.incrementalPerBucket)
         return Plan(items: Array(fresh.prefix(limits.incrementalPerBucket)), kind: .incremental, deferred: deferred)

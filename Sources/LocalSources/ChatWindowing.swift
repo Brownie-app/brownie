@@ -41,6 +41,13 @@ public enum ChatWindowing {
 
     static let time: DateFormatter = { let f = DateFormatter(); f.dateFormat = "d MMM HH:mm"; return f }()
 
+    /// Messages a chat database can hold that no reader should see as "the newest": ones dated in the future.
+    /// WhatsApp keeps the odd row stamped years ahead (a scheduled or malformed message); windowed as-is it becomes
+    /// the newest item, the cursor's mark leaps past every real message, and the chat reads as "nothing new" forever.
+    public static func sane(_ messages: [ChatMessage], now: Date, slack: TimeInterval = 86400) -> [ChatMessage] {
+        messages.filter { $0.date <= now.addingTimeInterval(slack) }
+    }
+
     /// Ascending messages → windows (ascending). Every message lands in exactly one window.
     public static func windows(_ messages: [ChatMessage], chat: ChatInfo) -> [ChatWindow] {
         var out: [ChatWindow] = []
