@@ -33,10 +33,17 @@ import Domain
         try w.put("People/Arif.md", Self.owned("# Arif\n\nA friend.\n", path: "People/Arif.md"))
         #expect(try await w.kb.note(at: "People/Arif.md")?.userEdited == false)
         try w.put("People/Arif.md", w.raw("People/Arif.md")!.replacingOccurrences(of: "A friend.", with: "A friend from Pune."))   // Obsidian, the phone, the household
+        let edited = Date(timeIntervalSince1970: 1_789_473_600)   // 2026-09-15 12:00 UTC, when that edit was made
+        try FileManager.default.setAttributes([.modificationDate: edited], ofItemAtPath: w.root.appendingPathComponent("People/Arif.md").path)
         let n = try #require(try await w.kb.note(at: "People/Arif.md"))
         #expect(n.userEdited, "the body no longer hashes to what Brownie wrote")
-        #expect(n.meta.updated == "2026-09-10" && n.updatedAt == NoteMeta.date("2026-09-10", Self.utc), "updated is the front-matter's day, not the file's mtime")
-        #expect(w.raw("People/Arif.md")!.contains("user_edited: false"), "noticed on read; written back on the next code write")
+        #expect(n.meta.updated == "2026-09-15" && n.updatedAt == edited, "the hand edit changed the substance on the day the file was written, not on the block's old day")
+        #expect(w.raw("People/Arif.md")!.contains("user_edited: false") && w.raw("People/Arif.md")!.contains("updated: 2026-09-10"), "noticed on read; written back on the next code write")
+        // a note whose body still hashes keeps the day its block records, whatever the file's mtime
+        try w.put("People/Sam.md", Self.owned("# Sam\n\nA friend.\n", path: "People/Sam.md"))
+        try FileManager.default.setAttributes([.modificationDate: edited], ofItemAtPath: w.root.appendingPathComponent("People/Sam.md").path)
+        let s = try #require(try await w.kb.note(at: "People/Sam.md"))
+        #expect(!s.userEdited && s.meta.updated == "2026-09-10" && s.updatedAt == NoteMeta.date("2026-09-10", Self.utc))
     }
 
     @Test func aNoteWithoutAHashIsNotAnEdit() async throws {

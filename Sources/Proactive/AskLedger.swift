@@ -198,24 +198,7 @@ public enum StatusBlock {
     }
 
     /// The note body with the block replaced (or inserted after the H1), unchanged when the block is the same.
-    /// A block under the old markers is replaced too, which is how a note migrates.
-    public static func upsert(into body: String, block: String) -> String {
-        let trimmed = block.trimmingCharacters(in: .newlines)
-        for (o, c) in [(open, close), (legacyOpen, legacyClose)] {
-            guard let s = body.range(of: o), let e = body.range(of: c), s.lowerBound < e.lowerBound else { continue }
-            // the block plus the blank line after it, so removing leaves the note as it was
-            var end = e.upperBound
-            while end < body.endIndex, body[end] == "\n", body.distance(from: e.upperBound, to: end) < 2 { end = body.index(after: end) }
-            let old = String(body[s.lowerBound..<e.upperBound])
-            if trimmed.isEmpty { var b = body; b.removeSubrange(s.lowerBound..<end); return b }
-            if old == trimmed { return body }
-            var b = body; b.replaceSubrange(s.lowerBound..<e.upperBound, with: trimmed); return b
-        }
-        guard !trimmed.isEmpty else { return body }
-        // right after the title line
-        if body.hasPrefix("# "), let nl = body.firstIndex(of: "\n") {
-            var b = body; b.insert(contentsOf: "\n" + trimmed + "\n", at: body.index(after: nl)); return b
-        }
-        return trimmed + "\n\n" + body
-    }
+    /// A block under the old markers is replaced too, which is how a note migrates. `NoteStatus` does the work, so
+    /// what goes in here is exactly what `NoteStatus.strip` takes out and the hash never sees a difference.
+    public static func upsert(into body: String, block: String) -> String { NoteStatus.upsert(block, into: body) }
 }

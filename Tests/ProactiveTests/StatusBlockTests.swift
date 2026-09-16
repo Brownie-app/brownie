@@ -76,6 +76,17 @@ import Domain
         #expect(StatusBlock.upsert(into: "no title here", block: block) == block.trimmingCharacters(in: .newlines) + "\n\nno title here")
     }
 
+    /// The brain writes many notes with no blank line under the title; the night's block must not turn that into the user's edit.
+    @Test func upsertOnANoteWithNoBlankLineUnderTheTitleIsUndoneExactlyByStrip() {
+        let body = "# Arif\nArif is a friend.\n"
+        let block = StatusBlock.open + "\n## Between you\n- one\n" + StatusBlock.close + "\n"
+        let once = StatusBlock.upsert(into: body, block: block)
+        #expect(once == "# Arif\n\n" + block + "Arif is a friend.\n")
+        #expect(NoteStatus.strip(once) == body && StatusBlock.upsert(into: once, block: "") == body, "what went in is exactly what comes out")
+        #expect(NoteMeta.hash(once) == NoteMeta.hash(body) && !NoteMeta.fresh(path: "People/Arif.md", body: body, today: "2026-09-16").bodyDiffers(once), "so the note is still Brownie's")
+        #expect(StatusBlock.upsert(into: once, block: block) == once && NoteStatus.strip(StatusBlock.upsert(into: once, block: block.replacingOccurrences(of: "one", with: "two"))) == body)
+    }
+
     @Test func aNoteWithTheOldMarkersIsMigrated() {
         let old = "# Nitesh\n\n" + StatusBlock.legacyOpen + "\n## Between you\n_old_\n- ⏳ 16 Sep they asked: “beer?” — **no reply yet** (2 h ago)\n" + StatusBlock.legacyClose + "\n\nRecurring contact.\n"
         let block = StatusBlock.open + "\n## Between you\n- ⏳ 16 Sep — they asked: “beer?” — no reply yet\n" + StatusBlock.close + "\n"
