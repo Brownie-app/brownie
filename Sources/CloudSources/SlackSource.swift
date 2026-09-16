@@ -232,3 +232,4 @@ extension SlackSource: ChatReader {
         return try await history(channel(bucket), t, oldest: from.timeIntervalSince1970, latest: to.timeIntervalSince1970, me: me, names: names)
     }
 }
+extension SlackSource: AskScanning { public func recentAsks(enabled: Set<BucketID>?, since: Date) async throws -> [Ask] { try await scanAsks(enabled: enabled, since: since) } }

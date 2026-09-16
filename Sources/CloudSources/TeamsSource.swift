@@ -223,3 +223,4 @@ extension TeamsSource: ChatReader {
         try await messages(of: bucket, me: try await me(), newerThan: from).filter { $0.date <= to }
     }
 }
+extension TeamsSource: AskScanning { public func recentAsks(enabled: Set<BucketID>?, since: Date) async throws -> [Ask] { try await scanAsks(enabled: enabled, since: since) } }

@@ -29,7 +29,7 @@ public struct Judge: Sendable {
         return (f.items, u)
     }
 
-    public func judge(summaries: [SummaryRecord], calendar: String?, instructions: String, openLoops: [Loop], max: Int = 8, household: Household? = nil) async throws -> (Findings, Usage) {
+    public func judge(summaries: [SummaryRecord], calendar: String?, instructions: String, openLoops: [Loop], max: Int = 8, household: Household? = nil, asks: String = "") async throws -> (Findings, Usage) {
         guard !summaries.isEmpty else { return (Findings(items: [], newLoops: [], updates: []), .zero) }
         let corpus = Self.trim(summaries.enumerated().map { Self.line($1, $0 + 1, shared: household?.isShared($1.bucket) ?? false) }.joined(separator: "\n"), to: BrainLimits.corpusPartBudget)
         var p = template
@@ -39,6 +39,7 @@ public struct Judge: Sendable {
         p = p.replacingOccurrences(of: "{{instructions}}", with: instructions.isEmpty ? "" : "THE USER'S STANDING INSTRUCTIONS (honour these about what to surface or skip; they never override accuracy):\n\(instructions)\n")
         p = p.replacingOccurrences(of: "{{summaries}}", with: corpus)
         p = p.replacingOccurrences(of: "{{household}}", with: Self.householdBlock(household))
+        p = p.replacingOccurrences(of: "{{asks}}", with: asks)
         p = p.replacingOccurrences(of: "{{loops}}", with: openLoops.isEmpty ? "" : "OPEN LOOPS BROWNIE ALREADY TRACKS (report only closures, in loop_updates, by id):\n" + openLoops.map(\.judgeLine).joined(separator: "\n") + "\n")
         let r = try await brain.complete(BrainRequest(system: "You return only the JSON the user asks for.", input: p, schema: Self.schema, effort: .high, maxOutputTokens: 8000, timeout: 1200))
         guard let data = r.jsonData, let obj = try? JSONDecoder().decode(Wrapper.self, from: data) else { throw BrainError.badResponse("judge returned no JSON") }

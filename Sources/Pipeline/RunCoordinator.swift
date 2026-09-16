@@ -126,7 +126,20 @@ public actor RunCoordinator {
                 let cal = await deps.calendarText()
                 deps.stage("Judge what matters", "\(recent.count) summaries from the last 7 days\(cal == nil ? "" : ", the calendar for 8 days"), \(openLoops.count) open loops")
                 let household = Self.loadHousehold(try await store.value(SettingKey.household))
-                let (findings, u1) = try await Judge(brain: brain, clock: deps.clock).judge(summaries: recent, calendar: cal, instructions: instructions, openLoops: openLoops, max: 8, household: household)
+                // Asks: read from the direct chats themselves, so a reply the user sent counts the same day.
+                var asks = Self.loadAsks(try await store.value(SettingKey.asks))
+                var found: [Ask] = []
+                for source in deps.sources {
+                    guard let scanner = source as? AskScanning, await source.availability() == .available else { continue }
+                    let enabled = try await enabledBuckets(for: source, store: store)
+                    if let a = try? await scanner.recentAsks(enabled: enabled, since: deps.clock.now().addingTimeInterval(-3 * 86400)) { found += a }
+                }
+                asks = AskLedger.merge(existing: asks, found: found, now: deps.clock.now())
+                try await store.setValue(SettingKey.asks, String(data: JSONEncoder().encode(asks), encoding: .utf8))
+                let settled = AskLedger.closures(loops: openLoops, asks: asks, now: deps.clock.now())
+                if settled != openLoops { var all = await LoopLedger.load(store); for l in settled where l.status == .closed { if let i = all.firstIndex(where: { $0.id == l.id }) { all[i] = l } }; await LoopLedger.save(all, store); log.info("\(settled.filter { $0.status == .closed }.count) loop(s) closed by the user's own replies") }
+                let openNow = settled.filter { $0.status == .open }
+                let (findings, u1) = try await Judge(brain: brain, clock: deps.clock).judge(summaries: recent, calendar: cal, instructions: instructions, openLoops: openNow, max: 8, household: household, asks: AskLedger.judgeLines(asks, now: deps.clock.now()))
                 usage = usage + u1
                 // Promises said out loud: parsed from transcript summaries, deterministically, so none is missed.
                 let spoken = recent.filter { $0.kind == .transcript }.flatMap { TranscriptPromises.parse(summary: $0.text, recording: $0.title.isEmpty ? $0.bucketName : $0.title, date: $0.itemDate ?? $0.createdAt, now: deps.clock.now()) }
@@ -136,6 +149,7 @@ public actor RunCoordinator {
                 let candidates = findings.items + TranscriptPromises.candidates(newSpoken)
                 let allLoops = LoopLedger.merge(existing: already, found: findings.newLoops + newSpoken.map(\.loop), updates: findings.updates, items: candidates, now: deps.clock.now())
                 await LoopLedger.save(allLoops, store)
+                await Self.writeBetweenYou(asks: asks, loops: allLoops, knowledge: deps.knowledge, now: deps.clock.now())
                 try await store.setValue(SettingKey.candidates, String(data: JSONEncoder().encode(candidates), encoding: .utf8))
 
                 onEvent(.progress(RunProgress(stage: .preparing, stats: stats)))
@@ -288,6 +302,23 @@ public actor RunCoordinator {
         return Set(ids.map(BucketID.init))
     }
 
+    public static func loadAsks(_ json: String?) -> [Ask] {
+        guard let j = json, let d = j.data(using: .utf8) else { return [] }
+        return (try? JSONDecoder().decode([Ask].self, from: d)) ?? []
+    }
+    /// The "Between you" block on every People note that has asks or loops: written straight to the file, so it never counts as the user's edit.
+    public static func writeBetweenYou(asks: [Ask], loops: [Loop], knowledge: any KnowledgeStore, now: Date) async {
+        guard let people = (try? await knowledge.folders())?.first(where: { $0.name == "People" }) else { return }
+        for n in people.notes {
+            let block = BetweenYou.render(person: n.title, asks: asks, loops: loops, now: now)
+            let url = knowledge.rootURL.appendingPathComponent(n.relativePath)
+            guard let raw = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            // keep the front-matter, work on the body
+            let (head, body): (String, String) = raw.hasPrefix("---\n") && raw.range(of: "\n---\n") != nil ? { let r = raw.range(of: "\n---\n")!; return (String(raw[..<r.upperBound]), String(raw[r.upperBound...])) }() : ("", raw)
+            let updated = BetweenYou.upsert(into: body, block: block)
+            if updated != body { try? (head + updated).write(to: url, atomically: true, encoding: .utf8) }
+        }
+    }
     public static func loadHousehold(_ json: String?) -> Household? {
         guard let j = json, let d = j.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(Household.self, from: d)

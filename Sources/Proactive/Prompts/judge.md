@@ -13,7 +13,7 @@ Loops. Separately from the items, keep the ledger of promises: every commitment 
 Return up to {{max}} items, best first. Return fewer, or none, when there genuinely aren't that many. For each: `title` (a specific headline, at most eight words, naming the person or thing), `action` (what the user should concretely do), `importance` (why it matters to this user — connect the dots and name which summaries you used), `dueDate` (the real relevant date in plain words, or null — never invented), `sources` (the summary numbers or names you relied on), `urgency` (high, medium or low), `owner` (only for items from SHARED summaries — see THE HOUSEHOLD; otherwise null).
 
 Right now it is {{now}}.
-{{calendar}}{{loops}}
+{{calendar}}{{asks}}{{loops}}
 SUMMARIES FROM THE LAST 7 DAYS:
 
 {{summaries}}
