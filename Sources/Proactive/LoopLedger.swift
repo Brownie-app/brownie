@@ -27,7 +27,7 @@ public enum LoopLedger {
     }
 
     public static func same(_ a: Loop, _ b: Loop) -> Bool {
-        guard a.direction == b.direction, a.person.lowercased().trimmingCharacters(in: .whitespaces) == b.person.lowercased().trimmingCharacters(in: .whitespaces) else { return false }
+        guard a.direction == b.direction, PersonKey.same(a.person, b.person) else { return false }
         let wa = words(a.what), wb = words(b.what)
         guard !wa.isEmpty, !wb.isEmpty else { return a.what == b.what }
         let inter = wa.intersection(wb).count
@@ -149,23 +149,20 @@ public enum CardDedupe {
 
     public static func same(_ a: Card, _ b: Card) -> Bool {
         if let l = a.loopID, let m = b.loopID, l == m { return true }
-        guard let pa = person(a), let pb = person(b), pa == pb else { return false }
+        guard let pa = person(a), let pb = person(b), PersonKey.same(pa, pb) else { return false }
         let wa = LoopLedger.words(a.title + " " + a.why + " " + a.draft), wb = LoopLedger.words(b.title + " " + b.why + " " + b.draft)
         guard !wa.isEmpty, !wb.isEmpty else { return false }
         return Double(wa.intersection(wb).count) / Double(min(wa.count, wb.count)) >= 0.5
     }
 
-    /// Who the card is for, from its recipe: the chat, the recipient, the addressee.
+    /// Who the card is for, from its recipe: the chat, the recipient, the addressee. Compared with `PersonKey.same`,
+    /// so "Kanika Pandey Loadmill" and "Kanika Pandey" are one person here as everywhere else.
     static func person(_ c: Card) -> String? {
-        let raw: String
         switch c.recipe {
-        case .whatsapp(let chat, _, _): raw = chat
-        case .imessage(let to, _, _): raw = to
-        case .mail(let to, _, _, _): raw = to
+        case .whatsapp(let chat, _, _): return PersonKey.normalise(chat).isEmpty ? nil : chat
+        case .imessage(let to, _, _): return PersonKey.normalise(to).isEmpty ? nil : to
+        case .mail(let to, _, _, _): return PersonKey.normalise(to).isEmpty ? nil : to
         default: return nil
         }
-        // "Kanika Pandey Loadmill" and "Kanika Pandey" are the same person: compare on the first two words
-        let parts = raw.lowercased().split(whereSeparator: { !$0.isLetter }).prefix(2)
-        return parts.isEmpty ? nil : parts.joined(separator: " ")
     }
 }

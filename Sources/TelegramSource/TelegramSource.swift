@@ -39,7 +39,7 @@ public struct TelegramSource: Source {
             let type = (chat["type"] as? [String: Any])?["@type"] as? String ?? ""
             let isGroup = type == "chatTypeBasicGroup" || type == "chatTypeSupergroup"
             if type == "chatTypeSupergroup", ((chat["type"] as? [String: Any])?["is_channel"] as? Bool) == true { continue }   // broadcast channels: skip
-            out.append(BucketInfo(id: BucketID("telegram:\(id)"), name: chat["title"] as? String ?? "Chat", detail: isGroup ? "Group" : "Direct", isGroup: isGroup, count: 0))
+            out.append(BucketInfo(id: BucketID("telegram:\(id)"), name: chat["title"] as? String ?? "Chat", detail: isGroup ? "Group" : "Direct", isGroup: isGroup, count: 0, handle: isGroup ? nil : PersonHandle.telegram(chatID: id)))
         }
         return out
     }

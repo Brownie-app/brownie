@@ -14,8 +14,10 @@ public struct Ask: Codable, Sendable, Equatable, Identifiable {
     public var reply: String?
     /// Did that message actually answer the question? nil = not yet judged.
     public var addressed: Bool?
-    public init(id: String, person: String, bucket: BucketID, askedAt: Date, question: String, answeredAt: Date? = nil, reply: String? = nil, addressed: Bool? = nil) {
-        self.id = id; self.person = person; self.bucket = bucket; self.askedAt = askedAt; self.question = question; self.answeredAt = answeredAt; self.reply = reply; self.addressed = addressed
+    /// The chat's stable handle (`PersonHandle`), when the source knows one — how the registry ties the ask to a person.
+    public var handle: String?
+    public init(id: String, person: String, bucket: BucketID, askedAt: Date, question: String, answeredAt: Date? = nil, reply: String? = nil, addressed: Bool? = nil, handle: String? = nil) {
+        self.id = id; self.person = person; self.bucket = bucket; self.askedAt = askedAt; self.question = question; self.answeredAt = answeredAt; self.reply = reply; self.addressed = addressed; self.handle = handle
     }
     /// Still waiting: no reply at all, or a reply that was about something else.
     public var isOpen: Bool { answeredAt == nil || addressed == false }

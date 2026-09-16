@@ -140,8 +140,11 @@ public struct BucketInfo: Sendable, Hashable, Identifiable {
     public let detail: String
     public let isGroup: Bool
     public let count: Int
-    public init(id: BucketID, name: String, detail: String, isGroup: Bool, count: Int) {
-        self.id = id; self.name = name; self.detail = detail; self.isGroup = isGroup; self.count = count
+    /// For a direct chat: the other person as the source knows them, spelled by `PersonHandle`
+    /// ("whatsapp:+91…", "slack:U0…"), so a renamed chat is still the same person. Nil for groups.
+    public let handle: String?
+    public init(id: BucketID, name: String, detail: String, isGroup: Bool, count: Int, handle: String? = nil) {
+        self.id = id; self.name = name; self.detail = detail; self.isGroup = isGroup; self.count = count; self.handle = handle
     }
 }
 

@@ -62,7 +62,8 @@ public struct WhatsAppSource: Source {
                 let isGroup = jid.hasSuffix("@g.us") || (r["type"].int ?? 0) == 1
                 let members = Int(r["members"].int ?? 0)
                 let phone = isGroup ? "" : String(jid.split(separator: "@").first ?? "")
-                return BucketInfo(id: BucketID("whatsapp:\(pk)"), name: r["name"].text ?? "Chat", detail: isGroup ? "Group · \(members) people" : "Direct" + (phone.isEmpty ? "" : " · +\(phone)"), isGroup: isGroup, count: Int(n))
+                return BucketInfo(id: BucketID("whatsapp:\(pk)"), name: r["name"].text ?? "Chat", detail: isGroup ? "Group · \(members) people" : "Direct" + (phone.isEmpty ? "" : " · +\(phone)"), isGroup: isGroup, count: Int(n),
+                                  handle: isGroup || phone.isEmpty ? nil : PersonHandle.whatsapp(phoneDigits: phone))
             }
     }
 

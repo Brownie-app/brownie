@@ -50,7 +50,7 @@ public actor SlackAuth {
 // MARK: - Parsing (pure)
 
 public enum SlackParsing {
-    public struct Channel: Sendable, Equatable { public let id: String; public let name: String; public let isGroup: Bool; public let members: Int; public let detail: String }
+    public struct Channel: Sendable, Equatable { public let id: String; public let name: String; public let isGroup: Bool; public let members: Int; public let detail: String; public var handle: String? = nil }
 
     /// `conversations.list` → channels and DMs. DMs get the other person's name; group DMs their members.
     public static func channels(_ obj: [String: Any], names: [String: String]) -> [Channel] {
@@ -59,7 +59,7 @@ public enum SlackParsing {
             if c["is_archived"] as? Bool == true { return nil }
             if c["is_im"] as? Bool == true {
                 let u = c["user"] as? String ?? ""
-                return Channel(id: id, name: names[u] ?? u, isGroup: false, members: 2, detail: "Direct")
+                return Channel(id: id, name: names[u] ?? u, isGroup: false, members: 2, detail: "Direct", handle: u.isEmpty ? nil : PersonHandle.slack(userID: u))
             }
             if c["is_mpim"] as? Bool == true {
                 let raw = c["name"] as? String ?? ""   // "mpdm-alice--bob--carol-1"
@@ -156,7 +156,7 @@ public struct SlackSource: Source {
         repeat {
             let r = try await call("conversations.list", t, ["types": "public_channel,private_channel,mpim,im", "exclude_archived": "true", "limit": "500", "cursor": cursor ?? ""])
             guard r["ok"] as? Bool == true else { throw SourceError.cannotRead("Slack: \(r["error"] as? String ?? "conversations.list failed")") }
-            out += SlackParsing.channels(r, names: names).map { BucketInfo(id: BucketID("slack:\($0.id)"), name: $0.name, detail: $0.detail, isGroup: $0.isGroup, count: $0.members) }
+            out += SlackParsing.channels(r, names: names).map { BucketInfo(id: BucketID("slack:\($0.id)"), name: $0.name, detail: $0.detail, isGroup: $0.isGroup, count: $0.members, handle: $0.handle) }
             cursor = (r["response_metadata"] as? [String: Any])?["next_cursor"] as? String; if cursor?.isEmpty == true { cursor = nil }
         } while cursor != nil
         log.info("\(out.count) conversations discovered")
