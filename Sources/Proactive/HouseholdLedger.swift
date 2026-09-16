@@ -78,7 +78,7 @@ public enum HouseholdLedger {
         guard let me = household.me?.id else { return loops }
         return loops.map { l in
             guard l.status == .open, l.owner != nil, let e = ledger.first(where: { $0.status == .closed && $0.closedBy != nil && $0.closedBy != me && ($0.loopID == l.id || sameLoop($0, HouseholdEntry(loopID: l.id, memberID: me, person: l.person, what: l.what, direction: l.direction, owner: l.owner, status: .open, updatedAt: now))) }) else { return l }
-            var l = l; l.status = .closed; l.closedAt = now
+            var l = l; l.status = .closed; l.closedAt = now; l.closedBy = "household"
             l.closedHow = "\(household.members.first { $0.id == e.closedBy }?.firstName ?? "someone at home") did it\(e.closedHow.map { " — \($0)" } ?? "")"
             return l
         }

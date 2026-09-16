@@ -16,13 +16,17 @@ public struct Ask: Codable, Sendable, Equatable, Identifiable {
     public var addressed: Bool?
     /// The chat's stable handle (`PersonHandle`), when the source knows one — how the registry ties the ask to a person.
     public var handle: String?
-    public init(id: String, person: String, bucket: BucketID, askedAt: Date, question: String, answeredAt: Date? = nil, reply: String? = nil, addressed: Bool? = nil, handle: String? = nil) {
-        self.id = id; self.person = person; self.bucket = bucket; self.askedAt = askedAt; self.question = question; self.answeredAt = answeredAt; self.reply = reply; self.addressed = addressed; self.handle = handle
+    /// Set when the question went unanswered long enough that Brownie stopped tracking it (45 days). Never nagged about again.
+    public var lapsedAt: Date?
+    public init(id: String, person: String, bucket: BucketID, askedAt: Date, question: String, answeredAt: Date? = nil, reply: String? = nil, addressed: Bool? = nil, handle: String? = nil, lapsedAt: Date? = nil) {
+        self.id = id; self.person = person; self.bucket = bucket; self.askedAt = askedAt; self.question = question; self.answeredAt = answeredAt; self.reply = reply; self.addressed = addressed; self.handle = handle; self.lapsedAt = lapsedAt
     }
-    /// Still waiting: no reply at all, or a reply that was about something else.
-    public var isOpen: Bool { answeredAt == nil || addressed == false }
+    /// Still waiting: no reply at all, or a reply that was about something else — and not yet let go.
+    public var isOpen: Bool { lapsedAt == nil && (answeredAt == nil || addressed == false) }
     /// Settled: a reply that addressed it.
     public var isAnswered: Bool { answeredAt != nil && addressed != false }
+    /// Let go: waited 45 days and nothing came.
+    public var isLapsed: Bool { lapsedAt != nil && !isAnswered }
 }
 
 /// A chat source that can tell what was asked of the user lately.

@@ -136,7 +136,7 @@ public actor RunCoordinator {
                 // What the user typed, then what their thumbs-downs taught.
                 let instructions = [typed, learned].filter { !$0.isEmpty }.joined(separator: "\n")
                 let max = Int(try await store.value(SettingKey.cardsPerMorning) ?? "5") ?? 5
-                let openLoops = await LoopLedger.load(store).filter { $0.status == .open }
+                let ledger = await LoopLedger.load(store), openLoops = ledger.filter { $0.status == .open }
                 let cal = await deps.calendarText()
                 deps.stage("Judge what matters", "\(recent.count) summaries from the last 7 days\(cal == nil ? "" : ", the calendar for 8 days"), \(openLoops.count) open loops")
                 let household = Self.loadHousehold(try await store.value(SettingKey.household))
@@ -146,7 +146,7 @@ public actor RunCoordinator {
                 let settled = AskLedger.closures(loops: openLoops, asks: asks, now: deps.clock.now())
                 if settled != openLoops { var all = await LoopLedger.load(store); for l in settled where l.status == .closed { if let i = all.firstIndex(where: { $0.id == l.id }) { all[i] = l } }; await LoopLedger.save(all, store); log.info("\(settled.filter { $0.status == .closed }.count) loop(s) closed by the user's own replies") }
                 let openNow = settled.filter { $0.status == .open }
-                let (findings, u1) = try await Judge(brain: brain, clock: deps.clock).judge(summaries: recent, calendar: cal, instructions: instructions, openLoops: openNow, max: 8, household: household, asks: AskLedger.judgeLines(asks, now: deps.clock.now()))
+                let (findings, u1) = try await Judge(brain: brain, clock: deps.clock).judge(summaries: recent, calendar: cal, instructions: instructions, openLoops: openNow, max: 8, household: household, asks: AskLedger.judgeLines(asks, loops: ledger, now: deps.clock.now()))
                 usage = usage + u1
                 // Promises said out loud: parsed from transcript summaries, deterministically, so none is missed.
                 let spoken = recent.filter { $0.kind == .transcript }.flatMap { TranscriptPromises.parse(summary: $0.text, recording: $0.title.isEmpty ? $0.bucketName : $0.title, date: $0.itemDate ?? $0.createdAt, now: deps.clock.now()) }
@@ -164,7 +164,7 @@ public actor RunCoordinator {
                 do { try await registry.save() } catch { log.warn("people registry not saved: \(error)") }
                 let suspects = await registry.suspects().map { [$0.0.id, $0.1.id] }
                 try? await store.setValue(SettingKey.duplicatePeople, String(data: JSONEncoder().encode(suspects), encoding: .utf8))
-                await Self.writeBetweenYou(asks: asks, loops: allLoops, knowledge: deps.knowledge, registry: registry, now: deps.clock.now())
+                await Self.writeStatusBlock(asks: asks, loops: allLoops, knowledge: deps.knowledge, registry: registry, now: deps.clock.now(), timeZone: deps.clock.timeZone)
                 try await store.setValue(SettingKey.candidates, String(data: JSONEncoder().encode(candidates), encoding: .utf8))
 
                 onEvent(.progress(RunProgress(stage: .preparing, stats: stats)))
@@ -318,13 +318,17 @@ public actor RunCoordinator {
 
     /// Direct chats → asks and the user's replies → judged (rules, then the on-device reader) → the local ledger.
     static func scanAsks(deps: Dependencies, store: any RunStore, reader: (any LocalModel)?, log: Log) async {
+        let now = deps.clock.now()
+        let existing = loadAsks(try? await store.value(SettingKey.asks))
         var found: [Ask] = []
         for source in deps.sources {
             guard let scanner = source as? AskScanning, await source.availability() == .available else { continue }
             let enabled = try? await Self.enabledBucketsStatic(for: source, store: store)
-            if let a = try? await scanner.recentAsks(enabled: enabled ?? nil, since: deps.clock.now().addingTimeInterval(-3 * 86400)) { found += a }
+            // Back to this source's oldest ask still waiting (bucket ids start with the source id), so a late reply is found however late.
+            let since = AskLedger.scanSince(open: existing.filter { $0.bucket.rawValue.hasPrefix(source.id.rawValue + ":") }, now: now)
+            if let a = try? await scanner.recentAsks(enabled: enabled ?? nil, since: since) { found += a }
         }
-        let merged = AskLedger.merge(existing: loadAsks(try? await store.value(SettingKey.asks)), found: found, now: deps.clock.now())
+        let merged = AskLedger.merge(existing: existing, found: found, now: now)
         let judged = await AskAnswering.judge(merged, reader: reader)
         let unsure = judged.filter { $0.answeredAt != nil && $0.addressed == nil }.count
         log.info("asks: \(judged.count) tracked · \(judged.filter(\.isOpen).count) open · \(judged.filter { $0.addressed == false }.count) replied-but-not-answered · \(unsure) not judged")
@@ -339,10 +343,10 @@ public actor RunCoordinator {
         guard let j = json, let d = j.data(using: .utf8) else { return [] }
         return (try? JSONDecoder().decode([Ask].self, from: d)) ?? []
     }
-    /// The "Between you" block on every People note that has asks or loops: written straight to the file, so it never counts as the user's edit.
+    /// The status block ("Between you") on every People note that has asks or loops: written straight to the file, so it never counts as the user's edit.
     /// Each ask and loop goes to exactly one note — the registry's, or failing that a title with the very same key.
     /// A first name alone never claims a note by its title; that is how "Arjun" once leaked into "Arjun Mehta".
-    public static func writeBetweenYou(asks: [Ask], loops: [Loop], knowledge: any KnowledgeStore, registry: PersonRegistry?, now: Date) async {
+    public static func writeStatusBlock(asks: [Ask], loops: [Loop], knowledge: any KnowledgeStore, registry: PersonRegistry?, now: Date, timeZone: TimeZone = .current) async {
         guard let people = (try? await knowledge.folders())?.first(where: { $0.name == "People" }) else { return }
         func pick(_ label: String, _ handle: String?) async -> String? {
             if let registry { return await registry.notePath(forLabel: label, handle: handle, amongNotes: people.notes) }
@@ -352,12 +356,12 @@ public actor RunCoordinator {
         for a in asks { if let p = await pick(a.person, a.handle) { asksFor[p, default: []].append(a) } }
         for l in loops { if let p = await pick(l.person, nil) { loopsFor[p, default: []].append(l) } }
         for n in people.notes {
-            let block = BetweenYou.render(person: n.title, asks: asksFor[n.relativePath] ?? [], loops: loopsFor[n.relativePath] ?? [], now: now)
+            let block = StatusBlock.render(person: n.title, asks: asksFor[n.relativePath] ?? [], loops: loopsFor[n.relativePath] ?? [], now: now, timeZone: timeZone, routed: true)
             let url = knowledge.rootURL.appendingPathComponent(n.relativePath)
             guard let raw = try? String(contentsOf: url, encoding: .utf8) else { continue }
             // keep the front-matter, work on the body
             let (head, body): (String, String) = raw.hasPrefix("---\n") && raw.range(of: "\n---\n") != nil ? { let r = raw.range(of: "\n---\n")!; return (String(raw[..<r.upperBound]), String(raw[r.upperBound...])) }() : ("", raw)
-            let updated = BetweenYou.upsert(into: body, block: block)
+            let updated = StatusBlock.upsert(into: body, block: block)
             if updated != body { try? (head + updated).write(to: url, atomically: true, encoding: .utf8) }
         }
     }

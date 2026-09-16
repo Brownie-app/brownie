@@ -9,10 +9,27 @@ import Domain
         Ask(id: id, person: person, bucket: BucketID("whatsapp:507"), askedAt: now.addingTimeInterval(-askedAgo), question: q, answeredAt: answeredAgo.map { now.addingTimeInterval(-$0) })
     }
 
-    @Test func mergeReplacesByIDAndForgetsOldOnes() {
-        let old = ask("a", askedAgo: 3600), ancient = ask("z", askedAgo: 50 * 86400)
-        let m = AskLedger.merge(existing: [old, ancient], found: [ask("a", askedAgo: 3600, answeredAgo: 600), ask("b", askedAgo: 60)], now: now)
-        #expect(m.map(\.id) == ["b", "a"] && m[1].answeredAt != nil, "the later scan carries the answer; 50 days is gone")
+    @Test func mergeReplacesByIDLetsGoTheUnansweredAndForgetsOldOnes() {
+        let old = ask("a", askedAgo: 3600), waiting = ask("z", askedAgo: 50 * 86400), ancient = ask("y", askedAgo: 100 * 86400)
+        let m = AskLedger.merge(existing: [old, waiting, ancient], found: [ask("a", askedAgo: 3600, answeredAgo: 600), ask("b", askedAgo: 60)], now: now)
+        #expect(m.map(\.id) == ["b", "a", "z"] && m[1].answeredAt != nil, "the later scan carries the answer; 100 days is gone")
+        #expect(m[2].lapsedAt == now && !m[2].isOpen && m[2].isLapsed, "45 days with no reply: let go, but remembered")
+        // once let go, a rescan without a reply keeps it let go; a reply that finally came takes it back
+        let again = AskLedger.merge(existing: m, found: [ask("z", askedAgo: 50 * 86400)], now: now)
+        #expect(again.first { $0.id == "z" }?.lapsedAt == now)
+        let answered = AskLedger.merge(existing: m, found: [ask("z", askedAgo: 50 * 86400, answeredAgo: 60)], now: now)
+        #expect(answered.first { $0.id == "z" }?.isAnswered == true && answered.first { $0.id == "z" }?.lapsedAt == nil)
+    }
+
+    @Test func theScanReachesBackToTheOldestOpenAsk() {
+        let day = 86400.0
+        #expect(AskLedger.scanSince(open: [], now: now) == now.addingTimeInterval(-3 * day), "nothing waiting: three days")
+        #expect(AskLedger.scanSince(open: [ask("a", askedAgo: 3600)], now: now) == now.addingTimeInterval(-3 * day), "a fresh ask is inside the three days anyway")
+        #expect(AskLedger.scanSince(open: [ask("a", askedAgo: 4 * day), ask("b", askedAgo: 2 * day)], now: now) == now.addingTimeInterval(-4 * day - 3600), "an hour before the oldest one waiting, so its reply on day 4 is paired")
+        #expect(AskLedger.scanSince(open: [ask("a", askedAgo: 60 * day)], now: now) == now.addingTimeInterval(-45 * day), "never past the horizon")
+        #expect(AskLedger.scanSince(open: [ask("a", askedAgo: 10 * day, answeredAgo: 9 * day)], now: now) == now.addingTimeInterval(-3 * day), "an answered ask does not widen the scan")
+        var gone = ask("a", askedAgo: 20 * day); gone.lapsedAt = now
+        #expect(AskLedger.scanSince(open: [gone], now: now) == now.addingTimeInterval(-3 * day), "nor one let go")
     }
 
     @Test func yourReplyClosesTheLoopAboutAnswering() {
@@ -21,7 +38,7 @@ import Domain
         let theirs = Loop(id: "T", direction: .theirs, person: "Nitesh", what: "answer about the URL", quote: "", sourceLabel: "WhatsApp", due: nil, openedAt: now.addingTimeInterval(-900))
         let asks = [ask("a", askedAgo: 1200, answeredAgo: 300)]
         let closed = AskLedger.closures(loops: [loop, promise, theirs], asks: asks, now: now)
-        #expect(closed[0].status == .closed && closed[0].closedHow == "you replied 5 min ago" && closed[0].closedAt == asks[0].answeredAt)
+        #expect(closed[0].status == .closed && closed[0].closedHow == "you replied" && closed[0].closedBy == "reply" && closed[0].closedAt == asks[0].answeredAt)
         #expect(closed[1].status == .open, "a promise opened after the reply is a new thing")
         #expect(closed[2].status == .open, "only what the user owed")
         #expect(AskLedger.closures(loops: [loop], asks: [ask("a", askedAgo: 1200)], now: now)[0].status == .open, "no reply, no closure")
@@ -35,40 +52,23 @@ import Domain
         #expect(AskLedger.judgeLines([], now: now) == "")
     }
 
+    @Test func theJudgeHearsLapsedNeverNoReplyYetAndLoopsLetGo() {
+        var gone = ask("g", person: "Kanika", askedAgo: 46 * 86400); gone.lapsedAt = now.addingTimeInterval(-86400)
+        var old = ask("o", person: "Rohan", askedAgo: 70 * 86400); old.lapsedAt = now.addingTimeInterval(-20 * 86400)
+        let s = AskLedger.judgeLines([gone, old], now: now)
+        #expect(s.contains("Kanika asked the user something on") && s.contains("LAPSED — no reply in 45 days"))
+        #expect(!s.contains("NO REPLY YET"), "a question let go is never called unanswered")
+        #expect(!s.contains("Rohan"), "one let go three weeks back is not worth the judge's time")
+        let letGo = Loop(id: "LAPSED01-x", direction: .mine, person: "Karan", what: "send the villa share", quote: "", sourceLabel: "s", due: nil, status: .lapsed, openedAt: now.addingTimeInterval(-100 * 86400), closedAt: now.addingTimeInterval(-3600), closedBy: "lapsed", lapsedAt: now.addingTimeInterval(-3600))
+        let openLoop = Loop(id: "OPEN0001-x", direction: .mine, person: "Karan", what: "cricket tickets", quote: "", sourceLabel: "s", due: nil, openedAt: now)
+        let l = AskLedger.judgeLines([], loops: [letGo, openLoop], now: now)
+        #expect(l.hasPrefix("LOOPS LET GO") && l.contains("- loop LAPSED01 · the user → Karan · send the villa share · let go") && !l.contains("cricket"))
+        #expect(!l.contains("ASKS IN DIRECT CHATS"), "no asks, no asks section")
+    }
+
     @Test func samePersonIsForgivingAboutNumbersAndSurnames() {
         #expect(AskLedger.samePerson("Nitesh (+919540752593)", "Nitesh"))
         #expect(AskLedger.samePerson("Kanika Pandey Loadmill", "Kanika Pandey"))
         #expect(!AskLedger.samePerson("Rohan", "Priya"))
-    }
-}
-
-@Suite struct BetweenYouTests {
-    let now = Date(timeIntervalSince1970: 1_758_000_000)
-    @Test func rendersAsksAndLoopsForThatPersonOnly() {
-        let asks = [Ask(id: "a", person: "Nitesh (+91)", bucket: BucketID("w:1"), askedAt: now.addingTimeInterval(-7200), question: "postgres ka url kaise milega\nbata do", answeredAt: now.addingTimeInterval(-3600)),
-                    Ask(id: "b", person: "Nitesh", bucket: BucketID("w:1"), askedAt: now.addingTimeInterval(-600), question: "beer?"),
-                    Ask(id: "c", person: "Kanika", bucket: BucketID("w:2"), askedAt: now, question: "x")]
-        let loops = [Loop(id: "L", direction: .mine, person: "Nitesh", what: "share the exact steps once confirmed", quote: "", sourceLabel: "s", due: "Friday", openedAt: now.addingTimeInterval(-100)),
-                     Loop(id: "K", direction: .theirs, person: "Kanika", what: "send the deck", quote: "", sourceLabel: "s", due: nil, openedAt: now)]
-        let b = BetweenYou.render(person: "Nitesh", asks: asks, loops: loops, now: now)
-        #expect(b.hasPrefix(BetweenYou.open + "\n## Between you"))
-        #expect(b.contains("✅") && b.contains("they asked: “postgres ka url kaise milega bata do” — you replied"))
-        #expect(b.contains("⏳") && b.contains("they asked: “beer?” — **no reply yet** (10 min ago)"))
-        #expect(b.contains("you promised: share the exact steps once confirmed · due Friday"))
-        #expect(!b.contains("Kanika") && !b.contains("deck"))
-        #expect(BetweenYou.render(person: "Nobody", asks: asks, loops: loops, now: now) == "")
-    }
-
-    @Test func upsertInsertsAfterTheTitleReplacesInPlaceAndRemovesWhenEmpty() {
-        let body = "# Nitesh\n\nRecurring contact.\n\n## Pending\n- stuff\n"
-        let block = BetweenYou.open + "\n## Between you\n- one\n" + BetweenYou.close + "\n"
-        let once = BetweenYou.upsert(into: body, block: block)
-        #expect(once == "# Nitesh\n\n" + block + "\nRecurring contact.\n\n## Pending\n- stuff\n")
-        #expect(BetweenYou.upsert(into: once, block: block) == once, "unchanged when the block is the same")
-        let block2 = BetweenYou.open + "\n## Between you\n- two\n" + BetweenYou.close + "\n"
-        let twice = BetweenYou.upsert(into: once, block: block2)
-        #expect(twice.contains("- two") && !twice.contains("- one") && twice.components(separatedBy: "## Between you").count == 2)
-        #expect(BetweenYou.upsert(into: twice, block: "") == "# Nitesh\n\nRecurring contact.\n\n## Pending\n- stuff\n", "an empty block takes the old one out")
-        #expect(BetweenYou.upsert(into: "no title here", block: block) == block.trimmingCharacters(in: .newlines) + "\n\nno title here")
     }
 }

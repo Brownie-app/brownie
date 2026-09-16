@@ -69,7 +69,7 @@ extension AppModel {
 
     func closeLoop(_ id: String, how: String) {
         guard let i = loops.firstIndex(where: { $0.id == id }) else { return }
-        loops[i].status = .closed; loops[i].closedAt = Date(); loops[i].closedHow = how
+        loops[i].status = .closed; loops[i].closedAt = Date(); loops[i].closedHow = how; loops[i].closedBy = "user"
         let ls = loops; Task { await LoopLedger.save(ls, store) }
     }
     func setStaleDays(_ d: Int) { staleDays = d; set(SettingKey.staleDays, String(d)); Task { await reload() } }
