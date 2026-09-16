@@ -21,6 +21,19 @@ import Domain
         #expect(AskDetector.detect(msgs, person: "Nitesh", bucket: BucketID("whatsapp:507"), since: t0.addingTimeInterval(-3600)) == asks, "ids are stable across scans")
     }
 
+    @Test func aReplyOnDayFourIsFoundWhenTheScanReachesBackToTheAsk() {
+        // asked four days ago, answered this morning: a three-day window sees the reply with no question in it and finds nothing
+        let day = 1440.0
+        let msgs = [m(1, "can you send the estimates?", mins: -4 * day), m(2, "sent them just now", me: true, mins: -30)]
+        let threeDays = AskDetector.detect(msgs, person: "Nitesh", bucket: BucketID("whatsapp:507"), since: t0.addingTimeInterval(-3 * 86400))
+        #expect(threeDays.isEmpty, "the question is outside the window, so the reply pairs with nothing")
+        // the scan window reaches back to the open ask (an hour before it), and the reply is paired
+        let widened = AskDetector.detect(msgs, person: "Nitesh", bucket: BucketID("whatsapp:507"), since: t0.addingTimeInterval(-4 * 86400 - 3600))
+        #expect(widened.count == 1 && widened[0].isAnswered && widened[0].answeredAt == t0.addingTimeInterval(-1800))
+        let earlier = AskDetector.detect([msgs[0]], person: "Nitesh", bucket: BucketID("whatsapp:507"), since: t0.addingTimeInterval(-5 * 86400))
+        #expect(earlier[0].id == widened[0].id && earlier[0].isOpen, "the same ask, by id, that the earlier scan left open")
+    }
+
     @Test func theUsersOwnQuestionsAndOldMessagesAreNotAsks() {
         let msgs = [m(1, "can you review this?", me: true, mins: 0), m(2, "kab milna hai?", mins: -5000)]
         #expect(AskDetector.detect(msgs, person: "N", bucket: BucketID("whatsapp:1"), since: t0.addingTimeInterval(-3600)).isEmpty)

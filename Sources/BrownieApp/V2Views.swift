@@ -85,6 +85,15 @@ struct LoopRow: View {
     @EnvironmentObject var m: AppModel
     @Environment(\.theme) var t
     let loop: Loop
+    /// Open, came back, done, not a loop — or let go: open for 90 days with no news, so Brownie stopped tracking it.
+    var statusLabel: String {
+        switch loop.status {
+        case .open: return loop.cameBackCount > 0 ? "Came back" : "Open"
+        case .closed: return "Done"
+        case .dismissed: return "Not a loop"
+        case .lapsed: return "Let go · no news in 90 days"
+        }
+    }
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
             ZStack { Circle().fill(t.ctl2).frame(width: 28, height: 28); Text(String(loop.person.prefix(1)).uppercased()).font(.system(size: 11, weight: .semibold)).foregroundStyle(t.ink2) }
@@ -103,8 +112,8 @@ struct LoopRow: View {
                 if let n = DueNudger.nudgeLine(for: loop, days: m.nudgeDays, now: Date()) { HStack(spacing: 4) { Image(systemName: "clock").font(.system(size: 9)); Text(n) }.font(.system(size: 10.5, weight: .medium)).foregroundStyle(t.accentInk).padding(.horizontal, 7).frame(height: 18).background(Capsule().fill(t.accentSoft)) }
             }
             HStack(spacing: 6) {
-                Circle().fill(loop.status == .open ? (loop.cameBackCount > 0 ? t.bad : t.warn) : t.ok).frame(width: 7, height: 7)
-                Text(loop.status == .open ? (loop.cameBackCount > 0 ? "Came back" : "Open") : (loop.status == .closed ? "Done" : "Not a loop")).font(.system(size: 12, weight: .medium))
+                Circle().fill(loop.status == .open ? (loop.cameBackCount > 0 ? t.bad : t.warn) : (loop.status == .lapsed ? t.ink2 : t.ok)).frame(width: 7, height: 7)
+                Text(statusLabel).font(.system(size: 12, weight: .medium))
             }.frame(width: 90, alignment: .leading)
             if loop.status == .open {
                 if m.nudging == loop.id { ProgressView().controlSize(.small) }

@@ -3,7 +3,15 @@ import Foundation
 /// Which way a promise points. `mine`: the user said they'd do something. `theirs`: someone
 /// said they'd do something for the user.
 public enum LoopDirection: String, Codable, Sendable { case mine, theirs }
-public enum LoopStatus: String, Codable, Sendable { case open, closed, dismissed }
+/// `lapsed`: open for 90 days with nothing happening — let go, kept only so it is never found again as new.
+public enum LoopStatus: String, Codable, Sendable {
+    case open, closed, dismissed, lapsed
+    /// A status this build does not know (a ledger written by a newer Brownie) reads as closed: better to stop
+    /// tracking a loop than to nag about one, and the whole ledger must never fail to load over one word.
+    public init(from decoder: any Decoder) throws {
+        self = LoopStatus(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .closed
+    }
+}
 
 /// A commitment found in the user's messages, tracked until the next read sees it done.
 /// The ledger of these is what the Loops screen shows.
@@ -25,6 +33,10 @@ public struct Loop: Codable, Sendable, Identifiable, Equatable {
     public let openedAt: Date
     public var closedAt: Date?
     public var closedHow: String?
+    /// What closed it: "reply" (the user's own message), "judge", "user" (the Loops screen), "lapsed", "household".
+    public var closedBy: String?
+    /// When it was let go for want of news; `closedAt` is set to the same moment.
+    public var lapsedAt: Date?
     /// Card ids fired for this loop; a fired card with the loop still open at the next read comes back.
     public var firedCardIDs: [String]
     public var cameBackCount: Int
@@ -33,10 +45,10 @@ public struct Loop: Codable, Sendable, Identifiable, Equatable {
 
     public init(id: String = UUID().uuidString, direction: LoopDirection, person: String, what: String, quote: String, sourceLabel: String,
                 due: String?, dueDate: Date? = nil, status: LoopStatus = .open, openedAt: Date, closedAt: Date? = nil, closedHow: String? = nil,
-                firedCardIDs: [String] = [], cameBackCount: Int = 0) {
+                closedBy: String? = nil, lapsedAt: Date? = nil, firedCardIDs: [String] = [], cameBackCount: Int = 0) {
         self.id = id; self.direction = direction; self.person = person; self.what = what; self.quote = quote; self.sourceLabel = sourceLabel
         self.due = due; self.dueDate = dueDate; self.status = status; self.openedAt = openedAt; self.closedAt = closedAt; self.closedHow = closedHow
-        self.firedCardIDs = firedCardIDs; self.cameBackCount = cameBackCount
+        self.closedBy = closedBy; self.lapsedAt = lapsedAt; self.firedCardIDs = firedCardIDs; self.cameBackCount = cameBackCount
     }
 
     /// One line for the judge: what it already knows is open, so it reports closures instead of re-finding them.

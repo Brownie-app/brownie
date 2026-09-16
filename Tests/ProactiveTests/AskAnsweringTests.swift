@@ -51,8 +51,8 @@ import Domain
     @Test func theBlockSaysWhenYouWroteButNotAboutIt() {
         let now = Date(timeIntervalSince1970: 1_758_000_000)
         var a = Ask(id: "a", person: "Nitesh", bucket: BucketID("w:1"), askedAt: now.addingTimeInterval(-600), question: "beer?", answeredAt: now.addingTimeInterval(-300), reply: "about postgres"); a.addressed = false
-        let b = BetweenYou.render(person: "Nitesh", asks: [a], loops: [], now: now)
-        #expect(b.contains("⏳") && b.contains("but **not about this**; still open"))
+        let b = StatusBlock.render(person: "Nitesh", asks: [a], loops: [], now: now)
+        #expect(b.contains("⏳") && b.contains("but not about this; still open"))
         #expect(AskLedger.judgeLines([a], now: now).contains("but NOT about it — still unanswered"))
         #expect(AskLedger.closures(loops: [Loop(id: "L", direction: .mine, person: "Nitesh", what: "answer Nitesh", quote: "", sourceLabel: "s", due: nil, openedAt: now.addingTimeInterval(-500))], asks: [a], now: now)[0].status == .open, "an off-topic reply closes nothing")
     }

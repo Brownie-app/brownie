@@ -10,19 +10,21 @@ public enum LoopLedger {
         var loops = existing
         for u in updates where u.closed {
             if let i = loops.firstIndex(where: { $0.id.hasPrefix(u.idPrefix) && $0.status == .open }) {
-                loops[i].status = .closed; loops[i].closedAt = now; loops[i].closedHow = u.how
+                loops[i].status = .closed; loops[i].closedAt = now; loops[i].closedHow = u.how; loops[i].closedBy = "judge"
             }
         }
         for f in found {
-            if let i = loops.firstIndex(where: { $0.status == .open && same($0, f) }) {
-                if loops[i].dueDate == nil, let d = f.dueDate { loops[i].dueDate = d }   // a date learned later still counts
+            // A loop that was let go is a duplicate too: it stays let go, and the judge cannot open it again as new.
+            if let i = loops.firstIndex(where: { ($0.status == .open || $0.status == .lapsed) && same($0, f) }) {
+                if loops[i].status == .open, loops[i].dueDate == nil, let d = f.dueDate { loops[i].dueDate = d }   // a date learned later still counts
             } else { loops.append(f) }
         }
         for it in items where it.cameBack == true {
             if let id = it.loopID, let i = loops.firstIndex(where: { $0.id.hasPrefix(id) }) { loops[i].cameBackCount += 1 }
         }
-        // Keep the ledger small: closed loops fall off after 30 days.
-        loops.removeAll { l in l.status != .open && now.timeIntervalSince(l.closedAt ?? l.openedAt) > 30 * 86400 }
+        loops = StatusRules.lapse(loops: loops, now: now)
+        // Keep the ledger small: closed loops fall off after 30 days; let-go ones after 90, long enough never to be found again as new.
+        loops.removeAll { l in l.status != .open && now.timeIntervalSince(l.closedAt ?? l.openedAt) > (l.status == .lapsed ? 90 : 30) * 86400 }
         return loops
     }
 
