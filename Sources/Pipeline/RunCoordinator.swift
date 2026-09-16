@@ -101,13 +101,19 @@ public actor RunCoordinator {
             }
 
             // 2–4. CLOUD
-            let summaries = try await store.summaries(since: nil)
+            // Only summaries the notes have not absorbed yet, oldest first; a resumed sync feeds the ids it froze.
+            let summaries = try await store.unmergedSummaries()
             if let brain = deps.brain, !summaries.isEmpty {
                 onEvent(.progress(RunProgress(stage: .synthesising, stats: stats)))
                 deps.stage("Update your notes", "\(summaries.count) summaries and the notes they touch")
-                let builder = try KnowledgeBuilder(brain: brain, store: deps.knowledge, runStore: store)
+                let builder = try KnowledgeBuilder(brain: brain, store: deps.knowledge, runStore: store, now: { [clock = deps.clock] in clock.now() }, timeZone: deps.clock.timeZone,
+                                                   coverage: { [tz = deps.clock.timeZone] in let all = SourceCoverage.decode(try? await store.value(SettingKey.coverage)); return all.isEmpty ? nil : CoverageLine.render(all, timeZone: tz) })
                 let readStats = stats
                 var usage = try await builder.sync(summaries: summaries, progress: { p in var p = p; p.stats = readStats; onEvent(.progress(p)) }, onEvent: { e in if case .message(let m) = e { onEvent(.thought(m)) } })
+                // The judge and the preparer take this week's summaries now, in memory; the rows the notes
+                // absorbed go at once, so nothing later in the chain failing can feed them to the notes twice.
+                let recent = try await store.summaries(since: deps.clock.now().addingTimeInterval(-7 * 86400))
+                try await store.deleteMerged()
 
                 // welcome letter, once
                 if (try await store.value(SettingKey.letter) ?? "").isEmpty, let readme = try await deps.knowledge.note(at: "README.md") {
@@ -119,7 +125,6 @@ public actor RunCoordinator {
                 }
 
                 onEvent(.progress(RunProgress(stage: .judging, stats: stats)))
-                let recent = try await store.summaries(since: deps.clock.now().addingTimeInterval(-7 * 86400))
                 let typed = try await store.value(SettingKey.standingInstructions) ?? ""
                 let feedback = Self.loadFeedback(try await store.value(SettingKey.feedback))
                 let learned = FeedbackDigest.instructions(feedback, now: deps.clock.now())
@@ -182,8 +187,7 @@ public actor RunCoordinator {
                 // Sunday: the week in a letter, once per week
                 if let u = try await writeWeeklyIfDue(brain: brain, store: store, cards: cards, loops: allLoops, calendar: cal) { usage = usage + u }
 
-                // 5. FINISH — summaries are disposable only after a fully successful chain
-                try await store.wipeSummaries()
+                // 5. FINISH — the merged summaries were deleted right after the swap; what is left waits for the next sync
                 let legacyMirror = try await store.value(SettingKey.icloudMirror) ?? "false"
                 let mode = try await store.value(SettingKey.icloudMode) ?? (legacyMirror == "true" ? "mirror" : "off")
                 // The household: shared notes go to the shared folder; what the others closed comes back.

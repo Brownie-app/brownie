@@ -23,7 +23,7 @@ public actor SQLiteRunStore: RunStore {
             mark_order REAL, mark_tiebreak TEXT, floor_order REAL, floor_tiebreak TEXT, updated_at REAL NOT NULL);
         CREATE TABLE IF NOT EXISTS summary(id INTEGER PRIMARY KEY, run_id INTEGER NOT NULL, source_id TEXT NOT NULL,
             bucket_id TEXT NOT NULL, bucket_name TEXT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL, text TEXT NOT NULL,
-            item_date REAL, created_at REAL NOT NULL);
+            item_date REAL, created_at REAL NOT NULL, sid TEXT, merged_at REAL);
         CREATE INDEX IF NOT EXISTS summary_created ON summary(created_at);
         CREATE TABLE IF NOT EXISTS drop_log(id INTEGER PRIMARY KEY, run_id INTEGER NOT NULL, source_id TEXT NOT NULL,
             bucket_name TEXT NOT NULL, reason TEXT NOT NULL, at REAL NOT NULL);
@@ -33,6 +33,19 @@ public actor SQLiteRunStore: RunStore {
             bytes INTEGER NOT NULL, detail TEXT NOT NULL, came_back TEXT NOT NULL DEFAULT '', payload TEXT NOT NULL);
         CREATE INDEX IF NOT EXISTS send_at ON send_log(at);
         """)
+        // Stores from before summaries had a stable id or a merged mark: add the columns; old rows read back nil.
+        let columns = Set(try db.query("PRAGMA table_info(summary)").compactMap { $0["name"].text })
+        if !columns.contains("sid") { try db.exec("ALTER TABLE summary ADD COLUMN sid TEXT") }
+        if !columns.contains("merged_at") { try db.exec("ALTER TABLE summary ADD COLUMN merged_at REAL") }
+    }
+
+    /// The id a note cites for one item: twelve hex digits of an FNV-1a fold over source, bucket, kind
+    /// and item key, so the same item always gets the same id and two runs never disagree.
+    public static func stableID(_ c: Candidate) -> String {
+        let key = "\(c.source.rawValue)|\(c.bucket.rawValue)|\(c.kind.rawValue)|\(c.key.order)|\(c.key.tiebreak)"
+        var h1: UInt64 = 0xcbf29ce484222325, h2: UInt64 = 0x84222325cbf29ce4
+        for b in key.utf8 { h1 = (h1 ^ UInt64(b)) &* 0x100000001b3; h2 = (h2 &+ UInt64(b)) &* 0x100000001b3 }
+        return String(String(format: "%016llx%016llx", h1 ^ (h2 >> 7), h2).prefix(12))
     }
 
     // MARK: runs
@@ -82,10 +95,10 @@ public actor SQLiteRunStore: RunStore {
         try db.transaction {
             if let s = outcome.survivor {
                 try db.run("""
-                INSERT INTO summary(run_id, source_id, bucket_id, bucket_name, kind, title, text, item_date, created_at)
-                VALUES(?,?,?,?,?,?,?,?,?)
+                INSERT INTO summary(run_id, source_id, bucket_id, bucket_name, kind, title, text, item_date, created_at, sid)
+                VALUES(?,?,?,?,?,?,?,?,?,?)
                 """, [.int(runID), .text(candidate.source.rawValue), .text(candidate.bucket.rawValue), .text(bucketName),
-                      .text(candidate.kind.rawValue), .text(s.title), .text(s.summary), .init(candidate.itemDate), .init(at)])
+                      .text(candidate.kind.rawValue), .text(s.title), .text(s.summary), .init(candidate.itemDate), .init(at), .text(Self.stableID(candidate))])
             } else if outcome.reason != .kept {
                 // Reason only — never content. Sensitive rows carry nothing but the fact.
                 try db.run("INSERT INTO drop_log(run_id, source_id, bucket_name, reason, at) VALUES(?,?,?,?,?)",
@@ -117,15 +130,36 @@ public actor SQLiteRunStore: RunStore {
         let rows = since == nil
             ? try db.query("SELECT * FROM summary ORDER BY created_at DESC")
             : try db.query("SELECT * FROM summary WHERE COALESCE(item_date, created_at) >= ? ORDER BY created_at DESC", [.init(since)])
-        return rows.map { r in
-            SummaryRecord(id: r["id"].int ?? 0, runID: r["run_id"].int ?? 0, source: SourceID(r["source_id"].text ?? ""),
-                          bucket: BucketID(r["bucket_id"].text ?? ""), bucketName: r["bucket_name"].text ?? "",
-                          kind: SourceKind(rawValue: r["kind"].text ?? "") ?? .document, title: r["title"].text ?? "",
-                          text: r["text"].text ?? "", itemDate: r["item_date"].date, createdAt: r["created_at"].date ?? Date())
+        return rows.map(Self.summaryRecord)
+    }
+
+    /// Oldest first, so the notes are told about things in the order they happened.
+    public func unmergedSummaries() throws -> [SummaryRecord] {
+        try db.query("SELECT * FROM summary WHERE merged_at IS NULL ORDER BY COALESCE(item_date, created_at) ASC, id ASC").map(Self.summaryRecord)
+    }
+
+    public func markMerged(ids: [Int64], at: Date) throws {
+        guard !ids.isEmpty else { return }
+        try db.transaction {
+            // SQLite caps bound parameters, so long lists go in slices.
+            for chunk in stride(from: 0, to: ids.count, by: 500).map({ Array(ids[$0..<min($0 + 500, ids.count)]) }) {
+                let marks = Array(repeating: "?", count: chunk.count).joined(separator: ",")
+                try db.run("UPDATE summary SET merged_at=? WHERE id IN (\(marks))", [.init(at)] + chunk.map { .int($0) })
+            }
         }
     }
 
+    public func deleteMerged() throws { try db.run("DELETE FROM summary WHERE merged_at IS NOT NULL") }
+
     public func wipeSummaries() throws { try db.run("DELETE FROM summary") }
+
+    private static func summaryRecord(_ r: SQLite.Row) -> SummaryRecord {
+        SummaryRecord(id: r["id"].int ?? 0, runID: r["run_id"].int ?? 0, source: SourceID(r["source_id"].text ?? ""),
+                      bucket: BucketID(r["bucket_id"].text ?? ""), bucketName: r["bucket_name"].text ?? "",
+                      kind: SourceKind(rawValue: r["kind"].text ?? "") ?? .document, title: r["title"].text ?? "",
+                      text: r["text"].text ?? "", itemDate: r["item_date"].date, createdAt: r["created_at"].date ?? Date(),
+                      sid: r["sid"].text, mergedAt: r["merged_at"].date)
+    }
 
     // MARK: drops
 

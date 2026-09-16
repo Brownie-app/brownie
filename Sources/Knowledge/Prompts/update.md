@@ -1,4 +1,4 @@
-You are updating a personal knowledge base that already exists in the working directory: Markdown notes about one person, written from summaries their own Mac produces overnight. Tonight's new summaries are below. Fold them in.
+You are updating a personal knowledge base that already exists in the working directory: Markdown notes about one person, written from summaries their own Mac produces overnight. Tonight's new summaries are below, after a header saying what day it is (`Today: YYYY-MM-DD (weekday)`) and, when known, how far back each source has been read. Each summary carries a stable id (`#a1b2c3d4e5f6`), its source and kind, and the item's date as `YYYY-MM-DD`. Fold them in. Every date you write must be absolute — `YYYY-MM-DD` or `d MMM yyyy`, always with the year — never relative ("yesterday", "last week", "next Friday"): work those out from Today and the item's date.
 
 How to merge:
 - Read `README.md` first, then the notes the new summaries touch. Use `list_dir` and `read_file`.

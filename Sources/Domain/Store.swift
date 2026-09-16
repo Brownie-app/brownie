@@ -1,6 +1,8 @@
 import Foundation
 
-/// A kept summary, tagged with where it came from (the KB builder's trust tier).
+/// A kept summary, tagged with where it came from (the KB builder's trust tier). `sid` is the stable
+/// id the notes cite (a short hash of source, bucket, kind and item key); rows written before it
+/// existed carry nil. `mergedAt` is set once the builder has folded the row into the notes.
 public struct SummaryRecord: Sendable, Identifiable, Equatable {
     public let id: Int64
     public let runID: Int64
@@ -12,11 +14,16 @@ public struct SummaryRecord: Sendable, Identifiable, Equatable {
     public let text: String
     public let itemDate: Date?
     public let createdAt: Date
+    public let sid: String?
+    public let mergedAt: Date?
     public init(id: Int64, runID: Int64, source: SourceID, bucket: BucketID, bucketName: String, kind: SourceKind,
-                title: String, text: String, itemDate: Date?, createdAt: Date) {
+                title: String, text: String, itemDate: Date?, createdAt: Date, sid: String? = nil, mergedAt: Date? = nil) {
         self.id = id; self.runID = runID; self.source = source; self.bucket = bucket; self.bucketName = bucketName
         self.kind = kind; self.title = title; self.text = text; self.itemDate = itemDate; self.createdAt = createdAt
+        self.sid = sid; self.mergedAt = mergedAt
     }
+    /// The date the notes should file it under: when the item happened, else when it was read.
+    public var effectiveDate: Date { itemDate ?? createdAt }
 }
 
 /// Per-bucket cursor. `mark` is the high-water mark; `floor` exists only mid-way through a first
@@ -97,8 +104,15 @@ public protocol RunStore: Sendable {
     func clearBucket(_ bucket: BucketID) async throws
     /// Forgets every cursor of one source, so its next run is a first read again (the way "Read further back" widens a window).
     func resetCursors(for source: SourceID) async throws
-    // summaries (ephemeral)
+    // summaries (ephemeral): fed to the notes exactly once, oldest first, then deleted
     func summaries(since: Date?) async throws -> [SummaryRecord]
+    /// Rows the notes have not absorbed yet, ordered by when the item happened (read time when undated), then id.
+    func unmergedSummaries() async throws -> [SummaryRecord]
+    /// Records that these rows are now in the notes, so no later run feeds them again.
+    func markMerged(ids: [Int64], at: Date) async throws
+    /// Drops every row that is already in the notes; unmerged rows wait for the next sync.
+    func deleteMerged() async throws
+    /// The panic path only: throws away every summary, merged or not.
     func wipeSummaries() async throws
     // drop log
     func drops(since: Date) async throws -> [DropRecord]
