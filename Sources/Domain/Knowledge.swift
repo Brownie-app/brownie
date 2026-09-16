@@ -18,12 +18,28 @@ public struct NoteMeta: Sendable, Equatable, Codable {
     public var extra: [String: String]
     /// The order the unknown keys appeared in on disk, so a save leaves them as the user wrote them.
     public var extraOrder: [String]
+    /// The lines of the block that are nobody's key — YAML comments and blank lines — verbatim, under the key they
+    /// followed ("" for those above the first), so a rewrite puts them back where the user had them.
+    public var comments: [String: String]
 
     public init(brownie: String, id: String? = nil, aliases: [String] = [], sources: [String] = [], created: String, updated: String,
-                userEdited: Bool = false, contentHash: String = "", extra: [String: String] = [:], extraOrder: [String] = []) {
+                userEdited: Bool = false, contentHash: String = "", extra: [String: String] = [:], extraOrder: [String] = [], comments: [String: String] = [:]) {
         self.brownie = brownie; self.id = id; self.aliases = aliases; self.sources = sources; self.created = created; self.updated = updated
         self.userEdited = userEdited; self.contentHash = contentHash; self.extra = extra
         self.extraOrder = extraOrder.filter { extra[$0] != nil } + extra.keys.filter { !extraOrder.contains($0) }.sorted()
+        self.comments = comments
+    }
+
+    enum CodingKeys: String, CodingKey { case brownie, id, aliases, sources, created, updated, userEdited, contentHash, extra, extraOrder, comments }
+    /// A block encoded before `comments` existed still decodes.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(brownie: try c.decode(String.self, forKey: .brownie), id: try c.decodeIfPresent(String.self, forKey: .id),
+                  aliases: try c.decodeIfPresent([String].self, forKey: .aliases) ?? [], sources: try c.decodeIfPresent([String].self, forKey: .sources) ?? [],
+                  created: try c.decode(String.self, forKey: .created), updated: try c.decode(String.self, forKey: .updated),
+                  userEdited: try c.decodeIfPresent(Bool.self, forKey: .userEdited) ?? false, contentHash: try c.decodeIfPresent(String.self, forKey: .contentHash) ?? "",
+                  extra: try c.decodeIfPresent([String: String].self, forKey: .extra) ?? [:], extraOrder: try c.decodeIfPresent([String].self, forKey: .extraOrder) ?? [],
+                  comments: try c.decodeIfPresent([String: String].self, forKey: .comments) ?? [:])
     }
 
     public static let owned: Set<String> = ["brownie", "id", "aliases", "sources", "created", "updated", "user_edited", "content_hash"]
@@ -41,11 +57,12 @@ public struct NoteMeta: Sendable, Equatable, Codable {
         NoteMeta(brownie: kind(forPath: rel), id: id, aliases: aliases, sources: sources, created: today, updated: today, userEdited: false, contentHash: hash(body))
     }
 
-    /// The hash `updated` and `user_edited` are judged by: the body without the status block, with runs of blank
-    /// lines folded and the ends trimmed, so the block coming and going and a trailing newline change nothing.
+    /// The hash `updated` and `user_edited` are judged by: the body without the status block, every blank line
+    /// dropped and the ends trimmed, so the block coming and going, a blank line more or less under the title and
+    /// a trailing newline change nothing — only words do.
     public static func hash(_ body: String) -> String {
         var s = NoteStatus.strip(body).trimmingCharacters(in: .whitespacesAndNewlines)
-        while s.contains("\n\n\n") { s = s.replacingOccurrences(of: "\n\n\n", with: "\n\n") }
+        while s.contains("\n\n") { s = s.replacingOccurrences(of: "\n\n", with: "\n") }
         return ContentHash.of(s)
     }
     /// Whether `body` on disk is not what Brownie last wrote. Unknown (no hash on record) is not an edit.
@@ -65,21 +82,38 @@ public struct NoteMeta: Sendable, Equatable, Codable {
 
     // MARK: parsing and rendering
 
-    /// Splits a file into its front-matter and body. No front-matter → (nil, whole text). A legacy block (the
-    /// old three keys, no `brownie:`) becomes a block whose kind comes from the path and whose dates are unknown (empty).
+    /// Splits a file into its front-matter and body. A BOM and Windows line endings are how some editors and syncs
+    /// write a file, so both go before anything is read (the body comes back with `\n` endings, and that is what is
+    /// written). Front-matter is only a leading `---` fence closed by the next `---` line (at the very end of the
+    /// file too) whose every line is a `key: value`, a continuation of one, a `#` comment or blank, with at least one
+    /// key: a body that opens with a horizontal rule is body, and round-trips. No front-matter → (nil, whole text).
+    /// A legacy block (the old three keys, no `brownie:`) becomes a block whose kind comes from the path and whose
+    /// dates are unknown (empty).
     public static func parse(_ raw: String, path rel: String) -> (meta: NoteMeta?, body: String) {
-        guard raw.hasPrefix("---\n"), let end = raw.range(of: "\n---\n", range: raw.index(raw.startIndex, offsetBy: 4)..<raw.endIndex) else { return (nil, raw) }
-        let block = String(raw[raw.index(raw.startIndex, offsetBy: 4)..<end.lowerBound]), body = String(raw[end.upperBound...])
-        // key → raw value, continuation lines (indented or "- item") folded into the key before them
-        var order: [String] = [], values: [String: String] = [:]
+        var text = raw
+        if text.unicodeScalars.first == "\u{FEFF}" { text.unicodeScalars.removeFirst() }
+        if text.utf8.contains(0x0D) { text = text.replacingOccurrences(of: "\r\n", with: "\n") }   // "\r\n" is one Character, so look at bytes
+        guard text.hasPrefix("---\n") else { return (nil, text) }
+        let padded = text.hasSuffix("\n---") ? text + "\n" : text   // a properties-only note may end at its closing fence
+        let from = padded.index(padded.startIndex, offsetBy: 4)
+        guard let end = padded.range(of: "\n---\n", range: from..<padded.endIndex) else { return (nil, text) }
+        let block = String(padded[from..<end.lowerBound]), body = String(padded[end.upperBound...])
+        // key → raw value, continuation lines (indented or "- item") folded into the key before them; comments and
+        // blank lines kept under the key before them, folded into its value when more of that value follows
+        var order: [String] = [], values: [String: String] = [:], comments: [String: String] = [:]
         for line in block.split(separator: "\n", omittingEmptySubsequences: false) {
-            if let last = order.last, line.first == " " || line.first == "\t" || line.hasPrefix("- ") { values[last, default: ""] += "\n" + line; continue }
-            guard let c = line.firstIndex(of: ":") else { continue }
+            let last = order.last ?? ""
+            if line.isEmpty || line.first == "#" { comments[last] = (comments[last].map { $0 + "\n" } ?? "") + line; continue }
+            if !last.isEmpty, line.first == " " || line.first == "\t" || line.hasPrefix("- ") {
+                if let c = comments.removeValue(forKey: last) { values[last, default: ""] += "\n" + c }
+                values[last, default: ""] += "\n" + line; continue
+            }
+            guard let c = line.firstIndex(of: ":"), isKey(line[..<c]), line.index(after: c) == line.endIndex || line[line.index(after: c)] == " " else { return (nil, text) }
             let key = String(line[..<c]).trimmingCharacters(in: .whitespaces)
-            guard !key.isEmpty else { continue }
             if !order.contains(key) { order.append(key) }
             values[key] = String(line[line.index(after: c)...])
         }
+        guard !order.isEmpty else { return (nil, text) }
         func scalar(_ k: String) -> String { (values[k] ?? "").trimmingCharacters(in: .whitespaces) }
         func list(_ k: String) -> [String] {
             let v = scalar(k)
@@ -97,18 +131,26 @@ public struct NoteMeta: Sendable, Equatable, Codable {
         let id = scalar("id")
         return (NoteMeta(brownie: isOwned ? scalar("brownie") : kind(forPath: rel), id: id.isEmpty ? nil : id, aliases: list("aliases"), sources: list("sources"),
                          created: isOwned ? scalar("created") : "", updated: isOwned ? scalar("updated") : "",
-                         userEdited: scalar("user_edited") == "true", contentHash: scalar("content_hash"), extra: extra, extraOrder: extraKeys), body)
+                         userEdited: scalar("user_edited") == "true", contentHash: scalar("content_hash"), extra: extra, extraOrder: extraKeys, comments: comments), body)
+    }
+    /// What may stand before the colon of a front-matter line: a word-ish name, spaces allowed, nothing prose would carry.
+    static func isKey(_ s: Substring) -> Bool {
+        let t = s.trimmingCharacters(in: .whitespaces)
+        return !t.isEmpty && s.first != " " && s.first != "\t" && t.allSatisfy { $0.isLetter || $0.isNumber || " _-.\"'".contains($0) }
     }
 
-    /// The block as it goes on disk, front-matter fences included, ready to prefix a body.
+    /// The block as it goes on disk, front-matter fences included, ready to prefix a body; the user's comment and
+    /// blank lines back under the keys they followed.
     public func render() -> String {
-        var lines = ["brownie: \(brownie)"]
-        if let id, !id.isEmpty { lines.append("id: \(id)") }
-        lines.append("aliases: [\(aliases.map(Self.quote).joined(separator: ", "))]")
-        lines.append("sources: [\(sources.map(Self.quote).joined(separator: ", "))]")
-        lines.append("created: \(created)"); lines.append("updated: \(updated)")
-        lines.append("user_edited: \(userEdited)"); lines.append("content_hash: \(contentHash)")
-        for k in extraOrder { if let v = extra[k] { lines.append("\(k):\(v)") } }
+        var lines: [String] = comments[""].map { [$0] } ?? []
+        func emit(_ key: String, _ line: String?) { if let line { lines.append(line) }; if let c = comments[key] { lines.append(c) } }
+        emit("brownie", "brownie: \(brownie)")
+        emit("id", id.flatMap { $0.isEmpty ? nil : "id: \($0)" })
+        emit("aliases", "aliases: [\(aliases.map(Self.quote).joined(separator: ", "))]")
+        emit("sources", "sources: [\(sources.map(Self.quote).joined(separator: ", "))]")
+        emit("created", "created: \(created)"); emit("updated", "updated: \(updated)")
+        emit("user_edited", "user_edited: \(userEdited)"); emit("content_hash", "content_hash: \(contentHash)")
+        for k in extraOrder { emit(k, extra[k].map { "\(k):\($0)" }) }
         return "---\n" + lines.joined(separator: "\n") + "\n---\n"
     }
 
@@ -159,14 +201,17 @@ public enum NoteStatus {
     }
     /// The block, markers included, or nil when the note has none.
     public static func extract(from body: String) -> String? { range(in: body).map { String(body[$0]) } }
-    /// The body without the block and the blank line that followed it.
+    /// The body without the block: the block goes, the newlines right after it go (two at most), and when fewer
+    /// than two followed and the block sat under a blank line, that blank line goes with it — so `strip` undoes
+    /// `insert` byte for byte whether or not the title had a blank line under it.
     public static func strip(_ body: String) -> String {
         guard let r = range(in: body) else { return body }
-        var end = r.upperBound
+        var end = r.upperBound, start = r.lowerBound
         while end < body.endIndex, body[end] == "\n", body.distance(from: r.upperBound, to: end) < 2 { end = body.index(after: end) }
-        var b = body; b.removeSubrange(r.lowerBound..<end); return b
+        if body.distance(from: r.upperBound, to: end) < 2, body[..<start].hasSuffix("\n\n") { start = body.index(before: start) }
+        var b = body; b.removeSubrange(start..<end); return b
     }
-    /// The block put back where Brownie keeps it: right after the title line, else at the top.
+    /// The block put back where Brownie keeps it: under the title line with a blank line above it, else at the top.
     public static func insert(_ block: String, into body: String) -> String {
         let trimmed = block.trimmingCharacters(in: .newlines)
         guard !trimmed.isEmpty else { return body }
@@ -174,6 +219,16 @@ public enum NoteStatus {
             var b = body; b.insert(contentsOf: "\n" + trimmed + "\n", at: body.index(after: nl)); return b
         }
         return trimmed + "\n\n" + body
+    }
+    /// The body with the block replaced in place (one under the legacy markers too, which is how a note migrates),
+    /// inserted when there was none, taken out when `block` is empty, and unchanged when it is the same. The one
+    /// implementation every writer shares, so what `upsert` puts in is exactly what `strip` takes out.
+    public static func upsert(_ block: String, into body: String) -> String {
+        let trimmed = block.trimmingCharacters(in: .newlines)
+        guard let r = range(in: body) else { return insert(trimmed, into: body) }
+        if trimmed.isEmpty { return strip(body) }
+        if body[r] == trimmed { return body }
+        var b = body; b.replaceSubrange(r, with: trimmed); return b
     }
 }
 

@@ -27,7 +27,10 @@ public enum VaultMigration {
                 let title = body.split(separator: "\n").first(where: { $0.hasPrefix("# ") }).map { String($0.dropFirst(2)) } ?? String(rel.dropFirst("People/".count).dropLast(3))
                 if let id = await registry.resolve(label: title, handle: nil), let p = await registry.person(id) {
                     meta.id = id
-                    meta.aliases = ([p.name] + p.aliases).filter { $0 != title }.reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
+                    // the user's own `aliases:` (their [[links]] resolve by them) stay first; the registry's spellings join, none twice
+                    meta.aliases = (meta.aliases + ([p.name] + p.aliases).filter { $0 != title }).reduce(into: [String]()) { acc, a in
+                        if !acc.contains(where: { $0.caseInsensitiveCompare(a) == .orderedSame }) { acc.append(a) }
+                    }
                 }
             }
             do { try (meta.render() + body).write(to: u, atomically: true, encoding: .utf8); done += 1 }

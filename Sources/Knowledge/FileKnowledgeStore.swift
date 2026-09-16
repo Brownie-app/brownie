@@ -172,6 +172,8 @@ public actor FileKnowledgeStore: KnowledgeStore {
 
     /// The note as the app sees it. `user_edited` is true when the block says so or when the body on disk no longer
     /// hashes to what Brownie last wrote — an edit in Obsidian, on the phone or from the household counts the same.
+    /// Such an edit changed the substance on the day the file was last written, so that day is `updated` until the
+    /// next code write stamps one; a note whose body still hashes keeps the day its block records.
     func read(_ url: URL) throws -> Note {
         let raw = try String(contentsOf: url, encoding: .utf8)
         let rel = relative(url)
@@ -179,8 +181,9 @@ public actor FileKnowledgeStore: KnowledgeStore {
         let mtime = (try? FileManager.default.attributesOfItem(atPath: url.path)[.modificationDate] as? Date) ?? Date()
         let title = body.split(separator: "\n").first(where: { $0.hasPrefix("# ") }).map { String($0.dropFirst(2)) } ?? url.deletingPathExtension().lastPathComponent
         var meta = parsed ?? NoteMeta(brownie: NoteMeta.kind(forPath: rel), created: "", updated: "")
-        if meta.bodyDiffers(body) { meta.userEdited = true }
-        return Note(relativePath: rel, title: title, body: body, meta: meta, updatedAt: NoteMeta.date(meta.updated, timeZone) ?? mtime)
+        var updatedAt = NoteMeta.date(meta.updated, timeZone) ?? mtime
+        if meta.bodyDiffers(body) { meta.userEdited = true; meta.updated = NoteMeta.day(mtime, timeZone); updatedAt = mtime }
+        return Note(relativePath: rel, title: title, body: body, meta: meta, updatedAt: updatedAt)
     }
 
     func reindex() throws {

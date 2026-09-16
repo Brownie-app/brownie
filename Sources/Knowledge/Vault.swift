@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import Domain
 import Support
 
 /// The knowledge base as an Obsidian vault: open it there, mirror it to iCloud Drive for the phone.
@@ -95,9 +96,12 @@ extension Vault {
     /// - changed only on the Mac → copied to the phone (Brownie's night's work goes out);
     /// - changed on both → the phone's text stays on top, Brownie's version goes under its own heading — nothing you wrote is overwritten;
     /// - new on the phone → added; deleted on the phone → restored from the Mac (the Mac is the truth for deletions);
-    /// - deleted on the Mac (gone here, its base copy still there) → taken off the phone too, never copied back;
+    /// - deleted on the Mac (gone here, its base copy still there) → taken off the phone too, never copied back — unless
+    ///   the phone changed it since the last sync, in which case what was written there comes home instead;
     /// - gone on both sides → its base copy is dropped.
-    public static func sync(_ root: URL, to dest: URL, now: Date = Date(), base baseName: String = ".sync", include: (String) -> Bool = { _ in true }) throws -> SyncReport {
+    /// `ignoringFrontMatter` (the household) compares bodies with the front-matter stripped — every Mac stamps its own
+    /// block, and that is no change — and what comes home is wrapped in this Mac's own block, so the local meta stays.
+    public static func sync(_ root: URL, to dest: URL, now: Date = Date(), base baseName: String = ".sync", include: (String) -> Bool = { _ in true }, ignoringFrontMatter: Bool = false) throws -> SyncReport {
         let fm = FileManager.default
         try fm.createDirectory(at: dest, withIntermediateDirectories: true)
         let base = root.appendingPathComponent(baseName)
@@ -109,24 +113,32 @@ extension Vault {
             let macURL = root.appendingPathComponent(rel), phoneURL = dest.appendingPathComponent(rel), baseURL = base.appendingPathComponent(rel)
             let mac = macNotes[rel], phone = phoneNotes[rel]
             let baseText = try? String(contentsOf: baseURL, encoding: .utf8)
+            func substance(_ t: String) -> String { ignoringFrontMatter ? NoteMeta.parse(t, path: rel).body : t }
+            func same(_ a: String?, _ b: String?) -> Bool { a.map(substance) == b.map(substance) }
+            /// The other side's text as it lands here: under this Mac's own front-matter when there is one to keep.
+            func local(_ t: String) -> String {
+                guard ignoringFrontMatter, let m = mac, let meta = NoteMeta.parse(m, path: rel).meta else { return t }
+                return meta.render() + substance(t)
+            }
             switch (mac, phone) {
             case (let m?, nil):
-                if baseText != nil, baseText == m { /* deleted on the phone; the Mac is the truth for deletions */ report.removedOnPhone += 1 }
+                if baseText != nil, same(baseText, m) { /* deleted on the phone; the Mac is the truth for deletions */ report.removedOnPhone += 1 }
                 try copy(macURL, to: phoneURL); try copy(macURL, to: baseURL); report.toPhone += 1
             case (nil, let p?):
-                if baseText != nil {
+                if baseText != nil, same(baseText, p) {
                     // It was here at the last sync and the user removed it on the Mac: the deletion goes out; the note does not come back.
                     try? fm.removeItem(at: phoneURL); try? fm.removeItem(at: baseURL); report.deletedOnMac += 1; continue
                 }
+                // New on the phone, or written there since the last sync while the Mac's copy went: what was written comes home.
                 try write(p, to: macURL); try write(p, to: baseURL); report.fromPhone += 1
             case (let m?, let p?):
-                if m == p { if baseText != m { try write(m, to: baseURL) }; continue }
-                let macChanged = baseText != m, phoneChanged = baseText != p
+                if same(m, p) { if baseText != m { try write(m, to: baseURL) }; continue }
+                let macChanged = !same(baseText, m), phoneChanged = !same(baseText, p)
                 switch (macChanged, phoneChanged) {
-                case (false, _): try write(p, to: macURL); try write(p, to: baseURL); report.fromPhone += 1
+                case (false, _): let t = local(p); try write(t, to: macURL); try write(t, to: baseURL); report.fromPhone += 1
                 case (true, false): try copy(macURL, to: phoneURL); try copy(macURL, to: baseURL); report.toPhone += 1
                 case (true, true):
-                    let merged = merge(yours: p, brownies: m, at: now)
+                    let merged = local(merge(yours: substance(p), brownies: substance(m), at: now))
                     try write(merged, to: macURL); try write(merged, to: phoneURL); try write(merged, to: baseURL)
                     report.conflicts += 1; report.fromPhone += 1
                 }
@@ -172,7 +184,9 @@ public enum HouseholdVault {
     public static func isShared(_ rel: String, sharedGroupNotes: Set<String>) -> Bool {
         rel.hasPrefix("Household/") || sharedGroupNotes.contains(rel)
     }
+    /// Bodies are what is compared: each member's Brownie stamps its own front-matter on its own copy, and two blocks
+    /// that differ over the same words are not two versions of the note.
     public static func sync(_ root: URL, to shared: URL, sharedGroupNotes: Set<String>, now: Date = Date()) throws -> SyncReport {
-        try Vault.sync(root, to: shared, now: now, base: ".household-sync", include: { isShared($0, sharedGroupNotes: sharedGroupNotes) })
+        try Vault.sync(root, to: shared, now: now, base: ".household-sync", include: { isShared($0, sharedGroupNotes: sharedGroupNotes) }, ignoringFrontMatter: true)
     }
 }

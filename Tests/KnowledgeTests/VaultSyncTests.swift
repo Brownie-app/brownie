@@ -139,6 +139,24 @@ import Foundation
         #expect(r.line == "2 notes came back from your iPhone and were merged · 3 sent to the phone · 0 conflicts")
     }
 
+    /// The rule is that nothing written on the phone is overwritten — a Mac-side deletion (or a rename, which is one at
+    /// the old path) must not take a note the phone has since edited down with it.
+    @Test func aNoteEditedOnThePhoneComesHomeWhenTheMacCopyIsGone() throws {
+        let (mac, phone) = try fresh()
+        try put("v1", "People/A.md", in: mac)
+        _ = try Vault.sync(mac, to: phone)
+        try put("v1 + written on the phone", "People/A.md", in: phone)
+        try fm.removeItem(at: mac.appendingPathComponent("People/A.md"))
+        let r = try Vault.sync(mac, to: phone)
+        #expect(r.fromPhone == 1 && r.deletedOnMac == 0 && r.conflicts == 0, "the phone's words are new since the base, so they come home")
+        #expect(read("People/A.md", in: mac) == "v1 + written on the phone" && read("People/A.md", in: phone) == "v1 + written on the phone")
+        #expect(read("People/A.md", in: mac.appendingPathComponent(".sync")) == "v1 + written on the phone")
+        // whereas an untouched phone copy follows the Mac's deletion
+        try fm.removeItem(at: mac.appendingPathComponent("People/A.md"))
+        let again = try Vault.sync(mac, to: phone)
+        #expect(again.deletedOnMac == 1 && again.fromPhone == 0 && read("People/A.md", in: phone) == nil)
+    }
+
     @Test func reportRoundTripsThroughJSON() throws {
         var r = SyncReport(at: Date(timeIntervalSince1970: 1_700_000_000)); r.toPhone = 4; r.conflicts = 2
         let back = try JSONDecoder().decode(SyncReport.self, from: JSONEncoder().encode(r))
