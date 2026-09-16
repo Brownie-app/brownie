@@ -94,9 +94,20 @@ final class FakeTranscriber: Transcriber, @unchecked Sendable {
     }
     let said = Transcript(lines: [.init(start: 192, end: 195, text: "I'll send it by Thursday.")], duration: 600)
 
-    @Test func candidatesAreTranscriptsWithDisplayPaths() async throws {
+    /// The fixture recording is from 2023; a first read only looks back the policy's window, so these tests widen it.
+    var everything: FirstRead { var p = FirstRead(); p.voiceDays = 10_000; return p }
+
+    @Test func aFirstReadListsOnlyRecentRecordingsUntilTheFolderHasBeenReadOnce() async throws {
         let (root, cache) = try setup()
         let s = RecordingsSource(folder: root, transcriber: FakeTranscriber(said), cache: cache)
+        #expect(try await s.buckets(since: [:], enabled: nil)[0].items.isEmpty, "a 2023 recording is outside the 90-day first read")
+        let read = try await s.buckets(since: [BucketID("recordings"): ItemKey(order: 1_600_000_000)], enabled: nil)
+        #expect(read[0].items.count == 1, "once the folder has a mark, everything is listed and the core keeps what is newer")
+    }
+
+    @Test func candidatesAreTranscriptsWithDisplayPaths() async throws {
+        let (root, cache) = try setup()
+        let s = RecordingsSource(folder: root, transcriber: FakeTranscriber(said), cache: cache, policy: { everything })
         let b = try await s.buckets(since: [:], enabled: nil)
         #expect(b.count == 1 && b[0].id == BucketID("recordings"))
         let c = try #require(b[0].items.first)
@@ -109,7 +120,7 @@ final class FakeTranscriber: Transcriber, @unchecked Sendable {
     @Test func loadTranscribesOnceThenReadsTheCache() async throws {
         let (root, cache) = try setup()
         let fake = FakeTranscriber(said)
-        let s = RecordingsSource(folder: root, transcriber: fake, cache: cache)
+        let s = RecordingsSource(folder: root, transcriber: fake, cache: cache, policy: { everything })
         let c = try await s.buckets(since: [:], enabled: nil)[0].items[0]
         let a = try await s.load(c)
         #expect(a.text == "[03:12] I'll send it by Thursday.")
@@ -127,14 +138,14 @@ final class FakeTranscriber: Transcriber, @unchecked Sendable {
 
     @Test func silentRecordingHasNoText() async throws {
         let (root, cache) = try setup()
-        let s = RecordingsSource(folder: root, transcriber: FakeTranscriber(Transcript(lines: [], duration: 30)), cache: cache)
+        let s = RecordingsSource(folder: root, transcriber: FakeTranscriber(Transcript(lines: [], duration: 30)), cache: cache, policy: { everything })
         let c = try await s.buckets(since: [:], enabled: nil)[0].items[0]
         #expect(try await s.load(c).text == nil)
     }
 
     @Test func goneFileThrows() async throws {
         let (root, cache) = try setup()
-        let s = RecordingsSource(folder: root, transcriber: FakeTranscriber(said), cache: cache)
+        let s = RecordingsSource(folder: root, transcriber: FakeTranscriber(said), cache: cache, policy: { everything })
         let c = try await s.buckets(since: [:], enabled: nil)[0].items[0]
         try FileManager.default.removeItem(atPath: c.id)
         await #expect(throws: SourceError.itemGone) { try await s.load(c) }

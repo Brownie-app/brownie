@@ -52,18 +52,21 @@ public struct FilesSource: Source {
 
     public func buckets(since marks: [BucketID: ItemKey], enabled: Set<BucketID>?) async throws -> [Bucket] {
         var out: [Bucket] = []
+        let now = Date(), policy = FirstRead.current
         for root in roots {
             let id = Self.bucketID(root)
             // Roots are chosen explicitly by the user; an empty selection means "all of them".
             if let enabled, !enabled.isEmpty, !enabled.contains(id) { continue }
             let files = eligibleFiles(in: root)
             log.info("\(root.lastPathComponent): \(files.count) eligible files")
-            let items = files.map { f in
+            var items = files.map { f in
                 Candidate(source: Self.descriptor.id, bucket: id, key: ItemKey(order: f.added.timeIntervalSince1970, tiebreak: f.url.path),
                           kind: .document, id: f.url.path, itemDate: f.added,
                           metadata: ["displayPath": f.url.path.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~"),
                                      "name": f.url.lastPathComponent, "created": Self.iso(f.created), "bytes": String(f.size)])
             }.sorted { $0.key > $1.key }   // newest first
+            // A root without a mark has never been read to the bottom: only files added inside the first-read window.
+            if marks[id] == nil { items = FirstReadFilter.inWindow(items, policy: policy, source: Self.descriptor.id, now: now) }
             out.append(Bucket(id: id, name: root.lastPathComponent, items: items))
         }
         return out

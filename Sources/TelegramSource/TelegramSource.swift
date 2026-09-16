@@ -49,18 +49,39 @@ public struct TelegramSource: Source {
         let infos = try await discoverBuckets().filter { enabled?.contains($0.id) ?? false }
         let me = (try? await c.send(["@type": "getMe"]))?["id"] as? Int64 ?? 0
         var out: [Bucket] = []
+        let now = Date(), policy = FirstRead.current
         for info in infos {
             let chatID = Int64(info.id.rawValue.dropFirst("telegram:".count)) ?? 0
-            let msgs = try await Self.history(c, chatID: chatID, me: me, limit: 400)
+            var msgs: [ChatMessage], deferred: Int
+            if let mark = marks[info.id] {
+                // Read to the bottom before: page newest-first until the last message already seen.
+                let h = try await Self.history(c, chatID: chatID, me: me, limit: Self.incrementalCap) { $0.rowID <= Int64(mark.order) }
+                msgs = h.messages; deferred = h.hitPageCap ? 1 : 0
+            } else {
+                // A first read: page until the policy's window edge or its cap, then keep the newest messages.
+                let edge = policy.window(for: Self.descriptor.id, now: now)
+                let h = try await Self.history(c, chatID: chatID, me: me, limit: policy.chatCap(isGroup: info.isGroup)) { $0.date < edge }
+                let cut = ChatWindowing.firstReadSlice(h.messages, isGroup: info.isGroup, policy: policy, source: Self.descriptor.id, now: now)
+                msgs = cut.messages; deferred = cut.deferred + (h.hitPageCap ? 1 : 0)
+            }
+            if deferred > 0 { log.info("\(info.name): \(deferred) messages set aside") }
             let chat = ChatInfo(id: info.id.rawValue, name: info.name, isGroup: info.isGroup, memberCount: 0)
             let items = ChatWindowing.windows(msgs, chat: chat).map { w in
                 Candidate(source: Self.descriptor.id, bucket: info.id, key: ItemKey(rowID: w.lastRowID), kind: info.isGroup ? .groupChat : .directMessage,
                           id: "\(info.id.rawValue):\(w.lastRowID)", itemDate: w.lastDate, metadata: ["chat": info.name, "isGroup": info.isGroup ? "1" : "0", "text": w.text])
             }.reversed()
-            out.append(Bucket(id: info.id, name: info.name, items: Array(items)))
+            out.append(Bucket(id: info.id, name: info.name, items: Array(items), deferred: deferred))
         }
         return out
     }
+
+    /// Between runs a chat is paged back to the mark, at most this many messages; past it the run reports what it left.
+    static let incrementalCap = 1200
+    static let pageSize = 100
+    /// Pages of history one call fetches at most; the message caps are all smaller, so a first read never hits it.
+    static let pageCap = 20
+
+    struct History { let messages: [ChatMessage]; let hitPageCap: Bool }
 
     public func load(_ c: Candidate) async throws -> Artifact {
         // The window text was captured at listing time (TDLib history is paged, not re-queryable by row range).
@@ -68,16 +89,18 @@ public struct TelegramSource: Source {
         return Artifact(candidate: Candidate(source: c.source, bucket: c.bucket, key: c.key, kind: c.kind, id: c.id, itemDate: c.itemDate, metadata: meta), text: ChatWindowing.clamp(text ?? ""))
     }
 
-    static func history(_ c: TDClient, chatID: Int64, me: Int64, limit: Int) async throws -> [ChatMessage] {
+    /// Newest-first pages until `stop` matches a message (the window edge, or one already read), `limit` messages
+    /// are in hand, or the page cap; the stopping message and everything behind it are left out. Ascending on return.
+    static func history(_ c: TDClient, chatID: Int64, me: Int64, limit: Int, stop: (ChatMessage) -> Bool) async throws -> History {
         var all: [ChatMessage] = []
         var from: Int64 = 0
         var names: [Int64: String] = [:]
-        var pages = 0
-        while all.count < limit, pages < 12 {
+        var pages = 0, done = false
+        while !done, all.count < limit, pages < pageCap {
             pages += 1
-            let r = try await c.send(["@type": "getChatHistory", "chat_id": chatID, "from_message_id": from, "offset": 0, "limit": 100, "only_local": false], timeout: 60)
+            let r = try await c.send(["@type": "getChatHistory", "chat_id": chatID, "from_message_id": from, "offset": 0, "limit": pageSize, "only_local": false], timeout: 60)
             let msgs = (r["messages"] as? [[String: Any]]) ?? []
-            guard let last = msgs.last, let lastID = (last["id"] as? Int64) ?? (last["id"] as? Int).map(Int64.init), lastID != from else { break }   // no progress ⇒ done
+            guard let last = msgs.last, let lastID = (last["id"] as? Int64) ?? (last["id"] as? Int).map(Int64.init), lastID != from else { done = true; break }   // no progress ⇒ done
             for m in msgs {
                 guard let id = (m["id"] as? Int64) ?? (m["id"] as? Int).map(Int64.init), let content = m["content"] as? [String: Any] else { continue }
                 let text = (content["text"] as? [String: Any])?["text"] as? String ?? (content["caption"] as? [String: Any])?["text"] as? String ?? ""
@@ -90,11 +113,15 @@ public struct TelegramSource: Source {
                     if let n = names[senderID] { name = n }
                     else if let u = try? await c.send(["@type": "getUser", "user_id": senderID]) { name = [u["first_name"] as? String ?? "", u["last_name"] as? String ?? ""].filter { !$0.isEmpty }.joined(separator: " "); names[senderID] = name }
                 }
-                all.append(ChatMessage(rowID: id, date: Date(timeIntervalSince1970: TimeInterval(m["date"] as? Int ?? 0)), sender: isMe ? "Me" : name, isMe: isMe, text: text))
+                let message = ChatMessage(rowID: id, date: Date(timeIntervalSince1970: TimeInterval(m["date"] as? Int ?? 0)), sender: isMe ? "Me" : name, isMe: isMe, text: text)
+                if stop(message) { done = true; break }
+                all.append(message)
             }
             from = lastID
         }
-        return all.sorted { $0.rowID < $1.rowID }
+        // Paging ended by the cap alone, with more behind it we never saw.
+        let hitPageCap = !done && all.count < limit && pages >= pageCap
+        return History(messages: all.sorted { $0.rowID < $1.rowID }, hitPageCap: hitPageCap)
     }
 }
 
@@ -104,7 +131,7 @@ extension TelegramSource: ChatReader {
         guard let c = Self.shared, await c.authState == .ready else { throw SourceError.notAvailable(.needsSignIn) }
         let me = (try? await c.send(["@type": "getMe"]))?["id"] as? Int64 ?? 0
         let chatID = Int64(bucket.rawValue.dropFirst("telegram:".count)) ?? 0
-        return try await Self.history(c, chatID: chatID, me: me, limit: 400).filter { $0.date >= from && $0.date <= to }
+        return try await Self.history(c, chatID: chatID, me: me, limit: Self.incrementalCap) { $0.date < from }.messages.filter { $0.date <= to }
     }
 }
 extension TelegramSource: AskScanning { public func recentAsks(enabled: Set<BucketID>?, since: Date) async throws -> [Ask] { try await scanAsks(enabled: enabled, since: since) } }

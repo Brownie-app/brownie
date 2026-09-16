@@ -66,6 +66,7 @@ struct SourcesPane: View {
                         if s.id == "calendar", m.permissions[.calendar] != true { BButton(title: "Allow") { Task { _ = await CalendarSource.requestAccess(); await m.refreshPermissions(); await m.refreshSources() } } }
                         Toggle2(on: Binding(get: { m.enabledSources.contains(s.id) }, set: { _ in m.toggleSource(s.id) }))
                     }.padding(.horizontal, 16)
+                    firstReadLine(s.id)
                     if s.id != personal.last?.id { Divider() }
                 }
             }
@@ -80,6 +81,7 @@ struct SourcesPane: View {
                         if m.permissions[.speech] != true, m.enabledSources.contains(s.id) { BButton(title: "Allow speech") { Task { _ = await SpeechTranscriber.requestAccess(); await m.refreshPermissions(); await m.refreshSources() } } }
                         Toggle2(on: Binding(get: { m.enabledSources.contains(s.id) }, set: { _ in m.toggleSource(s.id) }))
                     }.padding(.horizontal, 16)
+                    firstReadLine(s.id)
                     if s.id != spoken.last?.id { Divider() }
                 }
             }
@@ -122,6 +124,7 @@ struct SourcesPane: View {
                         }
                         Toggle2(on: Binding(get: { m.enabledSources.contains(s.id) }, set: { _ in m.toggleSource(s.id) }))
                     }.padding(.horizontal, 16)
+                    firstReadLine(s.id)
                     if s.id != workChat.last?.id { Divider() }
                 }
             }
@@ -159,6 +162,16 @@ struct SourcesPane: View {
         let p = NSOpenPanel(); p.canChooseDirectories = true; p.canChooseFiles = false; p.allowsMultipleSelection = false; p.directoryURL = m.recordingsFolder
         if p.runModal() == .OK, let u = p.url { m.setRecordingsFolder(u) }
     }
+    /// Under a source that is on: what its first read covers, and the quiet way to ask for more of the past.
+    @ViewBuilder func firstReadLine(_ id: SourceID) -> some View {
+        if m.enabledSources.contains(id), let line = FirstRead.current.describe(for: id) {
+            HStack(alignment: .center) {
+                Text(line).font(.system(size: 11)).foregroundStyle(t.ink2)
+                Spacer()
+                BButton(title: "Read further back", kind: .quiet) { m.readFurtherBack(id) }
+            }.padding(.horizontal, 16).padding(.bottom, 8)
+        }
+    }
     func detail(_ s: any Source) -> String {
         if s.id == "voicememos" || s.id == "recordings", m.availability[s.id] == .available {
             let c = m.audioCost[s.id] ?? (0, 0)
@@ -170,7 +183,7 @@ struct SourcesPane: View {
         case .needsPermission(let p): return p == .speech ? "Needs Speech Recognition — turn it on and allow when asked" : "Needs \(p == .fullDiskAccess ? "Full Disk Access" : p.rawValue) — grant it in Settings → Privacy"
         case .unavailable(let why): return why
         case .needsSignIn:
-            if s.id == "slack" { return "Sign in as you · DMs and channels you choose · last 7 days at first read" }
+            if s.id == "slack" { return "Sign in as you · DMs and channels you choose" }
             if s.id == "teams" { return "Sign in with your work account · chats and channels you choose · needs your admin's consent once" }
             return s.id == "telegram" ? "Sign in with your own phone number" : "Sign in with your own Google account · read-only"
         default:

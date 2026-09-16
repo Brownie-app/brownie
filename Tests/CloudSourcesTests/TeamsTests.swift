@@ -22,7 +22,7 @@ let teamsMessages = #"""
  {"id":"1757580000000","messageType":"message","createdDateTime":"2025-09-11T08:40:00Z","deletedDateTime":"2025-09-11T09:00:00Z","from":{"user":{"id":"ME","displayName":"Vivek"}},"body":{"contentType":"text","content":"oops"}},
  {"id":"1757570000000","messageType":"message","createdDateTime":"2025-09-11T05:53:20Z","from":{"user":{"id":"U2","displayName":"Meera Nair"}},"body":{"contentType":"html","content":""},"attachments":[{"name":"pricing.pdf"}]}]}
 """#
-let teamsOldPage = #"{"value":[{"id":"1","messageType":"message","createdDateTime":"2025-08-01T00:00:00Z","from":{"user":{"id":"U2","displayName":"Meera Nair"}},"body":{"contentType":"text","content":"ancient"}}]}"#
+let teamsOldPage = #"{"value":[{"id":"1","messageType":"message","createdDateTime":"2025-05-01T00:00:00Z","from":{"user":{"id":"U2","displayName":"Meera Nair"}},"body":{"contentType":"text","content":"ancient"}}]}"#
 
 @Suite struct TeamsParsingTests {
     @Test func chatsAreNamedForPeopleOrTopics() {
@@ -92,7 +92,30 @@ let teamsOldPage = #"{"value":[{"id":"1","messageType":"message","createdDateTim
         let text = try await source(t).load(out[0].items[0]).text ?? ""
         #expect(text.contains("Did you send the pricing notes?") && !text.contains("I'll send it by Thursday"))
         let old = try await source(t).buckets(since: [:], enabled: [BucketID("teams:chat:19:b")])
-        #expect(old[0].items.isEmpty, "a page older than 7 days yields nothing at first read")
+        #expect(old[0].items.isEmpty, "a page older than the policy's 90 days yields nothing at first read")
+    }
+
+    @Test func readFurtherBackReachesTheOlderPage() async throws {
+        var p = FirstRead(); p.readFurtherBack("teams"); p.readFurtherBack("teams")
+        let s = TeamsSource(transport: wired(), token: { "eyJ" }, now: { Date(timeIntervalSince1970: 1_757_700_000) }, policy: { p })
+        let old = try await s.buckets(since: [:], enabled: [BucketID("teams:chat:19:b")])
+        #expect(old[0].items.count == 1 && old[0].deferred == 0, "270 days back, May is inside the window")
+    }
+
+    @Test func aFirstReadKeepsTheNewestUpToTheCapAndCountsTheRest() async throws {
+        var p = FirstRead(); p.groupChatMessages = 1
+        let s = TeamsSource(transport: wired(), token: { "eyJ" }, now: { Date(timeIntervalSince1970: 1_757_700_000) }, policy: { p })
+        let out = try await s.buckets(since: [:], enabled: [BucketID("teams:channel:T1/C1")])
+        #expect(out[0].deferred == 2, "three messages in the window, one kept")
+        #expect(out[0].items.count == 1 && out[0].items[0].itemDate == Date(timeIntervalSince1970: 1757600000))
+    }
+
+    @Test func aPageCapThatStopsShortIsReportedNotSwallowed() async throws {
+        let endless = teamsMessages.replacingOccurrences(of: #"{"value":["#, with: #"{"@odata.nextLink":"https://graph.microsoft.com/v1.0/me/chats/19:a/messages?$top=50&$skiptoken=x","value":["#)
+        let t = FakeTransport().on("/me/chats", teamsChats).on("/me/joinedTeams", teamsTeams).on("/teams/T1/channels", teamsChannels).on("/me/chats/19:a/messages", endless).on("/me", teamsMe)
+        let out = try await source(t).buckets(since: [BucketID("teams:chat:19:a"): ItemKey(order: 1757000000, tiebreak: "")], enabled: [BucketID("teams:chat:19:a")])
+        #expect(t.count("/me/chats/19:a/messages") == TeamsSource.pageCap, "paging stops at the cap")
+        #expect(out[0].deferred == 1, "and the run is told there was more")
     }
 
     @Test func loadRendersTheWindow() async throws {

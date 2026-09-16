@@ -2,26 +2,45 @@ import Foundation
 import Domain
 import Support
 
-/// Gmail via the user's own Google account (readonly scope). Threads from the last 7 days,
-/// fetched to the Mac and judged by the local reader like everything else.
+/// Gmail via the user's own Google account (readonly scope). Recent threads — the first-read policy's window
+/// the first time, the last week after that — fetched to the Mac and judged by the local reader like everything else.
 public struct GmailSource: Source {
     public static let descriptor = SourceDescriptor(
-        id: "gmail", name: "Gmail", detail: "Last 7 days, via your own Google sign-in",
+        id: "gmail", name: "Gmail", detail: "Via your own Google sign-in · read-only",
         door: .userCloud, permissions: [])
 
     private let log = Log("source.gmail")
     static let bucket = BucketID("gmail:inbox")
-    public init() {}
+    let policy: @Sendable () -> FirstRead
+    public init(policy: @escaping @Sendable () -> FirstRead = { FirstRead.current }) { self.policy = policy }
 
     public func availability() async -> Availability {
         guard GoogleAuth.isConfigured else { return .unavailable("Needs a Google OAuth client (docs/launch-setup.md)") }
         return await GoogleAuth.shared.isSignedIn ? .available : .needsSignIn
     }
 
+    /// What one listing asks Gmail for. A first read covers the policy's mail window and thread cap; once the inbox
+    /// has been read to the bottom, a week is plenty between runs and the core keeps only what is newer than the mark.
+    public struct Listing: Equatable, Sendable { public let query: String; public let maxThreads: Int }
+    public static func listing(firstRead: Bool, policy: FirstRead) -> Listing {
+        let days = firstRead ? policy.days(for: descriptor.id) : 7
+        return Listing(query: "newer_than:\(days)d -category:promotions", maxThreads: firstRead ? policy.mailThreads : 100)
+    }
+
     public func buckets(since marks: [BucketID: ItemKey], enabled: Set<BucketID>?) async throws -> [Bucket] {
         let token = try await GoogleAuth.shared.accessToken()
-        let list = try await Self.get("https://gmail.googleapis.com/gmail/v1/users/me/threads?q=newer_than:7d%20-category:promotions&maxResults=100", token)
-        let threads = (list["threads"] as? [[String: Any]]) ?? []
+        let listing = Self.listing(firstRead: marks[Self.bucket] == nil, policy: policy())
+        let q = listing.query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? listing.query
+        var threads: [[String: Any]] = []
+        var pageToken: String? = nil
+        // Gmail hands back at most 500 threads a page; keep asking until the cap or the end of the window.
+        repeat {
+            let page = "https://gmail.googleapis.com/gmail/v1/users/me/threads?q=\(q)&maxResults=\(min(500, listing.maxThreads - threads.count))" + (pageToken.map { "&pageToken=\($0)" } ?? "")
+            let list = try await Self.get(page, token)
+            threads += (list["threads"] as? [[String: Any]]) ?? []
+            pageToken = list["nextPageToken"] as? String
+        } while pageToken != nil && threads.count < listing.maxThreads
+        threads = Array(threads.prefix(listing.maxThreads))
         var items: [Candidate] = []
         for (i, t) in threads.enumerated() {
             guard let id = t["id"] as? String else { continue }
@@ -39,10 +58,11 @@ public struct GmailSource: Source {
         let msgs = (t["messages"] as? [[String: Any]]) ?? []
         var out = ""
         var date: Date?
-        for m in msgs.prefix(8) {
+        // The newest few messages carry the thread's live state; the reader does not need the opener from weeks ago.
+        for m in msgs.suffix(policy().mailNewestMessages) {
             let headers = ((m["payload"] as? [String: Any])?["headers"] as? [[String: Any]]) ?? []
             func h(_ n: String) -> String { headers.first { ($0["name"] as? String)?.lowercased() == n }?["value"] as? String ?? "" }
-            if date == nil, let ms = (m["internalDate"] as? String).flatMap(Double.init) { date = Date(timeIntervalSince1970: ms / 1000) }
+            if let ms = (m["internalDate"] as? String).flatMap(Double.init) { date = Date(timeIntervalSince1970: ms / 1000) }   // ends on the newest
             out += "From: \(h("from"))\nTo: \(h("to"))\nDate: \(h("date"))\nSubject: \(h("subject"))\n\n\(Self.body(m["payload"] as? [String: Any]).prefix(6000))\n\n---\n"
         }
         var meta = c.metadata; meta["name"] = msgs.first.flatMap { (($0["payload"] as? [String: Any])?["headers"] as? [[String: Any]])?.first { ($0["name"] as? String) == "Subject" }?["value"] as? String } ?? "thread"

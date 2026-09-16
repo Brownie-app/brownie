@@ -53,6 +53,7 @@ public struct iMessageSource: Source {
     public func buckets(since marks: [BucketID: ItemKey], enabled: Set<BucketID>?) async throws -> [Bucket] {
         let infos = try await discoverBuckets().filter { enabled?.contains($0.id) ?? false }
         guard !infos.isEmpty else { return [] }
+        let now = Date(), policy = FirstRead.current
         return try WALSafeCopy.withCopy(of: Self.database) { db in
             let names = ContactNames()
             return try infos.map { info in
@@ -69,14 +70,19 @@ public struct iMessageSource: Source {
                     return ChatMessage(rowID: id, date: AppleDates.fromMessagesDate(r["d"].int ?? 0), sender: me ? "Me" : names.resolve(r["handle"].text ?? "?"), isMe: me, text: text)
                 }
                 let chat = ChatInfo(id: info.id.rawValue, name: info.name, isGroup: info.isGroup, memberCount: info.isGroup ? (Int(info.detail.split(separator: " ").dropFirst(2).first ?? "0") ?? 0) : 2)
-                let capped = (marks[info.id] == nil && msgs.count > 1000) ? Array(msgs.suffix(1000)) : msgs
+                // A chat without a mark has never been read to the bottom: the first-read policy bounds what is listed.
+                var capped = msgs, deferred = 0
+                if marks[info.id] == nil {
+                    let cut = ChatWindowing.firstReadSlice(msgs, isGroup: info.isGroup, policy: policy, source: Self.descriptor.id, now: now)
+                    capped = cut.messages; deferred = cut.deferred
+                }
                 let windows = ChatWindowing.windows(capped, chat: chat)
                 let items = windows.map { w in
                     Candidate(source: Self.descriptor.id, bucket: info.id, key: ItemKey(rowID: w.lastRowID), kind: info.isGroup ? .groupChat : .directMessage,
                               id: "\(info.id.rawValue):\(w.lastRowID)", itemDate: w.lastDate,
                               metadata: ["chat": info.name, "isGroup": info.isGroup ? "1" : "0", "firstRow": String(w.firstRowID), "lastRow": String(w.lastRowID)])
                 }.reversed()
-                return Bucket(id: info.id, name: info.name, items: Array(items))
+                return Bucket(id: info.id, name: info.name, items: Array(items), deferred: deferred)
             }
         }
     }

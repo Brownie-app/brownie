@@ -107,10 +107,11 @@ struct AudioSourceCore: Sendable {
     let folder: URL
     let transcriber: any Transcriber
     let cache: URL
+    let policy: @Sendable () -> FirstRead
     private let log: Log
 
-    init(source: SourceID, bucket: BucketID, name: String, folder: URL, transcriber: any Transcriber, cache: URL) {
-        self.source = source; self.bucket = bucket; self.name = name; self.folder = folder; self.transcriber = transcriber; self.cache = cache
+    init(source: SourceID, bucket: BucketID, name: String, folder: URL, transcriber: any Transcriber, cache: URL, policy: @escaping @Sendable () -> FirstRead) {
+        self.source = source; self.bucket = bucket; self.name = name; self.folder = folder; self.transcriber = transcriber; self.cache = cache; self.policy = policy
         log = Log("source.\(source.rawValue)")
     }
 
@@ -122,7 +123,13 @@ struct AudioSourceCore: Sendable {
         }
     }
 
-    func buckets() -> [Bucket] { let items = candidates(); log.info("\(items.count) recordings listed in \(folder.lastPathComponent)"); return [Bucket(id: bucket, name: name, items: items)] }
+    /// Without a mark the folder has never been read to the bottom: only recordings made inside the first-read window.
+    func buckets(since marks: [BucketID: ItemKey], now: Date = Date()) -> [Bucket] {
+        let all = candidates()
+        let items = marks[bucket] == nil ? FirstReadFilter.inWindow(all, policy: policy(), source: source, now: now) : all
+        log.info("\(all.count) recordings in \(folder.lastPathComponent), \(items.count) listed")
+        return [Bucket(id: bucket, name: name, items: items)]
+    }
 
     /// A recording is transcribed once; the text is kept next to a fingerprint of the file (path, size, modified).
     func load(_ c: Candidate) async throws -> Artifact {
@@ -160,15 +167,15 @@ public struct VoiceMemosSource: Source {
     public static var folder: URL { Paths.home.appendingPathComponent("Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings", isDirectory: true) }
     let core: AudioSourceCore
 
-    public init(folder: URL? = nil, transcriber: any Transcriber = SpeechTranscriber(), cache: URL? = nil) {
-        core = AudioSourceCore(source: Self.descriptor.id, bucket: BucketID("voicememos"), name: "Voice Memos", folder: folder ?? Self.folder, transcriber: transcriber, cache: cache ?? Paths.transcripts)
+    public init(folder: URL? = nil, transcriber: any Transcriber = SpeechTranscriber(), cache: URL? = nil, policy: @escaping @Sendable () -> FirstRead = { FirstRead.current }) {
+        core = AudioSourceCore(source: Self.descriptor.id, bucket: BucketID("voicememos"), name: "Voice Memos", folder: folder ?? Self.folder, transcriber: transcriber, cache: cache ?? Paths.transcripts, policy: policy)
     }
     public func availability() async -> Availability {
         guard FileManager.default.fileExists(atPath: core.folder.path) else { return .notInstalled }
         guard (try? FileManager.default.contentsOfDirectory(atPath: core.folder.path)) != nil else { return .needsPermission(.fullDiskAccess) }
         return SpeechTranscriber.availability()
     }
-    public func buckets(since marks: [BucketID: ItemKey], enabled: Set<BucketID>?) async throws -> [Bucket] { core.buckets() }
+    public func buckets(since marks: [BucketID: ItemKey], enabled: Set<BucketID>?) async throws -> [Bucket] { core.buckets(since: marks) }
     public func load(_ c: Candidate) async throws -> Artifact { try await core.load(c) }
 }
 
@@ -181,14 +188,14 @@ public struct RecordingsSource: Source {
     let core: AudioSourceCore
     public var folder: URL { core.folder }
 
-    public init(folder: URL? = nil, transcriber: any Transcriber = SpeechTranscriber(), cache: URL? = nil) {
-        core = AudioSourceCore(source: Self.descriptor.id, bucket: BucketID("recordings"), name: "Recordings", folder: folder ?? Self.defaultFolder, transcriber: transcriber, cache: cache ?? Paths.transcripts)
+    public init(folder: URL? = nil, transcriber: any Transcriber = SpeechTranscriber(), cache: URL? = nil, policy: @escaping @Sendable () -> FirstRead = { FirstRead.current }) {
+        core = AudioSourceCore(source: Self.descriptor.id, bucket: BucketID("recordings"), name: "Recordings", folder: folder ?? Self.defaultFolder, transcriber: transcriber, cache: cache ?? Paths.transcripts, policy: policy)
     }
     public func availability() async -> Availability {
         guard (try? FileManager.default.contentsOfDirectory(atPath: core.folder.path)) != nil else { return .unavailable("No folder at \(core.folder.path.replacingOccurrences(of: Paths.home.path, with: "~")) — choose one") }
         return SpeechTranscriber.availability()
     }
-    public func buckets(since marks: [BucketID: ItemKey], enabled: Set<BucketID>?) async throws -> [Bucket] { core.buckets() }
+    public func buckets(since marks: [BucketID: ItemKey], enabled: Set<BucketID>?) async throws -> [Bucket] { core.buckets(since: marks) }
     public func load(_ c: Candidate) async throws -> Artifact { try await core.load(c) }
 }
 

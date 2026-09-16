@@ -27,9 +27,41 @@ public protocol Source: Sendable {
 - **`Candidate`** = `{bucket, key, kind, sourceID, metadata}` — enough to load, nothing more.
 - **`Artifact`** = `{candidate, text?, imageData?, metadata}` — the thing the reader sees.
 - `since` marks are a hint for efficient listing; the core filters authoritatively, so a source may
-  return extra items.
+  return extra items. The core hands a source only the marks of buckets it has read to the bottom
+  once; a bucket with no mark is on its **first read** and the source bounds it by the policy below.
+- `Bucket.deferred` is what the source knew about but did not list this run — messages past the
+  first-read cap, or left behind a paging cap it could not see past (counted as one). The core adds it
+  to the run's deferred total so the UI never shows a silent gap.
 - Sources never throw for "nothing new". They throw for "could not read at all"; the core records the
   bucket as failed for this run and continues with the next bucket.
+
+## The first read (one policy, `FirstRead`)
+
+The first time a source is read — and again for any bucket whose first read was interrupted — the
+listing is bounded by one policy, the same for every source, kept in `Domain.FirstRead` and stored
+as JSON under `sources.firstRead`:
+
+| Shape | Sources | Window | Cap |
+|---|---|---|---|
+| chat | WhatsApp, iMessage, Telegram, Slack, Teams | last **90 days** | newest **600** messages per direct chat, **300** per group |
+| mail | Gmail | last **30 days** | **300** threads; the reader sees the newest **6** messages of a thread |
+| files | Files | files **added** in the last **180 days** | (per-folder bulk rule below) |
+| notes | Apple Notes | notes **created** in the last **365 days** | — |
+| voice | Voice Memos, Meeting audio | recordings from the last **90 days** | — |
+
+- A bucket is on its first read until the core has walked it to the bottom once. The core passes a
+  source only the marks of complete buckets, so a run stopped halfway lists the same bounded slice
+  again on the next run and resumes below its floor — never the whole history, and never a wedge
+  (Slack/Teams used to list only what was newer than a half-read bucket's mark, which the resume
+  filtered to nothing).
+- Paged sources (Telegram, Slack, Teams) page until the window edge or the cap; a paging cap is
+  sized past the message caps so it can only bite between runs, and when it does the bucket reports
+  `deferred` rather than dropping the rest.
+- **Read further back** (Settings → Sources, under each source) adds 90 days to that source's
+  window (`extraDays`), saves the policy, and clears the source's cursors, so its next run is a first
+  read with the wider window. Items inside the old window are read once more on that run.
+- Once a bucket is complete, incremental runs are unbounded by the policy: everything newer than the
+  mark, subject to the core's per-run limits (Gmail asks for the last 7 days and lets the mark filter).
 
 ## Chat windowing (shared by every chat-like source)
 
@@ -48,7 +80,7 @@ last message's row id.
 | Apple Notes | document | localDatabase | `~/Library/Group Containers/group.com.apple.notes/NoteStore.sqlite` | "notes" | (created, uuid) | Full Disk Access |
 | iMessage | dm / group | localDatabase | `~/Library/Messages/chat.db` | chat | (rowid, "") | Full Disk Access |
 | WhatsApp | dm / group | localDatabase | WhatsApp Desktop's group container `ChatStorage.sqlite` | chat | (rowid, "") | Full Disk Access; WhatsApp installed |
-| Gmail | mail | userCloud (Google OAuth, own client) | Gmail API, last 7 days, threads | label/inbox | (internalDate, id) | Google sign-in |
+| Gmail | mail | userCloud (Google OAuth, own client) | Gmail API, threads — the first-read window, then the last 7 days | label/inbox | (historyId, id) | Google sign-in |
 | Calendar | event | userCloud or localAPI (EventKit) | last 7 days + next 24 h, all events | calendar | (start, id) | Calendar permission / Google sign-in |
 | Telegram | dm / group | userCloud (TDLib, own account) | chats the user picks | chat | (messageId, "") | phone sign-in, API id/hash |
 | Slack | group | userCloud (OAuth) or mcp | channels the user picks | channel | (ts, "") | Slack sign-in |
@@ -61,8 +93,11 @@ last message's row id.
 - Text extraction: plain text, Markdown, code, CSV, PDF (text layer), docx/pages via Spotlight
   importer where available; images (`png jpg heic`) are downsampled to ≤1024 px JPEG for the reader's
   vision input; everything else is judged from path + dates only.
-- Caps per run: 2,000 items per root on a first run (oldest deferred to the next run), 400 per root
-  incrementally. The UI shows "deferred N" honestly.
+- A first read lists only files added inside the policy's window (180 days, or more after "Read
+  further back"); a folder with more than 100 files is a dataset or an export, so only its newest 100
+  are ever read and the rest are counted as bulk. Per-run caps then apply in the core: 500 items per
+  bucket on a first run (the oldest deferred to the next run), 400 incrementally. The UI shows
+  "deferred N" honestly.
 
 ### SQLite sources — the WAL-safe read
 Copy the database **plus** its `-wal` and `-shm` files to a private temp dir, open the copy read-only,

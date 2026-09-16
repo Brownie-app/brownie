@@ -35,8 +35,7 @@ public actor IngestRun {
         var stats = RunStats()
         let name = source.descriptor.name
         let cursors = try await store.cursors(for: source.id)
-        let marks = Dictionary(uniqueKeysWithValues: cursors.compactMap { c in c.mark.map { (c.bucket, $0) } })
-        let buckets = try await source.buckets(since: marks, enabled: enabledBuckets)
+        let buckets = try await source.buckets(since: Self.marks(of: cursors), enabled: enabledBuckets)
         var itemsSinceReload = 0, failureStreak = 0, reloadsWithoutProgress = 0
         var lastTitle: String?, lastSummary: String?
 
@@ -46,8 +45,8 @@ public actor IngestRun {
             if mode == .initial { cursor = BucketCursor(bucket: bucket.id, source: source.id, mark: nil, floor: nil) }
             let plan = Self.plan(bucket.items, cursor: cursor, mode: mode, limits: limits, now: clock.now())
             if plan.kind == .incremental, let m = cursor.mark, Self.isFutureDateKey(m, now: clock.now()) { log.warn("\(bucket.name): cursor mark was in the future (\(m.order)) — re-reading the newest item to heal it") }
-            stats.deferred += plan.deferred
-            log.info("\(name)/\(bucket.name): \(plan.items.count) items (\(plan.kind)), deferred \(plan.deferred)")
+            stats.deferred += plan.deferred + bucket.deferred
+            log.info("\(name)/\(bucket.name): \(plan.items.count) items (\(plan.kind)), deferred \(plan.deferred + bucket.deferred)")
 
             for (ii, item) in plan.items.enumerated() {
                 if Task.isCancelled { throw Failure.cancelled }
@@ -121,6 +120,15 @@ public actor IngestRun {
     }
 
     // MARK: planning
+
+    /// The marks a source is told about: only buckets read to the bottom once. A bucket still mid-way through
+    /// its first read (a floor exists) is deliberately left out, so the source applies its first-read window
+    /// and cap again and the resume walks below the floor inside that same bounded slice. Handing back a
+    /// half-read bucket's mark would make WhatsApp or iMessage list the chat's entire history, and Slack or
+    /// Teams list only what is newer than the mark, which the resume then filters to nothing.
+    static func marks(of cursors: [BucketCursor]) -> [BucketID: ItemKey] {
+        Dictionary(uniqueKeysWithValues: cursors.compactMap { c in c.isComplete ? c.mark.map { (c.bucket, $0) } : nil })
+    }
 
     enum PlanKind: String { case initial, resume, incremental, none }
     struct Plan { let items: [Candidate]; let kind: PlanKind; let deferred: Int }

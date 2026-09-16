@@ -12,7 +12,6 @@ public struct WhatsAppSource: Source {
         door: .localDatabase, permissions: [.fullDiskAccess], supportsPerBucketOptIn: true)
 
     static let bundleID = "net.whatsapp.WhatsApp"
-    static let firstReadCap = 1000
     static var database: URL { FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Group Containers/group.net.whatsapp.WhatsApp.shared/ChatStorage.sqlite") }
     public init() {}
 
@@ -70,12 +69,17 @@ public struct WhatsAppSource: Source {
     public func buckets(since marks: [BucketID: ItemKey], enabled: Set<BucketID>?) async throws -> [Bucket] {
         let infos = try await discoverBuckets().filter { enabled?.contains($0.id) ?? false }
         guard !infos.isEmpty else { return [] }
+        let now = Date(), policy = FirstRead.current
         return try WALSafeCopy.withCopy(of: Self.database) { db in
             try infos.map { info in
                 let pk = Int64(info.id.rawValue.dropFirst("whatsapp:".count)) ?? 0
-                var msgs = ChatWindowing.sane(try Self.messages(db, session: pk), now: Date())
-                // First read of a chat: the newest 1,000 messages. Older history rarely makes cards and would cost an hour on a big group.
-                if marks[info.id] == nil, msgs.count > Self.firstReadCap { msgs = Array(msgs.suffix(Self.firstReadCap)) }
+                var msgs = ChatWindowing.sane(try Self.messages(db, session: pk), now: now)
+                // A chat without a mark has never been read to the bottom: the first-read policy bounds what is listed.
+                var deferred = 0
+                if marks[info.id] == nil {
+                    let cut = ChatWindowing.firstReadSlice(msgs, isGroup: info.isGroup, policy: policy, source: Self.descriptor.id, now: now)
+                    msgs = cut.messages; deferred = cut.deferred
+                }
                 let chat = ChatInfo(id: info.id.rawValue, name: info.name, isGroup: info.isGroup, memberCount: 0)
                 // A freshly synced WhatsApp Desktop assigns row ids newest-first, so order and key by DATE, not id.
                 let items = ChatWindowing.windows(msgs, chat: chat).map { w in
@@ -83,7 +87,7 @@ public struct WhatsAppSource: Source {
                               id: "\(info.id.rawValue):\(w.lastRowID)", itemDate: w.lastDate,
                               metadata: ["chat": info.name, "isGroup": info.isGroup ? "1" : "0", "phone": info.detail.split(separator: "+").last.map { String($0) } ?? "", "firstDate": String(w.firstDate.timeIntervalSinceReferenceDate), "lastDate": String(w.lastDate.timeIntervalSinceReferenceDate)])
                 }.reversed()
-                return Bucket(id: info.id, name: info.name, items: Array(items))
+                return Bucket(id: info.id, name: info.name, items: Array(items), deferred: deferred)
             }
         }
     }
