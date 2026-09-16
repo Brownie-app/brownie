@@ -26,6 +26,23 @@ import Platform
         var recorded: [AgentTask] { lock.withLock { tasks } }
     }
 
+    /// A brain without file tools: every part is answered with the same file map, as a local model would answer.
+    final class FileMapBrain: Brain, @unchecked Sendable {
+        let descriptor = BrainDescriptor(id: "filemap", name: "File map", capabilities: [.json], costLine: "")
+        let files: [[String: String]]
+        init(_ files: [[String: String]]) { self.files = files }
+        func validate() async throws {}
+        func complete(_ r: BrainRequest) async throws -> BrainResult {
+            BrainResult(text: String(data: try JSONSerialization.data(withJSONObject: ["files": files]), encoding: .utf8)!, usage: Usage(inputTokens: 10, outputTokens: 1))
+        }
+    }
+    /// Every message the builder said out loud.
+    final class Said: @unchecked Sendable {
+        private let lock = NSLock(); private var lines: [String] = []
+        func note(_ e: AgentEvent) { if case .message(let m) = e { lock.withLock { lines.append(m) } } }
+        var all: [String] { lock.withLock { lines } }
+    }
+
     static func call(_ tools: [Tool], _ name: String, _ args: [String: Any] = [:]) async throws -> String {
         let t = tools.first { $0.name == name }!
         return try await t.run(try JSONSerialization.data(withJSONObject: args)).text
@@ -251,6 +268,38 @@ import Platform
         #expect(Set(try await w.store.unmergedSummaries().map(\.id)) == Set(late.map(\.id)), "the new rows wait for the next sync")
         _ = try await w.builder(writing).sync(summaries: try await w.store.unmergedSummaries(), progress: { _ in }, onEvent: { _ in })
         #expect(try await w.store.unmergedSummaries().isEmpty, "and are fed on it")
+    }
+
+    // MARK: a brain without file tools is told, and its rows kept, when the rules refuse what it wrote
+
+    @Test func aSingleShotPartWhoseEveryNoteIsRefusedIsSaidCountedAndNotMarkedMerged() async throws {
+        let w = try Self.world()
+        try w.put("---\nbrownie: portrait\ncreated: 2026-09-01\nupdated: 2026-09-01\n---\n# Me\n", "README.md")   // an update: staging is seeded from live, so notes exist regardless
+        let rows = try await w.seed(3, from: 0)
+        let brain = FileMapBrain([["path": "Work/Deep/Nested.md", "content": "# Nested\n"], ["path": "Trips/Goa (2026).md", "content": "# Goa\n"]])
+        let said = Said()
+        let builder = try w.builder(brain)
+        await #expect(throws: KnowledgeBuilder.Failure.self) { try await builder.sync(summaries: rows, progress: { _ in }, onEvent: { said.note($0) }) }
+        #expect(try await w.store.unmergedSummaries().count == 3, "nothing was written for these rows, so they are still owed")
+        #expect(try await w.token()?.nextPart == 0)
+        #expect(await builder.refusals == 2)
+        #expect(said.all == ["Refused Work/Deep/Nested.md: notes live one level deep (Folder/Note.md); Work/Deep/Nested.md is nested deeper",
+                             "Refused Trips/Goa (2026).md: \"Goa (2026)\" is a period-stamped title; keep one note per subject and write the dated section into Trips/Goa.md instead"])
+        #expect(w.read("Trips/Goa (2026).md") == nil && w.read("Work/Deep/Nested.md") == nil)
+    }
+
+    @Test func aSingleShotPartWithOneNoteRefusedLandsTheRestAndCountsTheLoss() async throws {
+        let w = try Self.world()
+        try w.put("---\nbrownie: portrait\ncreated: 2026-09-01\nupdated: 2026-09-01\n---\n# Me\n", "README.md")
+        let rows = try await w.seed(2, from: 0)
+        let brain = FileMapBrain([["path": "Work/Plan.md", "content": "# Plan\n"], ["path": "Work/Deep/Nested.md", "content": "# Nested\n"]])
+        let said = Said()
+        let builder = try w.builder(brain)
+        _ = try await builder.sync(summaries: rows, progress: { _ in }, onEvent: { said.note($0) })
+        #expect(w.body("Work/Plan.md") == "# Plan\n" && w.read("Work/Deep/Nested.md") == nil)
+        #expect(try await w.store.unmergedSummaries().isEmpty, "the part landed")
+        #expect(try await w.token() == nil)
+        #expect(await builder.refusals == 1 && said.all.count == 1 && said.all[0].hasPrefix("Refused Work/Deep/Nested.md: "))
     }
 
     @Test func aTokenWithNothingLeftToFeedAndNoNotesIsDroppedAndTheSyncPlansAfresh() async throws {

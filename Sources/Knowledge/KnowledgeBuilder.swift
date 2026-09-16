@@ -23,6 +23,11 @@ public actor KnowledgeBuilder {
     }
     public enum Failure: Error { case brainMissing, staleSwapAverted, nothingWritten }
 
+    /// Notes a brain without file tools proposed this sync that the vault's rules turned away. A brain with tools
+    /// hears a refusal and writes again; one without gets no second turn, so what it lost is counted here and
+    /// the coordinator carries the number into the night's stats.
+    public private(set) var refusals = 0
+
     private let brain: any Brain
     private let store: any KnowledgeStore
     private let runStore: any RunStore
@@ -51,6 +56,7 @@ public actor KnowledgeBuilder {
     /// feeds exactly the ids it froze. Returns usage. The caller deletes merged rows after the swap.
     public func sync(summaries: [SummaryRecord], progress: @escaping @Sendable (RunProgress) -> Void, onEvent: @escaping @Sendable (AgentEvent) -> Void) async throws -> Usage {
         let fm = FileManager.default
+        refusals = 0
         var token = try await loadToken()
         if let t = token, !fm.fileExists(atPath: t.stagingPath) { token = nil }
         var parts: [[SummaryRecord]] = []
@@ -186,7 +192,20 @@ public actor KnowledgeBuilder {
                                                      input: "EXISTING FILES:\n\(existing)\n\n" + input, schema: schema, maxOutputTokens: 32_000))
         guard let data = r.jsonData, let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let files = obj["files"] as? [[String: Any]] else { throw BrainError.badResponse("no file map") }
         // No read step exists here, so the read-first rule is waived; every other rule and the re-attached front-matter still apply.
-        for f in files { if let p = f["path"] as? String, let c = f["content"] as? String { _ = try? FileTools.write(part, path: p, content: c, requireRead: false) } }
+        // A refusal is not swallowed: this brain cannot see the rules' state and gets no turn to write again, so each one
+        // is logged, shown and counted — and a part whose every note was refused is not done, so its rows are fed again.
+        var written = 0, refused = 0
+        for f in files {
+            guard let p = f["path"] as? String, let c = f["content"] as? String else { continue }
+            do { try FileTools.write(part, path: p, content: c, requireRead: false); written += 1 }
+            catch let refusal as FileTools.Refusal {
+                refused += 1
+                log.warn("refused \(p): \(refusal.description)")
+                onEvent(.message("Refused \(FileTools.clean(p)): \(refusal.description)"))
+            }
+        }
+        refusals += refused
+        if written == 0, refused > 0 { throw Failure.nothingWritten }
         return r.usage
     }
 
@@ -287,6 +306,8 @@ private actor FinishBox {
 enum FileTools {
     static let maxRootFolders = 10, maxNotesPerFolder = 8, readmeWords = 350
     static let months = "(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)"
+    /// The vault's own folders: one file per person or group, never deleted, never counted against the shape's caps.
+    static let ownFolders = ["People", "Groups"]
 
     /// One sentence the brain can act on.
     struct Refusal: Error, CustomStringConvertible, Equatable { let description: String; init(_ s: String) { description = s } }
@@ -315,7 +336,7 @@ enum FileTools {
             Tool(name: "read_file", description: "Read a note's prose at a relative path. Brownie's front-matter and status block are kept out of what you see and put back when you write, so never write them yourself. An existing note must be read before write_file may overwrite it.", parametersSchema: #"{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}"#) { data in
                 try read(part, path: arg(data)["path"] as? String ?? "")
             },
-            Tool(name: "write_file", description: "Create or overwrite a note at a relative path with its full prose (no front-matter, no status block). `sources` optionally names the apps the note draws on. Refused, with the reason, when the note was not read first, when it would be the eleventh root folder or the ninth note in a folder other than People/ or Groups/, when README.md would pass 350 words, when the title is period-stamped or differs from an existing note only by case or punctuation, or when it would be a second People/ note for someone who already has one.", parametersSchema: #"{"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"},"sources":{"type":"array","items":{"type":"string"}}},"required":["path","content"]}"#) { data in
+            Tool(name: "write_file", description: "Create or overwrite a note at a relative path with its full prose (no front-matter, no status block). `sources` optionally names the apps the note draws on. Refused, with the reason, when the note was not read first, when it would be the eleventh root folder or the ninth note in a folder other than People/ or Groups/, when README.md would pass 350 words, when the title is period-stamped or differs from an existing note only by case or punctuation, when the folder is spelled in another case than the one that exists, or when it would be a second People/ note for someone who already has one.", parametersSchema: #"{"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"},"sources":{"type":"array","items":{"type":"string"}}},"required":["path","content"]}"#) { data in
                 let a = arg(data)
                 return try write(part, path: a["path"] as? String ?? "", content: a["content"] as? String ?? "", sources: a["sources"] as? [String])
             },
@@ -343,12 +364,44 @@ enum FileTools {
         return root.appendingPathComponent(p)
     }
 
+    /// "people" and "People" are one folder to the Mac's file system, so every rule keyed on a name compares this way.
+    static func same(_ a: String, _ b: String) -> Bool { a.caseInsensitiveCompare(b) == .orderedSame }
+    static func isOwn(_ folder: String) -> Bool { ownFolders.contains { same(folder, $0) } }
+    static func isToday(_ p: String) -> Bool { same(p, TodayNote.path) }
+
+    /// A path whose folder is spelled in another case than the one on disk — or than the vault's own People/, Groups/ and
+    /// README.md — is refused naming the spelling to use. The file system would fold "people/Arif.md" onto People/Arif.md,
+    /// and every rule keyed on the folder (one file per person, never deleted, the caps, the note's kind) would look the other way.
+    static func checkSpelling(_ p: String, parts: [String], root: URL) throws {
+        guard let first = parts.first else { return }
+        if parts.count == 1 {
+            if same(first, "README.md"), first != "README.md" { throw Refusal("the portrait is README.md; spell it so, not \(p)") }
+            return
+        }
+        let rest = parts.dropFirst().joined(separator: "/")
+        if let own = ownFolders.first(where: { same(first, $0) }), own != first {
+            throw Refusal("the folder is spelled \(own)/; spell it \(own)/\(rest), not \(p)")
+        }
+        if let existing = rootFolders(of: root).first(where: { same(first, $0) }), existing != first {
+            throw Refusal("\(existing)/ already exists and \(p) differs from it only by case; spell it \(existing)/\(rest)")
+        }
+    }
+
+    /// The spellings a person's note carries as aliases: names only. A chat label's phone number or parenthesised suffix
+    /// goes (PersonKey.displayName), and a label that is a handle rather than a name — an address, a JID, an @name, bare
+    /// digits — is no alias at all; the registry keeps handles on its own. The title itself is not repeated.
+    static func nameAliases(of person: Person, title: String) -> [String] {
+        dedupe(([person.name] + person.aliases).map(PersonKey.displayName).filter { a in
+            !a.contains("@") && !a.contains(":") && !PersonKey.normalise(a).isEmpty && !same(a, title)
+        })
+    }
+
     // MARK: read
 
     static func read(_ part: Part, path: String) throws -> String {
         let p = clean(path)
         let url = try resolve(part.root, p)
-        guard p != TodayNote.path else { throw Refusal("Today.md is Brownie's own checklist for the phone, not a note; leave it alone") }
+        guard !isToday(p) else { throw Refusal("Today.md is Brownie's own checklist for the phone, not a note; leave it alone") }
         guard FileManager.default.fileExists(atPath: url.path) else { throw Refusal("there is no file at \(p); list_dir shows what exists") }
         let raw = try String(contentsOf: url, encoding: .utf8)
         part.markRead(p)
@@ -364,10 +417,11 @@ enum FileTools {
         let p = clean(path)
         let url = try resolve(part.root, p)
         let fm = FileManager.default
-        guard p != TodayNote.path else { throw Refusal("Today.md is Brownie's own checklist for the phone and is never written by the brain") }
+        guard !isToday(p) else { throw Refusal("Today.md is Brownie's own checklist for the phone and is never written by the brain") }
         guard Vault.isNote(p) else { throw Refusal("notes are Markdown files (.md) in visible folders; \(p) is not one") }
         let parts = p.split(separator: "/").map(String.init)
         guard parts.count <= 2 else { throw Refusal("notes live one level deep (Folder/Note.md); \(p) is nested deeper") }
+        try checkSpelling(p, parts: parts, root: part.root)
         let folder = parts.count == 2 ? parts[0] : "", title = String(parts.last!.dropLast(3))
         // Spelled exactly: the Mac's file system would say "invoices.md" exists when only "Invoices.md" does, and that is a duplicate, not an overwrite.
         let siblings = notes(in: folder, of: part.root)
@@ -382,20 +436,20 @@ enum FileTools {
             throw Refusal("\(p) differs from \(notePath(folder, dup)) only by case, punctuation or a date suffix; write into \(notePath(folder, dup)) instead")
         }
         // One file per person, whatever the spelling: the registry says where they are written.
-        let person = folder == "People" ? PersonRegistry.resolve(label: title, handle: nil, among: part.people).flatMap { id in part.people.first { $0.id == id } } : nil
+        let person = same(folder, "People") ? PersonRegistry.resolve(label: title, handle: nil, among: part.people).flatMap { id in part.people.first { $0.id == id } } : nil
         if !exists, let person, let np = person.notePath, np != p, fm.fileExists(atPath: part.root.appendingPathComponent(np).path) {
             throw Refusal("\(person.name) already has a note at \(np); write about them there, not in \(p)")
         }
-        // The vault's shape: ten root folders, eight notes in any folder but People/ and Groups/.
-        if !exists, !folder.isEmpty, !fm.fileExists(atPath: part.root.appendingPathComponent(folder).path) {
+        // The vault's shape: ten root folders, eight notes in any folder — People/ and Groups/ are the vault's own and count towards neither.
+        if !exists, !folder.isEmpty, !isOwn(folder), !fm.fileExists(atPath: part.root.appendingPathComponent(folder).path) {
             let have = rootFolders(of: part.root)
             if have.count >= maxRootFolders { throw Refusal("the knowledge base already has its \(maxRootFolders) root folders (\(have.joined(separator: ", "))); put this note in one of them instead of creating \(folder)/") }
         }
-        if !exists, folder != "People", folder != "Groups", siblings.count >= maxNotesPerFolder {
+        if !exists, !isOwn(folder), siblings.count >= maxNotesPerFolder {
             throw Refusal("\(folder.isEmpty ? "the root" : folder + "/") already holds \(maxNotesPerFolder) notes (\(siblings.sorted().joined(separator: ", "))); fold this into one of them instead of adding a ninth")
         }
         // The portrait stays a portrait.
-        if p == "README.md" {
+        if same(p, "README.md") {
             let words = content.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count
             if words > readmeWords { throw Refusal("README.md would be \(words) words; the portrait stays under \(readmeWords) — write a shorter one") }
         }
@@ -416,8 +470,8 @@ enum FileTools {
             meta.contentHash = hash
             text = meta.render() + (NoteStatus.extract(from: oldBody).map { NoteStatus.insert($0, into: body) } ?? body)
         } else {
-            let aliases = person.map { ([$0.name] + $0.aliases).filter { $0 != title } } ?? []
-            text = NoteMeta.fresh(path: p, body: body, today: part.today, id: person?.id, aliases: dedupe(aliases), sources: dedupe(sources ?? [])).render() + body
+            let aliases = person.map { nameAliases(of: $0, title: title) } ?? []
+            text = NoteMeta.fresh(path: p, body: body, today: part.today, id: person?.id, aliases: aliases, sources: dedupe(sources ?? [])).render() + body
         }
         try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try text.write(to: url, atomically: true, encoding: .utf8)
@@ -430,10 +484,13 @@ enum FileTools {
     static func delete(_ part: Part, path: String) throws -> String {
         let p = clean(path)
         let url = try resolve(part.root, p)
-        guard Vault.isNote(p) else { throw Refusal("only notes can be deleted; \(p) is not one") }
-        if p.hasPrefix("People/") || p.hasPrefix("Groups/") {
+        guard Vault.isNote(p), !isToday(p) else { throw Refusal("only notes can be deleted; \(p) is not one") }
+        let parts = p.split(separator: "/").map(String.init)
+        // Whatever case the path is spelled in: the file system would find the note under its real folder.
+        if let folder = parts.first, parts.count > 1, isOwn(folder) {
             throw Refusal("notes under People/ and Groups/ are never deleted by the brain; leave \(p) and write in the note that fits, or fold the facts in and leave the file")
         }
+        try checkSpelling(p, parts: parts, root: part.root)
         guard FileManager.default.fileExists(atPath: url.path) else { throw Refusal("there is no note at \(p)") }
         try FileManager.default.removeItem(at: url)
         part.forget(p)
