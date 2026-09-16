@@ -114,6 +114,9 @@ public actor RunCoordinator {
                 // Who exists, from the People notes and every earlier run: the brain is told, so it writes each person in one file.
                 let registry = PersonRegistry(vault: deps.knowledge.rootURL, now: { [clock = deps.clock] in clock.now() })
                 await registry.load()
+                // Anyone tonight's summaries, open asks or open loops name comes back from Archive/ before the brain writes, so it finds their one file where it expects it.
+                let mentioned = summaries.map(\.bucketName) + Self.loadAsks(try await store.value(SettingKey.asks)).filter(\.isOpen).map(\.person) + (await LoopLedger.load(store)).filter { $0.status == .open }.map(\.person)
+                await NoteArchive.unarchive(root: deps.knowledge.rootURL, registry: registry, mentioned: mentioned)
                 await registry.seed(from: (try? await deps.knowledge.folders()) ?? [])
                 var usage = Usage.zero
                 if !summaries.isEmpty {
@@ -175,6 +178,9 @@ public actor RunCoordinator {
                 let suspects = await registry.suspects().map { [$0.0.id, $0.1.id] }
                 try? await store.setValue(SettingKey.duplicatePeople, String(data: JSONEncoder().encode(suspects), encoding: .utf8))
                 await Self.writeStatusBlock(asks: asks, loops: allLoops, knowledge: deps.knowledge, registry: registry, now: deps.clock.now(), timeZone: deps.clock.timeZone)
+                // The gardener: every People and Groups note back in shape and aged, the lines that retired from the status block kept under Earlier, quiet notes archived.
+                await VaultGardener.run(root: deps.knowledge.rootURL, registry: registry, now: deps.clock.now(), timeZone: deps.clock.timeZone,
+                                        retiredLines: { [now = deps.clock.now(), tz = deps.clock.timeZone] in StatusBlock.retiredLines(person: $0, asks: asks, loops: allLoops, now: now, timeZone: tz) }, archive: true)
                 try await store.setValue(SettingKey.candidates, String(data: JSONEncoder().encode(candidates), encoding: .utf8))
 
                 onEvent(.progress(RunProgress(stage: .preparing, stats: stats)))
