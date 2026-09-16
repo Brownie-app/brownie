@@ -78,15 +78,19 @@ extension AppModel {
 
     /// "Read further back": widen one source's first-read window by a step, remember it, and forget the source's
     /// cursors so the next run treats its buckets as first reads with the wider window. Already-read items inside
-    /// the old window are read once more on that run; the note builder folds duplicates into the notes it has.
+    /// the old window are read once more on that run; the note builder folds duplicates into the notes it has, and
+    /// the source's coverage line starts over with them so they are not counted twice.
     func readFurtherBack(_ source: SourceID) {
         var p = FirstRead.current; p.readFurtherBack(source); FirstRead.current = p
         objectWillChange.send()
         let name = allSources.first { $0.id == source }?.descriptor.name ?? source.rawValue
         announcement = "\(name) will read back \(p.days(for: source)) days on the next run."
         Task {
-            do { try await p.save(to: store); try await store.resetCursors(for: source) }
-            catch { announcement = "Couldn't widen \(name)'s window: \(error)" }
+            do {
+                try await p.save(to: store); try await store.resetCursors(for: source)
+                let kept = SourceCoverage.forgetting(source, in: SourceCoverage.decode(try await store.value(SettingKey.coverage)))
+                try await store.setValue(SettingKey.coverage, kept.isEmpty ? nil : SourceCoverage.encode(kept))
+            } catch { announcement = "Couldn't widen \(name)'s window: \(error)" }
         }
     }
     func setNudgeDays(_ d: Int) { nudgeDays = d; set(SettingKey.nudgeDays, String(d)) }

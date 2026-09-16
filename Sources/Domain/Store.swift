@@ -28,13 +28,19 @@ public struct SummaryRecord: Sendable, Identifiable, Equatable {
 
 /// Per-bucket cursor. `mark` is the high-water mark; `floor` exists only mid-way through a first
 /// run (the oldest item done so far) and collapses into `mark` when the bottom is reached.
+/// `setAside` is what the source's first-read window or cap left below what was read — the figure behind
+/// "older not read" — and stands until the bucket is read from scratch again. `gated` remembers the items
+/// whose dates could not be believed: they sit above any sane mark and are listed every run, so they are
+/// recorded in the drop log once and only mentioned after that.
 public struct BucketCursor: Sendable, Equatable {
     public let bucket: BucketID
     public let source: SourceID
     public var mark: ItemKey?
     public var floor: ItemKey?
-    public init(bucket: BucketID, source: SourceID, mark: ItemKey?, floor: ItemKey?) {
-        self.bucket = bucket; self.source = source; self.mark = mark; self.floor = floor
+    public var setAside: Int
+    public var gated: [ItemKey]
+    public init(bucket: BucketID, source: SourceID, mark: ItemKey?, floor: ItemKey?, setAside: Int = 0, gated: [ItemKey] = []) {
+        self.bucket = bucket; self.source = source; self.mark = mark; self.floor = floor; self.setAside = setAside; self.gated = gated
     }
     public var isMidInitial: Bool { floor != nil }
     public var isComplete: Bool { mark != nil && floor == nil }
@@ -54,8 +60,19 @@ public enum RunOutcome: Codable, Sendable, Equatable {
 
 public struct RunStats: Sendable, Equatable, Codable {
     public var read = 0, kept = 0, dropped = 0, sensitive = 0, failed = 0, deferred = 0
+    /// Items turned away at the date gate before the reader saw them: neither read nor "not worth keeping".
+    public var badDated = 0
     public init() {}
+    /// Stats written before the gate had its own tally decode with it at zero.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        read = try c.decodeIfPresent(Int.self, forKey: .read) ?? 0; kept = try c.decodeIfPresent(Int.self, forKey: .kept) ?? 0
+        dropped = try c.decodeIfPresent(Int.self, forKey: .dropped) ?? 0; sensitive = try c.decodeIfPresent(Int.self, forKey: .sensitive) ?? 0
+        failed = try c.decodeIfPresent(Int.self, forKey: .failed) ?? 0; deferred = try c.decodeIfPresent(Int.self, forKey: .deferred) ?? 0
+        badDated = try c.decodeIfPresent(Int.self, forKey: .badDated) ?? 0
+    }
     public mutating func record(_ reason: VerdictReason) {
+        if reason == .badDate { badDated += 1; return }
         read += 1
         switch reason.verdict {
         case .keep: kept += 1
@@ -101,6 +118,8 @@ public protocol RunStore: Sendable {
     func cursor(_ bucket: BucketID) async throws -> BucketCursor?
     func cursors(for source: SourceID) async throws -> [BucketCursor]
     func commit(runID: Int64, cursor: BucketCursor, bucketName: String, candidate: Candidate, outcome: Outcome, at: Date) async throws
+    /// Writes a cursor with no item behind it: the way a bucket completes when its listing has nothing older left to give.
+    func setCursor(_ cursor: BucketCursor, at: Date) async throws
     func clearBucket(_ bucket: BucketID) async throws
     /// Forgets every cursor of one source, so its next run is a first read again (the way "Read further back" widens a window).
     func resetCursors(for source: SourceID) async throws
