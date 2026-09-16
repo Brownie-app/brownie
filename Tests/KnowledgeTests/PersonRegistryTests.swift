@@ -181,6 +181,145 @@ import Platform
         #expect(PersonRegistry.headerLines([]).isEmpty)
     }
 
+    // MARK: two people sharing a key
+
+    @Test func resolvePrefersTheExactSpellingAndNeverGuessesBetweenTwoWhoShareAKey() async throws {
+        let v = try Self.vault(); let r = v.registry()
+        // "Kanika Pandey Loadmill.md" sorts before "Kanika Pandey.md", so the Loadmill record is on file first
+        let notes = [Self.note("People/Kanika Pandey Loadmill.md", "Kanika Pandey Loadmill"), Self.note("People/Kanika Pandey.md", "Kanika Pandey"),
+                     Self.note("People/Arjun Mehta.md", "Arjun Mehta"), Self.note("People/Arjun Mehta (Landlord).md", "Arjun Mehta (Landlord)")]
+        await r.seed(from: [KnowledgeFolder(name: "People", notes: notes)])
+        let people = await r.people()
+        let plain = try #require(people.first { $0.notePath == "People/Kanika Pandey.md" }), loadmill = try #require(people.first { $0.notePath == "People/Kanika Pandey Loadmill.md" })
+        let landlord = try #require(people.first { $0.notePath == "People/Arjun Mehta (Landlord).md" }), arjun = try #require(people.first { $0.notePath == "People/Arjun Mehta.md" })
+        #expect(await r.resolve(label: "Kanika Pandey", handle: nil) == plain.id, "the chat named exactly like the note is that note's person, not the first record on file")
+        #expect(await r.resolve(label: "kanika pandey ", handle: nil) == plain.id, "case and surrounding space aside")
+        #expect(await r.resolve(label: "Kanika Pandey Loadmill", handle: nil) == loadmill.id)
+        #expect(await r.resolve(label: "Arjun Mehta (Landlord)", handle: nil) == landlord.id, "the parenthesised suffix the key strips still tells the two apart")
+        #expect(await r.resolve(label: "Arjun Mehta", handle: nil) == arjun.id)
+        #expect(await r.resolve(label: "Kanika Pandey (work)", handle: nil) == nil, "a spelling that is neither of them is nobody — never the first on file")
+        // a label that spells neither is not learned onto either, and no third person is opened for it
+        let picked = await r.register(label: "Kanika Pandey (work)", handle: "whatsapp:+919")
+        let count = await r.people().count
+        #expect([plain.id, loadmill.id].contains(picked) && count == 4)
+        #expect(await r.people().allSatisfy { $0.handles.isEmpty && !$0.aliases.contains("Kanika Pandey (work)") }, "no handle and no alias attached by a guess")
+        #expect(await r.resolve(label: "Renamed Chat", handle: "whatsapp:+919") == nil)
+        // the exact spelling takes the handle, and the handle then decides whatever the chat is called
+        #expect(await r.register(label: "Kanika Pandey", handle: "whatsapp:+919") == plain.id)
+        let plainHandles = await r.person(plain.id)?.handles, loadmillHandles = await r.person(loadmill.id)?.handles
+        #expect(plainHandles == ["whatsapp:+919"] && loadmillHandles == [])
+        #expect(await r.resolve(label: "Renamed Chat", handle: "whatsapp:+919") == plain.id)
+        // kept separate, the pair still resolves the same way, and the block for each label lands on its own note
+        await r.keepSeparate(plain.id, loadmill.id)
+        #expect(await r.notePath(forLabel: "Kanika Pandey", handle: nil, amongNotes: notes) == "People/Kanika Pandey.md")
+        #expect(await r.notePath(forLabel: "Kanika Pandey Loadmill", handle: nil, amongNotes: notes) == "People/Kanika Pandey Loadmill.md")
+        #expect(await r.notePath(forLabel: "Kanika Pandey (work)", handle: nil, amongNotes: notes) == nil, "nowhere rather than the wrong note")
+        // the title fallback of an empty registry follows the same rule
+        let e = try Self.vault().registry()
+        #expect(await e.notePath(forLabel: "Kanika Pandey", handle: nil, amongNotes: notes) == "People/Kanika Pandey.md")
+        #expect(await e.notePath(forLabel: "Kanika Pandey (work)", handle: nil, amongNotes: notes) == nil)
+        // a person known from chats takes the note spelled like them, not the same-key note that sorts first
+        let c = try Self.vault().registry()
+        let known = await c.register(label: "Kanika Pandey", handle: "whatsapp:+1")
+        await c.seed(from: [KnowledgeFolder(name: "People", notes: Array(notes.prefix(2)))])
+        let knownPath = await c.notePath(for: known), knownCount = await c.people().count
+        #expect(knownPath == "People/Kanika Pandey.md" && knownCount == 2)
+    }
+
+    @Test func seedLeavesEveryNotePathAloneWhenNoPeopleFolderWasListed() async throws {
+        let v = try Self.vault(); let r = v.registry()
+        try v.put("People/Nitesh.md", "# Nitesh\n\nRecurring.\n")
+        try v.put("People/Arjun Mehta.md", "# Arjun Mehta\n")
+        await r.seed(from: try await v.kb.folders())
+        let paths = await r.people().compactMap(\.notePath).sorted()
+        #expect(paths == ["People/Arjun Mehta.md", "People/Nitesh.md"])
+        // one file the store cannot read (Latin-1 bytes) fails the whole listing, which the run turns into an empty one
+        try Data([0x23, 0x20, 0x4A, 0xF6, 0x72, 0x67, 0x0A]).write(to: v.root.appendingPathComponent("People/Jorg.md"))
+        let listed = try? await v.kb.folders()
+        #expect(listed == nil, "the listing fails on the unreadable note")
+        await r.seed(from: listed ?? [])
+        #expect(await r.people().compactMap(\.notePath).sorted() == paths, "nothing was listed, so nothing is released")
+        #expect(PersonRegistry.headerLines(await r.people()).allSatisfy { !$0.contains("no note yet") })
+        // a listed People folder with a note gone does release that one
+        await r.seed(from: Self.folders([("People/Nitesh.md", "Nitesh")]))
+        #expect(await r.people().compactMap(\.notePath) == ["People/Nitesh.md"])
+    }
+
+    @Test func saveKeepsAMergeAndAKeepSeparateMadeWhileTheRunHeldItsCopy() async throws {
+        let v = try Self.vault()
+        let first = v.registry()
+        await first.seed(from: Self.folders([("People/Kanika Pandey.md", "Kanika Pandey"), ("People/Kanika Pandey Loadmill.md", "Kanika Pandey Loadmill")]))
+        let a = await first.register(label: "Arjun", handle: nil), b = await first.register(label: "Arjun Mehta", handle: "whatsapp:+1")
+        try await first.save()
+        let keep = try #require(await first.people().first { $0.notePath == "People/Kanika Pandey.md" }?.id), drop = try #require(await first.people().first { $0.notePath == "People/Kanika Pandey Loadmill.md" }?.id)
+        // the night run loads its copy and works for an hour; meanwhile the app merges the Kanikas, keeps the Arjuns apart, deletes the dropped note
+        let run = v.registry(at: 3600); await run.load()
+        let app = v.registry(at: 10); await app.load()
+        await app.merge(keep: keep, drop: drop); await app.keepSeparate(a, b); try await app.save()
+        // the run learned a handle for the dropped spelling, a fuller name for Arjun, someone new, and saw the notes as they are now
+        await run.seed(from: Self.folders([("People/Kanika Pandey.md", "Kanika Pandey"), ("People/Zed Zulu.md", "Zed Zulu")]))
+        _ = await run.register(label: "Kanika Pandey Loadmill", handle: "whatsapp:+919")
+        _ = await run.register(label: "Kanika Pandey", handle: "slack:U9")
+        _ = await run.register(label: "Arjun", handle: "telegram:7")
+        try await run.save()
+        let again = v.registry(at: 99); await again.load()
+        let people = await again.people()
+        #expect(people.count == 4 && people.first { $0.id == drop } == nil, "the merge the app made stands")
+        let kept = try #require(people.first { $0.id == keep })
+        #expect(kept.aliases.contains("Kanika Pandey Loadmill") && kept.handles.sorted() == ["slack:U9", "whatsapp:+919"] && kept.notePath == "People/Kanika Pandey.md", "what the run learned about either Kanika is on the kept one")
+        #expect(people.first { $0.id == a }?.notSame == [b] && people.first { $0.id == b }?.notSame == [a], "keep separate stands")
+        #expect(people.first { $0.id == a }?.handles == ["telegram:7"] && people.first { $0.notePath == "People/Zed Zulu.md" } != nil)
+        #expect(await again.suspects().isEmpty, "the banner has nothing left to ask")
+        #expect(await run.people().sorted { $0.id < $1.id } == people.sorted { $0.id < $1.id }, "the run's own view is the reconciled one, so its status blocks route the same way")
+        // the other order: the run saved first and the app, holding an older copy, merges afterwards — the run's learning survives
+        let v2 = try Self.vault(); let seed = v2.registry()
+        await seed.seed(from: Self.folders([("People/Kanika Pandey.md", "Kanika Pandey"), ("People/Kanika Pandey Loadmill.md", "Kanika Pandey Loadmill")])); try await seed.save()
+        let k2 = try #require(await seed.people().first { $0.notePath == "People/Kanika Pandey.md" }?.id), d2 = try #require(await seed.people().first { $0.notePath == "People/Kanika Pandey Loadmill.md" }?.id)
+        let app2 = v2.registry(at: 5); await app2.load()
+        let run2 = v2.registry(at: 6); await run2.load()
+        _ = await run2.register(label: "Kanika Pandey Loadmill", handle: "whatsapp:+919"); _ = await run2.register(label: "New Person", handle: nil); try await run2.save()
+        await app2.merge(keep: k2, drop: d2); try await app2.save()
+        let final = v2.registry(at: 99); await final.load()
+        let finalCount = await final.people().count, gone2 = await final.person(d2), keptHandles = await final.person(k2)?.handles, newcomer = await final.resolve(label: "New Person", handle: nil)
+        #expect(finalCount == 2 && gone2 == nil)
+        #expect(keptHandles == ["whatsapp:+919"] && newcomer != nil)
+        // nothing changed on disk: a plain write
+        let lone = v2.registry(at: 100); await lone.load(); _ = await lone.register(label: "Third", handle: nil); try await lone.save()
+        let check = v2.registry(); await check.load()
+        #expect(await check.people().count == 3)
+    }
+
+    @Test func mergedNoteDropsTheStatusBlockSoOnlyTheKeptOneIsMaintained() {
+        let blocks = [(open: "<!-- brownie:status -->", close: "<!-- /brownie:status -->"), (open: "<!-- brownie:between-you -->", close: "<!-- /brownie:between-you -->")]
+        let kept = "# Kanika Pandey\n<!-- brownie:status -->\n## Between you\n- ⏳ 1 Sep — they asked: “x?” — no reply yet\n<!-- /brownie:status -->\n\nWorks at Loadmill.\n"
+        let dropped = "# Kanika Pandey Loadmill\n<!-- brownie:status -->\n## Between you\n- ⏳ 3 Sep — they asked: “pricing?” — no reply yet\n<!-- /brownie:status -->\n\nAsked about pricing.\n"
+        let out = PersonNotes.appendMerged(into: kept, droppedBody: dropped, droppedName: "Kanika Pandey Loadmill", date: Self.t0, stripping: blocks)
+        #expect(out == kept.trimmingCharacters(in: .whitespacesAndNewlines) + "\n\n## Merged from Kanika Pandey Loadmill (16 Sep 2026)\nAsked about pricing.\n")
+        #expect(out.components(separatedBy: "<!-- brownie:status -->").count == 2, "one block in the note: the kept note's own")
+        let legacy = "# Old\n\n<!-- brownie:between-you -->\n- ⏳ old\n<!-- /brownie:between-you -->\n\nStill here.\n<!-- brownie:status -->\nno closer\n"
+        let out2 = PersonNotes.appendMerged(into: "# New\n", droppedBody: legacy, droppedName: "Old", date: Self.t0, stripping: blocks)
+        #expect(out2 == "# New\n\n## Merged from Old (16 Sep 2026)\nStill here.\n<!-- brownie:status -->\nno closer\n", "the old markers go too; an opener with no closer is left as text")
+        #expect(PersonNotes.appendMerged(into: "# New\n", droppedBody: dropped, droppedName: "K", date: Self.t0).contains("<!-- brownie:status -->"), "nothing is stripped unless asked")
+    }
+
+    @Test func renamedLoopsAndAsksKeepEveryOtherField() throws {
+        var loop = Loop(id: "L1", direction: .theirs, person: "Arjun", what: "send the estimates", quote: "will send", sourceLabel: "WhatsApp · Fri", due: "Friday", dueDate: Self.t0, status: .lapsed,
+                        openedAt: Self.t0.addingTimeInterval(-91 * 86400), closedAt: Self.t0, closedHow: "let go", closedBy: "lapsed", lapsedAt: Self.t0, firedCardIDs: ["c1"], cameBackCount: 2)
+        loop.nudgedForDue = true; loop.owner = "either"
+        let ask = Ask(id: "A1", person: "Arjun", bucket: BucketID("whatsapp:1"), askedAt: Self.t0.addingTimeInterval(-60 * 86400), question: "estimates?", answeredAt: Self.t0.addingTimeInterval(-59 * 86400),
+                      reply: "lol", addressed: false, handle: "whatsapp:+1", lapsedAt: Self.t0.addingTimeInterval(-20 * 86400))
+        let l = loop.renamed(to: "Arjun Mehta"), a = ask.renamed(to: "Arjun Mehta")
+        #expect(l.person == "Arjun Mehta" && a.person == "Arjun Mehta")
+        #expect(l.lapsedAt == Self.t0 && l.closedBy == "lapsed" && l.status == .lapsed, "a let-go loop stays let go, by the same hand, on the same day")
+        #expect(a.lapsedAt == ask.lapsedAt && !a.isOpen, "a let-go ask does not come back as open")
+        // every field but the name survives, whatever fields the records grow
+        func fields<T: Encodable>(_ x: T) throws -> NSDictionary {
+            var d = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(x)) as? [String: Any]); d["person"] = nil; return d as NSDictionary
+        }
+        let (fl, floop, fa, fask) = (try fields(l), try fields(loop), try fields(a), try fields(ask))
+        #expect(fl == floop && fa == fask)
+    }
+
     @Test func mergedNoteTextAndLinkRewrites() {
         let kept = "# Kanika Pandey\n\nWorks at Loadmill.\n"
         let dropped = "# Kanika Pandey Loadmill\n\nAsked about pricing on 2026-09-01.\n"
