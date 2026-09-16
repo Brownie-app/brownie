@@ -63,3 +63,18 @@ import Platform
         #expect(MCPServer.isInstalled(in: f))
     }
 }
+
+@Suite struct VaultPathGuardTests {
+    @Test(arguments: ["People/Priya.md", "Household/Amma's 70th.md", "README.md"]) func insideStays(_ p: String) { #expect(FileKnowledgeStore.isInsideVault(p)) }
+    @Test(arguments: ["../../.ssh/id_rsa", "/etc/passwd", "~/secrets.md", "People/../../x.md", ".sync/People/A.md", "People/.hidden.md", "notes.txt", ""]) func outsideIsRefused(_ p: String) { #expect(!FileKnowledgeStore.isInsideVault(p)) }
+    @Test func readNoteRefusesEscapes() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("guard-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root.appendingPathComponent("People"), withIntermediateDirectories: true)
+        try "# A".write(to: root.appendingPathComponent("People/A.md"), atomically: true, encoding: .utf8)
+        try "secret".write(to: root.deletingLastPathComponent().appendingPathComponent("outside-\(UUID().uuidString).md"), atomically: true, encoding: .utf8)
+        let store = try FileKnowledgeStore(root: root, indexPath: root.appendingPathComponent("i.sqlite").path)
+        #expect(try await store.note(at: "People/A.md")?.title == "A")
+        #expect(try await store.note(at: "../People/A.md") == nil)
+        #expect(try await store.note(at: "People/../../x.md") == nil)
+    }
+}

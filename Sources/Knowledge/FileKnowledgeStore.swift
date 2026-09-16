@@ -31,9 +31,17 @@ public actor FileKnowledgeStore: KnowledgeStore {
     }
 
     public func note(at relativePath: String) throws -> Note? {
+        // Only paths inside the vault: an MCP client or a link can name anything, and ".." must not walk out.
+        guard Self.isInsideVault(relativePath) else { return nil }
         let url = rootURL.appendingPathComponent(relativePath)
-        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        guard url.standardizedFileURL.path.hasPrefix(rootURL.standardizedFileURL.path + "/"), FileManager.default.fileExists(atPath: url.path) else { return nil }
         return try read(url)
+    }
+    /// A relative Markdown path with no way out: no leading slash, no "..", no hidden segments.
+    public nonisolated static func isInsideVault(_ rel: String) -> Bool {
+        let parts = rel.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+        guard !rel.isEmpty, !rel.hasPrefix("/"), !rel.hasPrefix("~"), rel.lowercased().hasSuffix(".md") else { return false }
+        return !parts.contains { $0 == ".." || $0.hasPrefix(".") || $0.isEmpty }
     }
 
     public func save(_ note: Note) throws {
