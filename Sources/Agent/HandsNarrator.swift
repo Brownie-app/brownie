@@ -11,6 +11,13 @@ public enum HandsNarrator {
             return t.isEmpty ? "element \(id)" : "“\(t.prefix(40))”"
         }
         switch tool {
+        case "plan": return "Planning the steps"
+        case "step_done": return "Step \(a["n"] as? Int ?? 0) done"
+        case "find": return "Looking for \(quote(a["text"]))"
+        case "wait_for": return "Waiting for \(quote(a["text"])) to appear"
+        case "open_url": return "Going to \((a["url"] as? String ?? "the page").replacingOccurrences(of: "https://", with: "").replacingOccurrences(of: "http://", with: ""))"
+        case "open_chat": return "Opening the \(a["app"] as? String ?? "chat") conversation with \(a["name"] as? String ?? "them")"
+        case "type_message": return "Putting the message in the box: \(quote(a["text"]))"
         case "screen": return "Looking at the screen"
         case "look": return "Taking a screenshot to see the page"
         case "list_apps": return "Checking which apps are open"

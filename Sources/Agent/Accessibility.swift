@@ -18,6 +18,14 @@ public struct UISnapshot: Sendable {
     public let window: String
     public let elements: [Element]
 
+    /// Elements whose label, value or role mentions the words — how Hands finds "Add to Cart" without reading the whole tree.
+    public func matching(_ query: String) -> [Element] {
+        let q = query.lowercased().trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return [] }
+        return elements.filter { $0.title.lowercased().contains(q) || $0.value.lowercased().contains(q) || $0.role.lowercased() == q }
+    }
+    public func contains(_ query: String) -> Bool { window.lowercased().contains(query.lowercased()) || !matching(query).isEmpty }
+
     public var text: String {
         var out = "App: \(app) · Window: \(window)\n"
         for e in elements {
@@ -37,9 +45,16 @@ public final class AXSession {
     private var refs: [Int: AXUIElement] = [:]
 
     public init() {}
+    private var enhanced = Set<pid_t>()
     public func snapshot(maxElements: Int = 400) -> UISnapshot? {
         guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
         let axApp = AXUIElementCreateApplication(app.processIdentifier)
+        // Chrome, Electron and Catalyst apps only expose their web content once an assistive client asks for it.
+        if !enhanced.contains(app.processIdentifier) {
+            AXUIElementSetAttributeValue(axApp, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
+            AXUIElementSetAttributeValue(axApp, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+            enhanced.insert(app.processIdentifier)
+        }
         var winRef: CFTypeRef?
         AXUIElementCopyAttributeValue(axApp, kAXFocusedWindowAttribute as CFString, &winRef)
         let root: AXUIElement = (winRef as! AXUIElement?) ?? axApp
@@ -104,6 +119,7 @@ public final class AXSession {
     }
     func frame(of id: Int) -> CGRect? { refs[id].map(frame) }
 
+    func snapshotRole(_ id: Int) -> String { refs[id].flatMap { attr($0, kAXRoleAttribute) as? String }.map { String($0.dropFirst(2)) } ?? "?" }
     func titleOf(_ id: Int) -> String { refs[id].flatMap { (attr($0, kAXTitleAttribute) as? String) ?? (attr($0, kAXDescriptionAttribute) as? String) } ?? "" }
 
     private func attr(_ el: AXUIElement, _ name: String) -> AnyObject? {

@@ -92,6 +92,8 @@ final class AppModel: ObservableObject {
     @Published var checkingEligible = false
     /// The card whose "Something else…" sheet is open.
     @Published var feedbackNoteFor: String?
+    /// What Hands is doing right now, as steps a person can follow (the floating panel and the card view read it).
+    @Published var journey: HandsJourney?
     /// The evidence being shown in its own sheet: the chat window, or the clip.
     @Published var evidenceShown: EvidenceShown?
     @Published var handsHotkey = "rightCommand"
@@ -527,7 +529,14 @@ final class AppModel: ObservableObject {
         let executor = RecipeExecutor(knowledgeRoot: knowledge.rootURL) { [weak self] goal, onEvent in
             guard let self, let hands = await self.hands else { onEvent(.step("Hands needs a brain with tools", done: false)); return .couldNot }
             onEvent(.step("Hands is starting: \(goal)", done: true))
-            let o = await hands.perform(goal) { e in if case .step(let s) = e { onEvent(.step(s, done: true)) } }
+            let o = await hands.perform(goal) { e in
+                switch e {
+                case .step(let s): onEvent(.step(s, done: true))
+                case .plan(let p): onEvent(.plan(p))
+                case .stepDone(let n, let note): onEvent(.stepDone(n, note))
+                default: break
+                }
+            }
             switch o {
             case .done(let s): onEvent(.step(s, done: true)); return .done
             case .pausedForUser(let w): onEvent(.pausedForUser(w)); return .pausedAtUserStep

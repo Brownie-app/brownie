@@ -362,23 +362,8 @@ public struct RecipeRunner: Sendable {
                 if isSearch, attempt == 0, near.width > 0 { VirtualInput.click(CGPoint(x: near.midX, y: near.midY)) }   // click the label again; the box may need it
                 try? await Task.sleep(nanoseconds: 700_000_000); continue
             }
-            let landed = { (self_: AXSession) -> Bool in self_.value(of: id).lowercased().contains(s.text.lowercased().prefix(12)) }
-            // 1. focus with a real click (AX focus alone is ignored by Electron/Catalyst apps)
-            await MainActor.run { _ = session.focus(id); if let f = session.frame(of: id), f.width > 0 { VirtualInput.click(CGPoint(x: f.midX, y: f.midY)) } }
-            try? await Task.sleep(nanoseconds: 300_000_000)
-            // 2. select what's there and type the text as key events
-            VirtualInput.key("cmd+a"); usleep(80_000); VirtualInput.type(s.text)
-            try? await Task.sleep(nanoseconds: 400_000_000)
-            if await MainActor.run(body: { landed(session) }) { await settle(isSearch); return true }
-            // 3. paste
-            await MainActor.run { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(s.text, forType: .string) }
-            VirtualInput.key("cmd+a"); usleep(80_000); VirtualInput.key("cmd+v")
-            try? await Task.sleep(nanoseconds: 500_000_000)
-            if await MainActor.run(body: { landed(session) }) { await settle(isSearch); return true }
-            // 4. the AX value, and read it back
-            if await MainActor.run(body: { session.setValue(s.text, on: id) && landed(session) }) { await settle(isSearch); return true }
-            let now = await MainActor.run { String(session.value(of: id).prefix(40)) }
-            log.warn("typing attempt \(attempt + 1) into “\(s.target)” did not land (value now: “\(now)”)")
+            if await RobustTyper.type(s.text, into: id, session: session, log: log) { await settle(isSearch); return true }
+            log.warn("typing attempt \(attempt + 1) into “\(s.target)” did not land")
             if attempt == 2 { return await MainActor.run { !session.value(of: id).isEmpty } }
         }
         log.warn("no \(isSearch ? "search" : (isMessage ? "message" : "text")) field for “\(s.target)” — not typing anywhere else")
@@ -397,14 +382,7 @@ public struct RecipeRunner: Sendable {
 
     /// True when the conversation header (top of the window, right of the list) names this person.
     private func chatIsOpen(_ session: AXSession, person: String) async -> Bool {
-        let first = person.lowercased().filter { $0.isLetter || $0.isNumber || $0 == " " }.split(separator: " ").first.map(String.init) ?? person.lowercased()
-        return await MainActor.run {
-            guard let snap = session.snapshot(), let win = snap.elements.first(where: { $0.role == "Window" })?.frame, win.width > 0 else { return false }
-            return snap.elements.contains { e in
-                (e.role == "StaticText" || e.role == "Button" || e.role == "Heading") && e.frame.minY < win.minY + win.height * 0.14 && e.frame.minX > win.minX + win.width * 0.3
-                    && e.title.lowercased().filter { $0.isLetter || $0.isNumber || $0 == " " }.contains(first)
-            }
-        }
+        await MainActor.run { session.snapshot().map { ChatWindowCheck.headerNames($0, person: person) } ?? false }
     }
 
     /// Search results need a moment to appear before the next click looks for them.

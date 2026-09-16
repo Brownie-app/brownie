@@ -159,6 +159,9 @@ public enum FireEvent: Sendable, Equatable {
     case step(String, done: Bool)
     case pausedForUser(String)
     case finished(FireOutcome)
+    /// Hands' plan in the user's words, and a step of it closing.
+    case plan([String])
+    case stepDone(Int, String)
 }
 public enum FireOutcome: String, Codable, Sendable { case done, pausedAtUserStep, stopped, couldNot }
 

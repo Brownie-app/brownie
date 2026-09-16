@@ -89,12 +89,19 @@ final class HandsController: ObservableObject {
         m.markWalkthrough("hands")
         guard let hands = m.hands else { m.handsState = .finished("Hands needs a brain with tools — set one in Settings → Brain"); hidePanel(after: 4); return }
         guard Hands.hasAccessibility else { m.handsState = .finished("Hands needs Accessibility — Settings → Privacy"); hidePanel(after: 4); return }
-        m.handsState = .running(["Starting: \(goal)"])
+        m.handsState = .running(["Starting: \(goal)"]); m.journey = HandsJourney()
         Task {
             let o = await hands.perform(goal) { [weak self] e in
                 Task { @MainActor in
                     guard let self else { return }
-                    if case .step(let s) = e, case .running(var steps) = self.m.handsState { steps.append(s); if steps.count > 6 { steps.removeFirst() }; self.m.handsState = .running(steps) }
+                    switch e {
+                    case .step(let s):
+                        if case .running(var steps) = self.m.handsState { steps.append(s); if steps.count > 6 { steps.removeFirst() }; self.m.handsState = .running(steps) }
+                        self.m.journey?.add(s)
+                    case .plan(let p): self.m.journey?.setPlan(p)
+                    case .stepDone(let n, let note): self.m.journey?.stepDone(n, note: note)
+                    default: break
+                    }
                 }
             }
             await MainActor.run {
@@ -143,9 +150,26 @@ struct HandsOverlay: View {
                 HStack(spacing: 12) { Image(systemName: "waveform").foregroundStyle(accent); Text(t.isEmpty ? "Listening…" : "“\(t)”").font(.system(size: 15, weight: .medium)) }
                 Text("Transcribed on this Mac · let go to start").font(.system(size: 11)).foregroundStyle(.white.opacity(0.6))
             case .running(let steps):
-                HStack { Text(m.runningRecipeName.map { "Running “\($0)”" } ?? "Hands is working").font(.system(size: 15, weight: .semibold)); Spacer(); Button("Stop") { controller.stop() }.buttonStyle(.plain).padding(.horizontal, 10).frame(height: 26).background(RoundedRectangle(cornerRadius: 6).fill(Color(hex: 0xD94F45))) }
-                if let now = steps.last { HStack(alignment: .top, spacing: 8) { Image(systemName: "arrow.right").font(.system(size: 11, weight: .bold)).foregroundStyle(accent).padding(.top, 2); Text(now).font(.system(size: 13, weight: .medium)).lineLimit(2) } }
-                ForEach(Array(steps.dropLast().suffix(3).enumerated()), id: \.offset) { _, s in HStack(spacing: 8) { Circle().fill(.white.opacity(0.35)).frame(width: 5, height: 5); Text(s).font(.system(size: 11)).foregroundStyle(.white.opacity(0.6)).lineLimit(1) } }
+                HStack { Text(m.runningRecipeName.map { "Running “\($0)”" } ?? (m.journey?.progressLine ?? "Hands is working")).font(.system(size: 15, weight: .semibold)).lineLimit(1); Spacer(); Button("Stop") { controller.stop() }.buttonStyle(.plain).padding(.horizontal, 10).frame(height: 26).background(RoundedRectangle(cornerRadius: 6).fill(Color(hex: 0xD94F45))) }
+                if let j = m.journey, j.hasPlan {
+                    ForEach(j.steps) { st in
+                        HStack(alignment: .top, spacing: 8) {
+                            Group {
+                                if st.state == .done || st.state == .skipped { Image(systemName: "checkmark").font(.system(size: 9, weight: .bold)).foregroundStyle(.black).frame(width: 14, height: 14).background(Circle().fill(Color(hex: 0x6FCF8A))) }
+                                else if st.state == .current { Image(systemName: "arrow.right").font(.system(size: 9, weight: .bold)).foregroundStyle(.black).frame(width: 14, height: 14).background(Circle().fill(accent)) }
+                                else { Circle().stroke(.white.opacity(0.35), lineWidth: 1).frame(width: 14, height: 14) }
+                            }.padding(.top, 1)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(st.title).font(.system(size: 12.5, weight: st.state == .current ? .semibold : .regular)).foregroundStyle(st.state == .pending ? .white.opacity(0.55) : .white).lineLimit(1)
+                                if st.state == .current, let a = st.actions.last { Text(a).font(.system(size: 11)).foregroundStyle(.white.opacity(0.7)).lineLimit(1) }
+                                if st.state == .done, let n = st.note, !n.isEmpty { Text(n).font(.system(size: 10.5)).foregroundStyle(.white.opacity(0.55)).lineLimit(1) }
+                            }
+                        }
+                    }
+                } else {
+                    if let now = steps.last { HStack(alignment: .top, spacing: 8) { Image(systemName: "arrow.right").font(.system(size: 11, weight: .bold)).foregroundStyle(accent).padding(.top, 2); Text(now).font(.system(size: 13, weight: .medium)).lineLimit(2) } }
+                    ForEach(Array(steps.dropLast().suffix(3).enumerated()), id: \.offset) { _, s in HStack(spacing: 8) { Circle().fill(.white.opacity(0.35)).frame(width: 5, height: 5); Text(s).font(.system(size: 11)).foregroundStyle(.white.opacity(0.6)).lineLimit(1) } }
+                }
                 Text("Hands never presses Send, Pay or Delete. Those stay yours.").font(.system(size: 11)).foregroundStyle(.white.opacity(0.6))
             case .paused(let w): HStack(spacing: 10) { Circle().fill(accent).frame(width: 10, height: 10); Text(w).font(.system(size: 14, weight: .medium)) }
             case .finished(let s): Text(s).font(.system(size: 14, weight: .medium))

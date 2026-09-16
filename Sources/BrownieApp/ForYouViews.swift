@@ -390,14 +390,35 @@ struct HandsProgress: View {
     var body: some View {
         let steps = events.compactMap { e -> (String, Bool)? in switch e { case .step(let s, let done): return (s, done); case .pausedForUser(let s): return (s, false); default: return nil } }
         let outcome = events.compactMap { e -> FireOutcome? in if case .finished(let o) = e { return o }; return nil }.first
+        let journey = HandsJourney.fold(events)
         VStack(alignment: .leading, spacing: 10) {
-            if let now = steps.last {
+            if journey.hasPlan {
+                // The plan, as a person would follow it: done, doing, still to come.
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(journey.steps) { st in
+                        HStack(alignment: .top, spacing: 10) {
+                            ZStack {
+                                Circle().fill(st.state == .done || st.state == .skipped ? t.ok : (st.state == .current ? t.accent : t.ctl2)).frame(width: 18, height: 18)
+                                if st.state == .done || st.state == .skipped { Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundStyle(.white) }
+                                else if st.state == .current { Image(systemName: "arrow.right").font(.system(size: 10, weight: .bold)).foregroundStyle(.white) }
+                                else { Text("\(st.index + 1)").font(.system(size: 9, weight: .semibold)).foregroundStyle(t.ink2) }
+                            }
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(st.title).font(.system(size: 13.5, weight: st.state == .current ? .semibold : .regular)).foregroundStyle(st.state == .pending ? t.ink2 : t.ink)
+                                if st.state == .current, outcome == nil, let a = st.actions.last { Text(a).font(.system(size: 12)).foregroundStyle(t.ink2) }
+                                if let n = st.note, !n.isEmpty, st.state != .current { Text(n).font(.system(size: 11)).foregroundStyle(t.ink2) }
+                            }
+                        }
+                    }
+                }
+                if let outcome { Text(label(outcome)).font(.system(size: 11)).foregroundStyle(t.ink2) }
+            } else if let now = steps.last {
                 HStack(alignment: .top, spacing: 10) {
                     ZStack { Circle().fill(outcome == nil ? t.accent : (outcome == .couldNot ? t.bad : t.ok)).frame(width: 18, height: 18); Image(systemName: outcome == nil ? "arrow.right" : (outcome == .couldNot ? "xmark" : "checkmark")).font(.system(size: 10, weight: .bold)).foregroundStyle(.white) }
                     Text(now.0).font(.system(size: 14, weight: .medium)).fixedSize(horizontal: false, vertical: true)
                 }
             }
-            if let outcome { Text(label(outcome)).font(.system(size: 11)).foregroundStyle(t.ink2) }
+            if !journey.hasPlan, let outcome { Text(label(outcome)).font(.system(size: 11)).foregroundStyle(t.ink2) }
             if steps.count > 1 {
                 Button { withAnimation { showTrail.toggle() } } label: {
                     HStack(spacing: 6) { Image(systemName: showTrail ? "chevron.down" : "chevron.right").font(.system(size: 10, weight: .semibold)); Text("\(steps.count - 1) step\(steps.count == 2 ? "" : "s") before this").font(.system(size: 11)) }.foregroundStyle(t.ink2)
