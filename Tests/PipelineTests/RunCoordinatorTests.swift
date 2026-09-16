@@ -50,7 +50,9 @@ import Support
     struct World {
         let dir: URL, kb: FileKnowledgeStore, store: SQLiteRunStore
         func coordinator(_ brain: Fake) -> RunCoordinator {
-            RunCoordinator(.init(store: store, knowledge: kb, sources: [], reader: Reader(), brain: brain, policy: DefaultSensitivityPolicy(), clock: RunCoordinatorTests.clock))
+            var deps = RunCoordinator.Dependencies(store: store, knowledge: kb, sources: [], reader: Reader(), brain: brain, policy: DefaultSensitivityPolicy(), clock: RunCoordinatorTests.clock)
+            deps.diskHousekeeping = false
+            return RunCoordinator(deps)
         }
         /// `n` kept summaries an hour apart inside the last day, each `bytes` long, titled "T<tag><i>".
         @discardableResult
@@ -103,6 +105,19 @@ import Support
         #expect(brain.judged.count == 2)
         #expect(Self.titles("b", 5, in: brain.judged[1]) == 5 && Self.titles("a", 30, in: brain.judged[1]) == 0)
         #expect(try await w.rows().isEmpty)
+    }
+
+    @Test func finishMeasuresTheVaultAndPrunesTheStoreEvenOnAQuietNight() async throws {
+        let w = try Self.world()
+        try FileManager.default.createDirectory(at: w.kb.rootURL.appendingPathComponent("People"), withIntermediateDirectories: true)
+        try "# Priya\n\nA note.\n".write(to: w.kb.rootURL.appendingPathComponent("People/Priya.md"), atomically: true, encoding: .utf8)
+        try await w.store.setValue(SettingKey.weekly("2026-W01"), "an old letter")
+        try await w.store.setValue(SettingKey.weekly("2026-W36"), "last week's letter")
+        #expect(await Self.night(w, Fake()) == .ran(cards: 0))
+        let h = try #require(VaultHealth.latest(from: try await w.store.value(SettingKey.vaultHealth)))
+        #expect(h.at == Self.today && h.notes >= 1 && h.notesPerFolder["People"] == 1, "measured at the clock's now, over the vault the run wrote")
+        let old = try await w.store.value(SettingKey.weekly("2026-W01")), recent = try await w.store.value(SettingKey.weekly("2026-W36"))
+        #expect(old == nil && recent != nil, "the store's retention ran")
     }
 
     @Test func mergedRowsSurviveAJudgeThatFailsAndAreJudgedTheNextNightEvenWithNothingNew() async throws {

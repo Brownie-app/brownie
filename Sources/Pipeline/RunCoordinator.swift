@@ -19,6 +19,9 @@ public actor RunCoordinator {
         public var calendarText: @Sendable () async -> String?
         /// Names the stage about to talk to the brain, for the "What left your Mac" log.
         public var stage: @Sendable (_ purpose: String, _ detail: String) -> Void
+        /// FINISH also tidies what lives outside the store — the transcript cache and the log files, at their real paths;
+        /// tests run against their own folders and turn this off.
+        public var diskHousekeeping = true
         public init(store: any RunStore, knowledge: any KnowledgeStore, sources: [any Source], reader: (any LocalModel)?, brain: (any Brain)?,
                     policy: any SensitivityPolicy, clock: Clock = SystemClock(), calendarText: @escaping @Sendable () async -> String? = { nil },
                     stage: @escaping @Sendable (String, String) -> Void = { _, _ in }) {
@@ -248,6 +251,9 @@ public actor RunCoordinator {
             if readable == 0, !skipped.isEmpty, deps.reader != nil {
                 outcome = .partial(stage: "nothing could be read — " + skipped.joined(separator: "; "))
             }
+            // FINISH, every run: the vault measured and the night's record kept, and what has aged out let go —
+            // the store's rows and dated settings, the transcript cache, the log files. None of it can fail the run.
+            await Self.housekeep(deps: deps, store: store, log: log)
             try? await store.setValue("run.lastSkipped", skipped.isEmpty ? nil : skipped.joined(separator: "; "))
             if !skipped.isEmpty { log.warn("skipped: \(skipped.joined(separator: "; "))") }
             if deps.reader == nil { outcome = .failedReader("the reader isn't downloaded yet") }
@@ -378,6 +384,21 @@ public actor RunCoordinator {
         guard let j = json, let d = j.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(Household.self, from: d)
     }
+    /// The FINISH housekeeping, in one place so a Mac that keeps Brownie open for months is pruned every night, not
+    /// only at launch: the vault's health record, the store's retention, the transcript cache, the log files.
+    static func housekeep(deps: Dependencies, store: any RunStore, log: Log) async {
+        let now = deps.clock.now()
+        if FileManager.default.fileExists(atPath: deps.knowledge.rootURL.path) {
+            let h = await VaultHealth.nightly(root: deps.knowledge.rootURL, now: now, store: store, timeZone: deps.clock.timeZone)
+            log.info("vault health: \(h.line)")
+        }
+        do { try await store.prune(now: now) } catch { log.warn("prune: \(error)") }
+        guard deps.diskHousekeeping else { return }
+        let transcripts = TranscriptCache.prune(now: now)
+        let logs = Log.rotate()
+        if transcripts > 0 || !logs.isEmpty { log.info("housekeeping: \(transcripts) old transcript(s) deleted, \(logs.count) log file(s) rotated") }
+    }
+
     /// Notes out, ledger merged, closures by the others applied to my loops and cards. Returns the notes' sync report.
     public static func syncHousehold(_ h: Household, root: URL, store: any RunStore, now: Date) async throws -> SyncReport {
         let shared = URL(fileURLWithPath: h.folderPath, isDirectory: true)
@@ -388,7 +409,7 @@ public actor RunCoordinator {
         var loops = await LoopLedger.load(store)
         let mine = HouseholdLedger.entries(from: loops, me: h.me?.id ?? "me", now: now)
         let ledgerURL = shared.appendingPathComponent(HouseholdLedger.file)
-        let merged = HouseholdLedger.merge(HouseholdLedger.read(ledgerURL), mine)
+        let merged = HouseholdLedger.merge(HouseholdLedger.read(ledgerURL), mine, now: now)
         try HouseholdLedger.write(merged, to: ledgerURL)
         let closed = HouseholdLedger.closures(for: loops, ledger: merged, household: h, now: now)
         if closed != loops { loops = closed; await LoopLedger.save(loops, store) }

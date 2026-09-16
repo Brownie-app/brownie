@@ -222,14 +222,34 @@ public actor SQLiteRunStore: RunStore {
         else { try db.run("DELETE FROM setting WHERE key=?", [.text(key)]) }
     }
 
+    public func keys(withPrefix prefix: String) throws -> [String] {
+        try db.query("SELECT key FROM setting WHERE substr(key, 1, ?) = ? ORDER BY key", [.init(prefix.count), .text(prefix)]).compactMap { $0["key"].text }
+    }
+
     // MARK: reset
 
-    /// Retention: drop log and run rows older than 90 days.
-    public func prune(olderThan days: Int = 90) throws {
-        let cutoff = Date().addingTimeInterval(-Double(days) * 86400).timeIntervalSince1970
+    /// Retention: drop log and run rows older than 90 days, the send log older than 30, and Sunday letters older
+    /// than 26 weeks (the week's key is its ISO week; the pointer keys beside them are not dated and stay). The vault
+    /// health history trims itself as it is appended, so it is not touched here.
+    public func prune(now: Date) throws { try prune(now: now, olderThan: 90) }
+    public func prune(now: Date, olderThan days: Int) throws {
+        let cutoff = now.addingTimeInterval(-Double(days) * 86400).timeIntervalSince1970
         try db.run("DELETE FROM drop_log WHERE at < ?", [.real(cutoff)])
         try db.run("DELETE FROM run WHERE started_at < ?", [.real(cutoff)])
-        try db.run("DELETE FROM send_log WHERE at < ?", [.real(Date().addingTimeInterval(-30 * 86400).timeIntervalSince1970)])
+        try db.run("DELETE FROM send_log WHERE at < ?", [.real(now.addingTimeInterval(-30 * 86400).timeIntervalSince1970)])
+        for key in try keys(withPrefix: "proactive.weekly.") where Self.weekIsOlder(key, than: Self.weeklyKeep, at: now) { try setValue(key, nil) }
+    }
+    static let weeklyKeep = 26
+
+    /// "proactive.weekly.2026-W12" → whether that ISO week began more than `weeks` weeks before `now`. A key that is not
+    /// a week (".latest", ".seen") is never older.
+    static func weekIsOlder(_ key: String, than weeks: Int, at now: Date) -> Bool {
+        let tail = key.split(separator: ".").last.map(String.init) ?? ""
+        let parts = tail.split(separator: "-W")
+        guard parts.count == 2, let year = Int(parts[0]), let week = Int(parts[1]), tail.count == 8 else { return false }
+        let cal = Calendar(identifier: .iso8601)
+        guard let start = cal.date(from: DateComponents(weekday: 2, weekOfYear: week, yearForWeekOfYear: year)) else { return false }
+        return start < now.addingTimeInterval(-Double(weeks) * 7 * 86400)
     }
 
     public func factoryReset() throws {

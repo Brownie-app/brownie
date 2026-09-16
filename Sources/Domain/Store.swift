@@ -142,6 +142,15 @@ public protocol RunStore: Sendable {
     // key/value
     func value(_ key: String) async throws -> String?
     func setValue(_ key: String, _ value: String?) async throws
+    /// Every key starting with `prefix`, sorted — the way the weekly letters are found for retention.
+    func keys(withPrefix prefix: String) async throws -> [String]
+    // retention: what has aged out of the drop log, runs, the send log and the dated settings, judged at `now`
+    func prune(now: Date) async throws
     // nuclear
     func factoryReset() async throws
+}
+
+public extension RunStore {
+    func deleteValue(_ key: String) async throws { try await setValue(key, nil) }
+    func prune() async throws { try await prune(now: Date()) }
 }

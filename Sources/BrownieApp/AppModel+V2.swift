@@ -50,6 +50,7 @@ extension AppModel {
         if let j = try? await store.value(SettingKey.askHistory), let d = j.data(using: .utf8) { asks = (try? JSONDecoder().decode([Asker.Answer].self, from: d)) ?? [] }
         sendLog = (try? await store.sendLog(since: Date().addingTimeInterval(-30 * 86400))) ?? []
         weeklyWeek = try? await store.value(SettingKey.weeklyLatest)
+        vaultHealth = VaultHealth.latest(from: try? await store.value(SettingKey.vaultHealth))
         if let w = weeklyWeek { weekly = try? await store.value(SettingKey.weekly(w)); weeklySeen = (try? await store.value("proactive.weekly.seen")) == w }
         if let j = try? await store.value(SettingKey.recipesTaught), let d = j.data(using: .utf8) {
             // Titles recorded before the cleaner existed carry WhatsApp's direction marks; scrub on load.

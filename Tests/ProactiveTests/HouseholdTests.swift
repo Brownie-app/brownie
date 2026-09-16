@@ -50,12 +50,21 @@ let now = Date(timeIntervalSince1970: 1_758_000_000)
         let mine = HouseholdLedger.entries(from: [loop("a", what: "book the table for twelve at Karavalli")], me: "m-v", now: now)
         var theirs = HouseholdLedger.entries(from: [loop("p-1", what: "Book a table for 12 at Karavalli", owner: "Priya", closed: true)], me: "m-p", now: now)
         theirs[0].updatedAt = now.addingTimeInterval(-3600)   // her closure is older than my open line
-        let m = HouseholdLedger.merge(mine, theirs)
+        let m = HouseholdLedger.merge(mine, theirs, now: now)
         #expect(m.count == 1, "same person, same promise in other words — one entry")
         #expect(m[0].loopID == "a" && m[0].status == .closed && m[0].closedBy == "m-p", "the earlier line's id is kept; her closure stands even though my open line is newer")
         let other = HouseholdLedger.entries(from: [loop("z", what: "order the cake", owner: "Priya")], me: "m-p", now: now)
-        #expect(HouseholdLedger.merge(m, other).count == 2)
-        #expect(HouseholdLedger.merge(m, m) == m, "idempotent")
+        #expect(HouseholdLedger.merge(m, other, now: now).count == 2)
+        #expect(HouseholdLedger.merge(m, m, now: now) == m, "idempotent")
+    }
+
+    @Test func aClosureOlderThanNinetyDaysLeavesTheLedgerAndAnOpenLineNeverDoes() {
+        func entry(_ id: String, _ what: String, closed: Bool, ago days: Double) -> HouseholdEntry {
+            HouseholdEntry(loopID: id, memberID: "m-v", person: "Upreti Family", what: what, direction: .mine, owner: "either", status: closed ? .closed : .open, closedBy: closed ? "m-v" : nil, updatedAt: now.addingTimeInterval(-days * 86400))
+        }
+        let merged = HouseholdLedger.merge([entry("stale", "book the table", closed: true, ago: 91), entry("kept", "renew the passport", closed: true, ago: 89)], [entry("open", "call the plumber", closed: false, ago: 200)], now: now)
+        #expect(merged.map(\.loopID).sorted() == ["kept", "open"], "a closure every Mac has long seen is dropped; an open line stays however old")
+        #expect(HouseholdLedger.merge(merged, [entry("stale", "book the table", closed: true, ago: 91)], now: now).map(\.loopID).sorted() == ["kept", "open"], "the other Mac's stale copy does not bring it back")
     }
 
     @Test func cardsSheHandledAreMarkedAndMyLoopsClose() {

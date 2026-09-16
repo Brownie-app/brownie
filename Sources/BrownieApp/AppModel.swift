@@ -118,6 +118,8 @@ final class AppModel: ObservableObject {
     @Published var loops: [Loop] = []
     /// Registry people who look like one person twice, the better one to keep first in each pair; the Knowledge screen's banner.
     @Published var duplicatePeople: [(Person, Person)] = []
+    /// Last night's measure of the vault, for the Settings → Knowledge card.
+    @Published var vaultHealth: VaultHealth?
     @Published var sendLog: [SendRecord] = []
     @Published var weekly: String?
     @Published var weeklyWeek: String?
