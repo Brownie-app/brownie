@@ -24,6 +24,9 @@ struct RootView: View {
         .foregroundStyle(theme.ink)
         .frame(minWidth: 960, minHeight: 620)
         .overlay(alignment: .top) { if let a = m.announcement { Banner(text: a) { m.announcement = nil } } }
+        .overlay { if m.quickOpenShown { QuickOpenPalette() } }
+        // ⌘K from any screen: the note palette. An invisible button carries the shortcut; the menu bar is untouched.
+        .background(Button("Quick open") { m.quickOpenShown.toggle() }.keyboardShortcut("k", modifiers: .command).opacity(0).frame(width: 0, height: 0).allowsHitTesting(false))
     }
 
     @ViewBuilder var content: some View {
