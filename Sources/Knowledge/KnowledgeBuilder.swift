@@ -53,14 +53,22 @@ public actor KnowledgeBuilder {
         let fm = FileManager.default
         var token = try await loadToken()
         if let t = token, !fm.fileExists(atPath: t.stagingPath) { token = nil }
-        let parts: [[SummaryRecord]]
+        var parts: [[SummaryRecord]] = []
         if let t = token {
             // Exactly the rows planned then, by id. Anything that arrived since waits for the next sync; a
             // row already marked merged (a crash between a part's mark and its token save) is not fed twice.
             let byID = Dictionary(try await runStore.unmergedSummaries().map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
             parts = t.parts.map { $0.compactMap { byID[$0] } }
-            log.info("resuming at part \(t.nextPart + 1)/\(parts.count)")
-        } else {
+            if parts[t.nextPart...].allSatisfy(\.isEmpty), !Self.hasNotes(URL(fileURLWithPath: t.stagingPath, isDirectory: true)) {
+                // Nothing left to feed and nothing to swap: a token like this (a build whose every row was marked
+                // but whose brain never wrote a note) would wedge every later sync, so it is dropped and tonight plans afresh.
+                log.warn("resume token has no parts left and no notes in staging — starting over")
+                try? fm.removeItem(atPath: t.stagingPath); token = nil; try await saveToken(nil)
+            } else {
+                log.info("resuming at part \(t.nextPart + 1)/\(parts.count)")
+            }
+        }
+        if token == nil {
             guard !summaries.isEmpty else { return .zero }
             let isBuild = !(await store.exists())
             let ordered = summaries.sorted { ($0.effectiveDate, $0.id) < ($1.effectiveDate, $1.id) }
@@ -75,13 +83,19 @@ public actor KnowledgeBuilder {
         let staging = URL(fileURLWithPath: t.stagingPath, isDirectory: true)
         var usage = Usage.zero
         for i in t.nextPart..<parts.count {
+            // Stop (the run's cancellation) is honoured between parts as well as inside one.
+            try Task.checkCancellation()
             let part = parts[i]
             if !part.isEmpty {
                 progress(RunProgress(stage: .synthesising, partIndex: i + 1, partCount: parts.count))
                 // A part that fails leaves no half-written notes behind: staging goes back to how it was.
                 let snapshot = try snapshot(of: staging)
-                do { usage = usage + (try await runPart(isBuild: t.isBuild, corpus: CorpusSlicer.render(part: part, timeZone: timeZone), in: staging, onEvent: onEvent)) }
-                catch { try? restore(snapshot, to: staging); throw error }
+                do {
+                    usage = usage + (try await runPart(isBuild: t.isBuild, corpus: CorpusSlicer.render(part: part, timeZone: timeZone), in: staging, onEvent: onEvent))
+                    // A part is done only when notes exist to show for it: a brain that answered without writing
+                    // has not done the part, so its rows are not marked and the same part is fed again next time.
+                    guard Self.hasNotes(staging) else { throw Failure.nothingWritten }
+                } catch { try? restore(snapshot, to: staging); throw error }
                 try? fm.removeItem(at: snapshot)
                 // Mark first, then advance: a crash between the two makes the resumed part empty rather than fed twice.
                 try await runStore.markMerged(ids: part.map(\.id), at: now())
@@ -89,9 +103,8 @@ public actor KnowledgeBuilder {
             t.nextPart = i + 1
             try await saveToken(t)
         }
-        // verify + swap
-        let written = try fm.contentsOfDirectory(at: staging, includingPropertiesForKeys: nil).filter { $0.pathExtension == "md" || $0.hasDirectoryPath }
-        guard !written.isEmpty else { throw Failure.nothingWritten }
+        // verify + swap; nothing to swap means this token must not survive to wedge the next sync
+        guard Self.hasNotes(staging) else { try? fm.removeItem(at: staging); try await saveToken(nil); throw Failure.nothingWritten }
         if !t.isBuild, try await store.fingerprint() != t.fingerprint {
             // The user edited notes while the sync ran: their files win, the brain's work stands everywhere else.
             let kept = try Self.keepUserEdits(live: store.rootURL, staging: staging, seeded: t.seeded)
@@ -134,15 +147,25 @@ public actor KnowledgeBuilder {
         if let agentic = brain as? AgenticBrain, brain.descriptor.capabilities.contains(.files) {
             let effort: Effort = isBuild ? .high : .medium   // first build thinks hard; nightly merges don't need to
             let ended = FinishBox()
-            let tools = FileTools.make(root: staging).map { tool in
-                guard tool.name == "finish" else { return tool }
-                // finish ends the loop: the brain's task is cancelled the moment it is called, so the
-                // model cannot keep writing after saying it is done. That cancellation is success.
-                return Tool(name: tool.name, description: tool.description, parametersSchema: tool.parametersSchema) { d in
-                    let out = try await tool.run(d); await ended.finish(); return out
+            let tools = FileTools.make(root: staging).map { tool -> Tool in
+                switch tool.name {
+                case "finish":
+                    // finish is the last word: its output ends the brain's loop, which then returns normally with
+                    // its usage and turns, so the send log and the cost line see a part that succeeded.
+                    return Tool(name: tool.name, description: tool.description, parametersSchema: tool.parametersSchema) { (d: Data) async throws -> ToolOutput in
+                        let out = try await tool.run(d); await ended.finish(); return ToolOutput(out.text, endsRun: true)
+                    }
+                case "write_file", "delete_file":
+                    // A write the model still emits after saying it is done is refused, so nothing lands after finish.
+                    return Tool(name: tool.name, description: tool.description, parametersSchema: tool.parametersSchema) { (d: Data) async throws -> ToolOutput in
+                        if await ended.finished { throw NSError(domain: "FileTools", code: 2, userInfo: [NSLocalizedDescriptionKey: "finish was already called; nothing more is written"]) }
+                        return try await tool.run(d)
+                    }
+                default: return tool
                 }
             }
-            let task = Task { try await agentic.run(AgentTask(system: system, input: input, effort: effort, maxTurns: 200, timeout: 2400), tools: tools) { e in
+            // Awaited in place, so Stop (the run's cancellation) reaches the brain's loop at its next turn.
+            let r = try await agentic.run(AgentTask(system: system, input: input, effort: effort, maxTurns: 200, timeout: 2400), tools: tools) { e in
                 switch e {
                 case .toolCall(let name, let summary):
                     if name == "write_file", let path = (try? JSONSerialization.jsonObject(with: Data(summary.utf8))) as? [String: Any], let p = path["path"] as? String { onEvent(.message("Writing \(p)")) }
@@ -151,14 +174,8 @@ public actor KnowledgeBuilder {
                     else if name == "read_file" || name == "list_dir" { onEvent(.message("Reading existing notes")) }
                 default: onEvent(e)
                 }
-            } }
-            await ended.hold(task)
-            do { return try await task.value.usage }
-            catch {
-                // A part ended by finish never reports its usage; it counts as nothing rather than failing the part.
-                if await ended.finished, error is CancellationError || (error as? BrainError) == .cancelled { return .zero }
-                throw error
             }
+            return r.usage
         }
         // Single-shot fallback for brains without file tools: emit a file map as JSON.
         let schema = #"{"type":"object","properties":{"files":{"type":"array","items":{"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"}},"required":["path","content"]}}},"required":["files"]}"#
@@ -206,6 +223,12 @@ public actor KnowledgeBuilder {
         }
     }
 
+    /// Whether a directory holds anything worth swapping live: a note, or a folder of them.
+    static func hasNotes(_ dir: URL) -> Bool {
+        let entries = (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
+        return entries.contains { $0.pathExtension == "md" || $0.hasDirectoryPath }
+    }
+
     /// Every note under root as relpath → "size|mtime": the cheapest thing that changes on any edit.
     static func stamps(_ root: URL) -> [String: String] {
         var out: [String: String] = [:]
@@ -246,12 +269,10 @@ public actor KnowledgeBuilder {
     }
 }
 
-/// Whether the brain has said it is done, and the task to stop when it does.
+/// Whether the brain has said it is done.
 private actor FinishBox {
     private(set) var finished = false
-    private var task: Task<AgentResult, Error>?
-    func hold(_ t: Task<AgentResult, Error>) { task = t; if finished { t.cancel() } }
-    func finish() { finished = true; task?.cancel() }
+    func finish() { finished = true }
 }
 
 /// File tools scoped to one directory. Paths are relative; `..` is refused.
