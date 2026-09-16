@@ -157,6 +157,7 @@ public actor Hands {
             },
             Tool(name: "type", description: "Type text at the current focus.", parametersSchema: #"{"type":"object","properties":{"text":{"type":"string"}},"required":["text"]}"#) { d in
                 let t = arg(d)["text"] as? String ?? ""
+                guard await self.canType() else { return "the app in front has no window ready for typing — press the field you mean (find it first), or use set_value" }
                 await MainActor.run { VirtualInput.type(t) }
                 try? await Task.sleep(nanoseconds: 300_000_000)
                 let f = await self.focused()
@@ -192,6 +193,7 @@ public actor Hands {
     private func snap(_ max: Int = 400) -> UISnapshot? { session.snapshot(maxElements: max) }
     private func windowTitle() -> String { session.snapshot(maxElements: 10)?.window ?? "?" }
     private func focused() -> UISnapshot.Element? { session.focusedTextElement() }
+    private func canType() -> Bool { session.hasKeyWindow() }
     private func narrate(_ tool: String, _ args: String) -> String { HandsNarrator.line(tool: tool, args: args, label: { session.titleOf($0) }) }
     private func snapshotText() -> String { session.snapshot()?.text ?? "(no frontmost window)" }
     private func endLoop() { task?.cancel() }
@@ -216,22 +218,22 @@ public actor Hands {
     private func openURL(_ url: String) async -> String {
         let front = await MainActor.run { NSWorkspace.shared.frontmostApplication?.localizedName ?? "" }
         let browser = BrowserSkill.isBrowser(front) ? front : "Google Chrome"
-        guard await MainActor.run(body: { AppLauncher.open(browser) }) else { return "no browser found — could_not" }
-        for _ in 0..<8 { if await MainActor.run(body: { NSWorkspace.shared.frontmostApplication?.localizedName == browser }) { break }; try? await Task.sleep(nanoseconds: 250_000_000) }
+        guard let target = URL(string: url), let appURL = AppLauncher.locate(browser) ?? AppLauncher.locate("Safari") else { return "no browser found — could_not" }
         let before = windowTitle()
-        await MainActor.run { VirtualInput.key("cmd+l") }
-        try? await Task.sleep(nanoseconds: 250_000_000)
-        await MainActor.run { VirtualInput.key("cmd+a"); VirtualInput.type(url) }
-        try? await Task.sleep(nanoseconds: 150_000_000)
-        await MainActor.run { VirtualInput.key("return") }
-        let started = Date()
-        while Date().timeIntervalSince(started) < 10 {
-            try? await Task.sleep(nanoseconds: 500_000_000)
-            let title = windowTitle()
-            if BrowserSkill.loaded(title: title, before: before) { return "\(browser) is showing “\(title)”" }
+        // The browser opens the address itself — no keystrokes, nothing to land in the wrong window.
+        let opened: Bool = await withCheckedContinuation { c in
+            NSWorkspace.shared.open([target], withApplicationAt: appURL, configuration: NSWorkspace.OpenConfiguration()) { app, error in c.resume(returning: error == nil && app != nil) }
         }
-        let title = windowTitle()
-        return "typed the address but after 10 s the window is still “\(title)” — check with screen; the address may not have taken"
+        guard opened else { return "the browser refused to open \(url)" }
+        let started = Date()
+        while Date().timeIntervalSince(started) < 12 {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            let frontNow = await MainActor.run { NSWorkspace.shared.frontmostApplication?.localizedName ?? "" }
+            guard BrowserSkill.isBrowser(frontNow) else { continue }
+            let title = windowTitle()
+            if BrowserSkill.loaded(title: title, before: before) { return "\(frontNow) is showing “\(title)”" }
+        }
+        return "opened \(url) in \(browser) but after 12 s the window is still “\(windowTitle())” — check with find or screen"
     }
 
     /// The chat skill: the URL scheme with the number from Contacts, then the header checked. Never types.

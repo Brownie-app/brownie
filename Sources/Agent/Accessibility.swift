@@ -43,6 +43,8 @@ public struct UISnapshot: Sendable {
 /// Not Sendable by design — lives on one actor.
 public final class AXSession {
     private var refs: [Int: AXUIElement] = [:]
+    /// What each id looked like when it was numbered, so a stale reference (Chrome rebuilds its tree constantly) can be found again.
+    private var descs: [Int: UISnapshot.Element] = [:]
 
     public init() {}
     private var enhanced = Set<pid_t>()
@@ -58,11 +60,16 @@ public final class AXSession {
         var winRef: CFTypeRef?
         AXUIElementCopyAttributeValue(axApp, kAXFocusedWindowAttribute as CFString, &winRef)
         let root: AXUIElement = (winRef as! AXUIElement?) ?? axApp
-        refs.removeAll()
+        refs.removeAll(); descs.removeAll()
         var elements: [UISnapshot.Element] = []
         var next = 1
-        func walk(_ el: AXUIElement, depth: Int) {
-            guard elements.count < maxElements, depth < 14 else { return }
+        // Breadth-first: toolbars, address bars and buttons sit near the top of the tree; a web page's thousand
+        // nodes sit deep. Depth-first would spend the whole cap inside the page and never number the toolbar.
+        var queue: [(AXUIElement, Int)] = [(root, 0)]
+        var head = 0
+        while head < queue.count, elements.count < maxElements {
+            let (el, depth) = queue[head]; head += 1
+            guard depth < 14 else { continue }
             let role = attr(el, kAXRoleAttribute) as? String ?? "?"
             let title = (attr(el, kAXTitleAttribute) as? String) ?? (attr(el, kAXDescriptionAttribute) as? String) ?? (attr(el, kAXPlaceholderValueAttribute) as? String) ?? ""
             var value = ""
@@ -74,23 +81,45 @@ public final class AXSession {
             if interesting, role != "AXGroup" || !title.isEmpty {
                 let id = next; next += 1
                 refs[id] = el
-                elements.append(.init(id: id, role: String(role.dropFirst(2)), title: title, value: value, frame: frame(el), actions: actions, depth: depth))
+                let e = UISnapshot.Element(id: id, role: String(role.dropFirst(2)), title: title, value: value, frame: frame(el), actions: actions, depth: depth)
+                descs[id] = e
+                elements.append(e)
             }
-            if let kids = attr(el, kAXChildrenAttribute) as? [AXUIElement] { for k in kids { walk(k, depth: depth + 1) } }
+            if let kids = attr(el, kAXChildrenAttribute) as? [AXUIElement] { for k in kids { queue.append((k, depth + 1)) } }
         }
-        walk(root, depth: 0)
         return UISnapshot(app: app.localizedName ?? "?", window: attr(root, kAXTitleAttribute) as? String ?? "", elements: elements)
     }
 
-    func element(_ id: Int) -> AXUIElement? { refs[id] }
+    /// The live element for an id. A reference the app has since thrown away is re-found by role, title and place.
+    func element(_ id: Int) -> AXUIElement? {
+        guard let el = refs[id] else { return nil }
+        if attr(el, kAXRoleAttribute) != nil { return el }
+        guard let want = descs[id] else { return nil }
+        let keep = (refs, descs)
+        guard let fresh = snapshot() else { refs = keep.0; descs = keep.1; return nil }
+        let again = Self.rematch(want, in: fresh.elements)
+        let found = again.flatMap { refs[$0.id] }
+        // keep the caller's numbering: the old id now points at the re-found element
+        refs = keep.0; descs = keep.1
+        if let found { refs[id] = found }
+        return found
+    }
+    /// The same element in a newer snapshot: same role and title, closest frame; a title-less element must match by frame.
+    static func rematch(_ want: UISnapshot.Element, in elements: [UISnapshot.Element]) -> UISnapshot.Element? {
+        let same = elements.filter { $0.role == want.role && $0.title == want.title }
+        guard !same.isEmpty else { return nil }
+        if want.title.isEmpty { return same.min(by: { dist($0.frame, want.frame) < dist($1.frame, want.frame) }).flatMap { dist($0.frame, want.frame) < 40 ? $0 : nil } }
+        return same.min(by: { dist($0.frame, want.frame) < dist($1.frame, want.frame) })
+    }
+    static func dist(_ a: CGRect, _ b: CGRect) -> CGFloat { abs(a.midX - b.midX) + abs(a.midY - b.midY) }
 
     func perform(_ action: String, on id: Int) -> Bool {
-        guard let el = refs[id] else { return false }
+        guard let el = element(id) else { return false }
         return AXUIElementPerformAction(el, ("AX" + action) as CFString) == .success
     }
 
     func setValue(_ text: String, on id: Int) -> Bool {
-        guard let el = refs[id] else { return false }
+        guard let el = element(id) else { return false }
         AXUIElementSetAttributeValue(el, kAXFocusedAttribute as CFString, kCFBooleanTrue)
         return AXUIElementSetAttributeValue(el, kAXValueAttribute as CFString, text as CFTypeRef) == .success
     }
@@ -110,17 +139,23 @@ public final class AXSession {
     }
 
     func focus(_ id: Int) -> Bool {
-        guard let el = refs[id] else { return false }
+        guard let el = element(id) else { return false }
         return AXUIElementSetAttributeValue(el, kAXFocusedAttribute as CFString, kCFBooleanTrue) == .success
     }
     func value(of id: Int) -> String {
-        guard let el = refs[id], let v = attr(el, kAXValueAttribute) else { return "" }
+        guard let el = element(id), let v = attr(el, kAXValueAttribute) else { return "" }
         return (v as? String) ?? ((v as? NSNumber).map { $0.stringValue } ?? "")
     }
-    func frame(of id: Int) -> CGRect? { refs[id].map(frame) }
+    func frame(of id: Int) -> CGRect? { element(id).map(frame) }
+    /// True when the frontmost app has a key window that can take typing.
+    public func hasKeyWindow() -> Bool {
+        guard let app = NSWorkspace.shared.frontmostApplication else { return false }
+        var w: CFTypeRef?; AXUIElementCopyAttributeValue(AXUIElementCreateApplication(app.processIdentifier), kAXFocusedWindowAttribute as CFString, &w)
+        return w != nil
+    }
 
-    func snapshotRole(_ id: Int) -> String { refs[id].flatMap { attr($0, kAXRoleAttribute) as? String }.map { String($0.dropFirst(2)) } ?? "?" }
-    func titleOf(_ id: Int) -> String { refs[id].flatMap { (attr($0, kAXTitleAttribute) as? String) ?? (attr($0, kAXDescriptionAttribute) as? String) } ?? "" }
+    func snapshotRole(_ id: Int) -> String { element(id).flatMap { attr($0, kAXRoleAttribute) as? String }.map { String($0.dropFirst(2)) } ?? (descs[id]?.role ?? "?") }
+    func titleOf(_ id: Int) -> String { element(id).flatMap { (attr($0, kAXTitleAttribute) as? String) ?? (attr($0, kAXDescriptionAttribute) as? String) } ?? "" }
 
     private func attr(_ el: AXUIElement, _ name: String) -> AnyObject? {
         var v: CFTypeRef?; AXUIElementCopyAttributeValue(el, name as CFString, &v); return v

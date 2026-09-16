@@ -62,3 +62,15 @@ func el(_ id: Int, _ role: String, _ title: String, value: String = "", x: CGFlo
         #expect(HandsNarrator.line(tool: "type_message", args: #"{"text":"Hi"}"#) == "Putting the message in the box: “Hi”")
     }
 }
+
+@Suite struct StaleElementTests {
+    @Test func aThrownAwayElementIsFoundAgainByRoleTitleAndPlace() {
+        let want = el(7, "TextField", "Address and search bar", x: 200, y: 60, w: 800, h: 30)
+        let fresh = [el(1, "Button", "Back", x: 20, y: 60), el(2, "TextField", "Address and search bar", x: 210, y: 62, w: 790, h: 30), el(3, "TextField", "Address and search bar", x: 210, y: 400, w: 790, h: 30)]
+        #expect(AXSession.rematch(want, in: fresh)?.id == 2, "the one in the same place, not the one further down")
+        #expect(AXSession.rematch(el(9, "Button", "Add to Cart"), in: fresh) == nil)
+        let blank = el(4, "TextArea", "", x: 300, y: 750, w: 600, h: 30)
+        #expect(AXSession.rematch(blank, in: [el(1, "TextArea", "", x: 305, y: 752, w: 600, h: 30)])?.id == 1)
+        #expect(AXSession.rematch(blank, in: [el(1, "TextArea", "", x: 305, y: 100, w: 600, h: 30)]) == nil, "a nameless box far away is a different box")
+    }
+}
