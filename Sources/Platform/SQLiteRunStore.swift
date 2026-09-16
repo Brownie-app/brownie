@@ -20,7 +20,8 @@ public actor SQLiteRunStore: RunStore {
         CREATE TABLE IF NOT EXISTS run(id INTEGER PRIMARY KEY, trigger TEXT NOT NULL, started_at REAL NOT NULL, ended_at REAL,
             outcome TEXT, stats TEXT NOT NULL DEFAULT '{}');
         CREATE TABLE IF NOT EXISTS bucket_cursor(bucket_id TEXT PRIMARY KEY, source_id TEXT NOT NULL,
-            mark_order REAL, mark_tiebreak TEXT, floor_order REAL, floor_tiebreak TEXT, updated_at REAL NOT NULL);
+            mark_order REAL, mark_tiebreak TEXT, floor_order REAL, floor_tiebreak TEXT, updated_at REAL NOT NULL,
+            set_aside INTEGER NOT NULL DEFAULT 0, gated TEXT);
         CREATE TABLE IF NOT EXISTS summary(id INTEGER PRIMARY KEY, run_id INTEGER NOT NULL, source_id TEXT NOT NULL,
             bucket_id TEXT NOT NULL, bucket_name TEXT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL, text TEXT NOT NULL,
             item_date REAL, created_at REAL NOT NULL, sid TEXT, merged_at REAL);
@@ -37,7 +38,20 @@ public actor SQLiteRunStore: RunStore {
         let columns = Set(try db.query("PRAGMA table_info(summary)").compactMap { $0["name"].text })
         if !columns.contains("sid") { try db.exec("ALTER TABLE summary ADD COLUMN sid TEXT") }
         if !columns.contains("merged_at") { try db.exec("ALTER TABLE summary ADD COLUMN merged_at REAL") }
+        // Stores from before a cursor carried what its bucket set aside or the bad-dated items already recorded.
+        let cursorColumns = Set(try db.query("PRAGMA table_info(bucket_cursor)").compactMap { $0["name"].text })
+        if !cursorColumns.contains("set_aside") { try db.exec("ALTER TABLE bucket_cursor ADD COLUMN set_aside INTEGER NOT NULL DEFAULT 0") }
+        if !cursorColumns.contains("gated") { try db.exec("ALTER TABLE bucket_cursor ADD COLUMN gated TEXT") }
+        // Once, for the sources whose first read became window-bound: a root walked part-way under the old build,
+        // which listed everything, has a floor older than anything the new window will list, so its resume would
+        // find nothing below the floor for good. Collapsing the floor into the mark lets it go on incrementally.
+        // A floor a later run of this build leaves behind is not touched: the key keeps this to one opening.
+        if try db.query("SELECT 1 FROM setting WHERE key=?", [.text(Self.floorsCollapsedKey)]).isEmpty {
+            try db.run("UPDATE bucket_cursor SET floor_order=NULL, floor_tiebreak=NULL WHERE mark_order IS NOT NULL AND floor_order IS NOT NULL AND source_id IN ('files','notes','voicememos','recordings')")
+            try db.run("INSERT INTO setting(key,value) VALUES(?,?)", [.text(Self.floorsCollapsedKey), .text("1")])
+        }
     }
+    static let floorsCollapsedKey = "store.windowFloorsCollapsed"
 
     /// The id a note cites for one item: twelve hex digits of an FNV-1a fold over source, bucket, kind
     /// and item key, so the same item always gets the same id and two runs never disagree.
@@ -87,8 +101,26 @@ public actor SQLiteRunStore: RunStore {
     private static func cursorRecord(_ r: SQLite.Row) -> BucketCursor {
         let mark = r["mark_order"].real.map { ItemKey(order: $0, tiebreak: r["mark_tiebreak"].text ?? "") }
         let floor = r["floor_order"].real.map { ItemKey(order: $0, tiebreak: r["floor_tiebreak"].text ?? "") }
-        return BucketCursor(bucket: BucketID(r["bucket_id"].text ?? ""), source: SourceID(r["source_id"].text ?? ""), mark: mark, floor: floor)
+        let gated = r["gated"].text.flatMap { try? JSONDecoder().decode([ItemKey].self, from: Data($0.utf8)) } ?? []
+        return BucketCursor(bucket: BucketID(r["bucket_id"].text ?? ""), source: SourceID(r["source_id"].text ?? ""), mark: mark, floor: floor,
+                            setAside: Int(r["set_aside"].int ?? 0), gated: gated)
     }
+
+    /// The cursor row as one upsert, shared by the atomic commit and the cursor-only write.
+    private func upsertCursor(_ cursor: BucketCursor, at: Date) throws {
+        let gated = cursor.gated.isEmpty ? nil : (try? JSONEncoder().encode(cursor.gated)).flatMap { String(data: $0, encoding: .utf8) }
+        try db.run("""
+        INSERT INTO bucket_cursor(bucket_id, source_id, mark_order, mark_tiebreak, floor_order, floor_tiebreak, updated_at, set_aside, gated)
+        VALUES(?,?,?,?,?,?,?,?,?)
+        ON CONFLICT(bucket_id) DO UPDATE SET source_id=excluded.source_id, mark_order=excluded.mark_order,
+          mark_tiebreak=excluded.mark_tiebreak, floor_order=excluded.floor_order, floor_tiebreak=excluded.floor_tiebreak,
+          updated_at=excluded.updated_at, set_aside=excluded.set_aside, gated=excluded.gated
+        """, [.text(cursor.bucket.rawValue), .text(cursor.source.rawValue),
+              cursor.mark.map { .real($0.order) } ?? .null, .init(cursor.mark?.tiebreak),
+              cursor.floor.map { .real($0.order) } ?? .null, .init(cursor.floor?.tiebreak), .init(at), .init(cursor.setAside), .init(gated)])
+    }
+
+    public func setCursor(_ cursor: BucketCursor, at: Date) throws { try upsertCursor(cursor, at: at) }
 
     /// The atomic commit. See `03-ingest.md`.
     public func commit(runID: Int64, cursor: BucketCursor, bucketName: String, candidate: Candidate, outcome: Outcome, at: Date) throws {
@@ -104,15 +136,7 @@ public actor SQLiteRunStore: RunStore {
                 try db.run("INSERT INTO drop_log(run_id, source_id, bucket_name, reason, at) VALUES(?,?,?,?,?)",
                            [.int(runID), .text(candidate.source.rawValue), .text(bucketName), .text(outcome.reason.rawValue), .init(at)])
             }
-            try db.run("""
-            INSERT INTO bucket_cursor(bucket_id, source_id, mark_order, mark_tiebreak, floor_order, floor_tiebreak, updated_at)
-            VALUES(?,?,?,?,?,?,?)
-            ON CONFLICT(bucket_id) DO UPDATE SET source_id=excluded.source_id, mark_order=excluded.mark_order,
-              mark_tiebreak=excluded.mark_tiebreak, floor_order=excluded.floor_order, floor_tiebreak=excluded.floor_tiebreak,
-              updated_at=excluded.updated_at
-            """, [.text(cursor.bucket.rawValue), .text(cursor.source.rawValue),
-                  cursor.mark.map { .real($0.order) } ?? .null, .init(cursor.mark?.tiebreak),
-                  cursor.floor.map { .real($0.order) } ?? .null, .init(cursor.floor?.tiebreak), .init(at)])
+            try upsertCursor(cursor, at: at)
         }
     }
 

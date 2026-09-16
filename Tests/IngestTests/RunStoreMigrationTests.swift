@@ -47,6 +47,64 @@ import Domain
         #expect(try await again.summaries(since: nil).count == 1)
     }
 
+    /// A store from the build that listed every file and walked 500 a night, with cursors left mid-walk.
+    static func oldCursorDatabase() throws -> String {
+        let path = FileManager.default.temporaryDirectory.appendingPathComponent("old-cursors-\(UUID().uuidString).sqlite").path
+        do {
+            let db = try SQLite(path: path)
+            try db.exec("""
+            CREATE TABLE bucket_cursor(bucket_id TEXT PRIMARY KEY, source_id TEXT NOT NULL,
+                mark_order REAL, mark_tiebreak TEXT, floor_order REAL, floor_tiebreak TEXT, updated_at REAL NOT NULL);
+            """)
+            let rows: [(String, String, Double, Double?)] = [("files:downloads", "files", 1_789_000_000, 1_763_000_000), ("notes:all", "notes", 1_789_000_000, 1_750_000_000),
+                                                             ("voicememos:all", "voicememos", 1_789_000_000, 1_780_000_000), ("recordings:all", "recordings", 1_789_000_000, 1_780_000_000),
+                                                             ("whatsapp:7", "whatsapp", 1_789_000_000, 1_788_000_000), ("files:desktop", "files", 1_789_000_000, nil)]
+            for (bucket, source, mark, floor) in rows {
+                try db.run("INSERT INTO bucket_cursor(bucket_id, source_id, mark_order, mark_tiebreak, floor_order, floor_tiebreak, updated_at) VALUES(?,?,?,?,?,?,?)",
+                           [.text(bucket), .text(source), .real(mark), .text("m"), floor.map { .real($0) } ?? .null, .init(floor.map { _ in "f" }), .real(1_789_100_000)])
+            }
+            // A files root the old build never got a mark on: its floor is not a wedge, and it must stay.
+            try db.run("INSERT INTO bucket_cursor(bucket_id, source_id, mark_order, mark_tiebreak, floor_order, floor_tiebreak, updated_at) VALUES(?,?,?,?,?,?,?)",
+                       [.text("files:odd"), .text("files"), .null, .null, .real(1_763_000_000), .text("f"), .real(1_789_100_000)])
+        }
+        return path
+    }
+
+    @Test func windowBoundSourcesLoseAFloorTheNewWindowCouldNeverReachOnceAndChatsKeepTheirs() async throws {
+        let path = try Self.oldCursorDatabase()
+        let store = try SQLiteRunStore(path: path)
+        for bucket in ["files:downloads", "notes:all", "voicememos:all", "recordings:all"] {
+            let c = try #require(try await store.cursor(BucketID(bucket)))
+            #expect(c.isComplete && c.mark?.order == 1_789_000_000, "\(bucket) resumes incrementally from its mark")
+        }
+        let chat = try #require(try await store.cursor(BucketID("whatsapp:7")))
+        #expect(chat.floor?.order == 1_788_000_000, "a chat mid-first-read still walks below its floor inside the slice")
+        let markless = try #require(try await store.cursor(BucketID("files:odd")))
+        #expect(markless.mark == nil && markless.floor?.order == 1_763_000_000)
+        let desktop = try #require(try await store.cursor(BucketID("files:desktop")))
+        #expect(desktop.isComplete && desktop.setAside == 0 && desktop.gated.isEmpty, "old rows read back with nothing set aside and nothing gated")
+
+        // The collapse ran once: a floor this build leaves behind survives the next opening.
+        let midway = BucketCursor(bucket: BucketID("files:downloads"), source: "files", mark: ItemKey(order: 1_789_400_000, tiebreak: "n"), floor: ItemKey(order: 1_789_300_000, tiebreak: "o"))
+        try await store.setCursor(midway, at: Date(timeIntervalSince1970: 1_789_500_000))
+        let reopened = try SQLiteRunStore(path: path)
+        #expect(try await reopened.cursor(BucketID("files:downloads")) == midway)
+    }
+
+    @Test func aCursorWrittenByItselfRoundTripsWithWhatItSetAsideAndWhatItGated() async throws {
+        let store = try SQLiteRunStore.inMemory()
+        let gated = [ItemKey(order: 2_001_513_725, tiebreak: "y2033"), ItemKey(order: 2_101_513_725, tiebreak: "y2036")]
+        let c = BucketCursor(bucket: BucketID("capped:chat"), source: "capped", mark: ItemKey(order: 9, tiebreak: "m9"), floor: nil, setAside: 4_990, gated: gated)
+        try await store.setCursor(c, at: Date(timeIntervalSince1970: 1_789_500_000))
+        #expect(try await store.cursor(c.bucket) == c)
+        #expect(try await store.cursors(for: "capped") == [c])
+        let summaries = try await store.summaries(since: nil), drops = try await store.drops(since: .distantPast)
+        #expect(summaries.isEmpty && drops.isEmpty, "no item stands behind the write")
+        var moved = c; moved.floor = nil; moved.setAside = 0; moved.gated = []
+        try await store.setCursor(moved, at: Date(timeIntervalSince1970: 1_789_500_100))
+        #expect(try await store.cursor(c.bucket) == moved, "a second write replaces, including an emptied gated list")
+    }
+
     @Test func newRowsCarryAStableIdThatOnlyDependsOnTheItem() async throws {
         let store = try SQLiteRunStore.inMemory()
         let run = try await store.beginRun(trigger: .test, at: Date())

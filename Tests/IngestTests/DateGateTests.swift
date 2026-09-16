@@ -20,14 +20,15 @@ import Support
         let runID = try await store.beginRun(trigger: .test, at: now)
         let future = cand(2_001_513_725, "y2033"), real = cand(1_789_400_000, "real")
         let stats = try await run.read(FixtureSource(items: [future, real]), enabledBuckets: nil, runID: runID, progress: { _ in })
-        #expect(stats.kept == 1 && stats.dropped == 1)
+        #expect(stats.kept == 1 && stats.badDated == 1 && stats.dropped == 0 && stats.read == 1, "turned away at the gate, not read and not judged unworthy")
         #expect(await reader.calls == 1, "the 2033 window never reached the reader")
         let cursor = try await store.cursor(BucketID("fixture:a"))
         #expect(cursor?.mark == real.key && cursor?.floor == nil, "the mark is the real newest item, not the 2033 one")
         let drops = try await store.drops(since: now.addingTimeInterval(-60))
         #expect(drops.map(\.reason) == [.badDate])
         let coverage = await run.coverage(of: "fixture")
-        #expect(coverage?.itemsRead == 1 && coverage?.notRead == 1 && coverage?.buckets == 1)
+        #expect(coverage?.itemsRead == 1 && coverage?.notRead == 0 && coverage?.buckets == 1, "a bad date is not unread history")
+        #expect(cursor?.gated == [future.key], "the cursor remembers it was recorded")
         #expect(coverage?.oldestRead == real.itemDate && coverage?.newestRead == real.itemDate && coverage?.lastRun == now)
     }
 

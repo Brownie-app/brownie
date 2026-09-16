@@ -155,9 +155,10 @@ struct ExcludedView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     HStack(spacing: 12) {
-                        stat("Not worth keeping", rows.filter { $0.reason.verdict == .drop && $0.reason != .loadFailed && $0.reason != .readerFailed }.count, "Banter, logistics, installers, duplicates", t.ink)
+                        // A bad-dated item never reached the reader, so it is not something the reader judged unworthy.
+                        stat("Not worth keeping", rows.filter { $0.reason.verdict == .drop && ![.loadFailed, .readerFailed, .badDate].contains($0.reason) }.count, "Banter, logistics, installers, duplicates", t.ink)
                         stat("Sensitive · erased on sight", rows.filter { $0.reason.verdict == .sensitive }.count, "Model \(rows.filter { $0.reason == .modelSensitive }.count) · pattern match \(rows.filter { $0.reason == .piiBackstop }.count)", t.bad)
-                        stat("Couldn't read", rows.filter { $0.reason == .loadFailed || $0.reason == .readerFailed || $0.reason == .parseFailed }.count, "Load or model errors", t.ink)
+                        stat("Couldn't read", rows.filter { [.loadFailed, .readerFailed, .parseFailed, .badDate].contains($0.reason) }.count, "Load or model errors, dates that can't be believed", t.ink)
                     }
                     CardBox(padding: 0) {
                         VStack(spacing: 0) {

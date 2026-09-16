@@ -2,7 +2,9 @@ import Foundation
 
 /// What Brownie has actually read from one source, so the user can see "how far back" instead of
 /// guessing. Written by the read loop after every run and merged across runs: the date range only widens,
-/// the item count only grows, and `notRead` is whatever was still left over after the latest run.
+/// the item count only grows, and `notRead` is the run's whole word on what lies below what was read — the
+/// read loop carries each bucket's set-aside count on its cursor, so a cap that held back history keeps
+/// counting on the quiet nights after it, until "Read further back" reads it or the source starts over.
 public struct SourceCoverage: Codable, Sendable, Equatable {
     public var source: SourceID
     public var oldestRead: Date?
@@ -29,6 +31,10 @@ public struct SourceCoverage: Codable, Sendable, Equatable {
         m.buckets = fresh.buckets > 0 ? fresh.buckets : known.buckets
         return m
     }
+
+    /// The list without one source: its cursors were reset, so the next run establishes its figures afresh
+    /// instead of adding a second read of the same items to the count.
+    public static func forgetting(_ source: SourceID, in all: [SourceCoverage]) -> [SourceCoverage] { all.filter { $0.source != source } }
 
     /// The whole list with one source's fresh figures merged in, order kept.
     public static func merge(_ all: [SourceCoverage], with fresh: SourceCoverage) -> [SourceCoverage] {

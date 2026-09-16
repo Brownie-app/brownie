@@ -383,6 +383,6 @@ public actor RunCoordinator {
 extension RunStats {
     static func + (a: RunStats, b: RunStats) -> RunStats {
         var r = RunStats(); r.read = a.read + b.read; r.kept = a.kept + b.kept; r.dropped = a.dropped + b.dropped
-        r.sensitive = a.sensitive + b.sensitive; r.failed = a.failed + b.failed; r.deferred = a.deferred + b.deferred; return r
+        r.sensitive = a.sensitive + b.sensitive; r.failed = a.failed + b.failed; r.deferred = a.deferred + b.deferred; r.badDated = a.badDated + b.badDated; return r
     }
 }

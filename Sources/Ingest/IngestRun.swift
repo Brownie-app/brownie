@@ -15,6 +15,8 @@ public actor IngestRun {
         public init() {}
     }
     public enum Failure: Error { case readerStuck, cancelled }
+    /// How many bad-dated items a cursor remembers as recorded; a bucket with more than this has a broken clock, not a log problem.
+    static let gatedRemembered = 200
 
     private let store: RunStore
     private let reader: LocalModel
@@ -43,28 +45,51 @@ public actor IngestRun {
         let buckets = try await source.buckets(since: Self.marks(of: cursors), enabled: enabledBuckets)
         var itemsSinceReload = 0, failureStreak = 0, reloadsWithoutProgress = 0
         var lastTitle: String?, lastSummary: String?
-        var oldest: Date?, newest: Date?, itemsRead = 0, notRead = 0
-        defer { coverages[source.id] = SourceCoverage(source: source.id, oldestRead: oldest, newestRead: newest, itemsRead: itemsRead, notRead: notRead + stats.deferred, lastRun: clock.now(), buckets: buckets.count) }
+        var oldest: Date?, newest: Date?, itemsRead = 0
+        // What lies below what was read, per bucket: what earlier runs set aside stays "not read" until the bucket is
+        // read from scratch again, whether or not this run lists the bucket at all, so a cap that held back history
+        // still shows on the quiet nights after it.
+        var setAside = Dictionary(cursors.map { ($0.bucket, $0.setAside) }, uniquingKeysWith: { a, _ in a })
+        defer { coverages[source.id] = SourceCoverage(source: source.id, oldestRead: oldest, newestRead: newest, itemsRead: itemsRead, notRead: setAside.values.reduce(0, +), lastRun: clock.now(), buckets: buckets.count) }
 
         for (bi, bucket) in buckets.enumerated() {
             let existing = try await store.cursor(bucket.id)
             var cursor = existing ?? BucketCursor(bucket: bucket.id, source: source.id, mark: nil, floor: nil)
-            if mode == .initial { cursor = BucketCursor(bucket: bucket.id, source: source.id, mark: nil, floor: nil) }
+            if mode == .initial { cursor = BucketCursor(bucket: bucket.id, source: source.id, mark: nil, floor: nil, gated: cursor.gated) }
             // The date gate, before any planning: an item dated years ahead or absurdly far back is never read and never
             // becomes a cursor mark. The ones this pass would otherwise have read are logged as drops, against the stored
-            // cursor as it stands, so the log shows they went and nothing else moves.
+            // cursor as it stands, so the log shows they went and nothing else moves. Such an item sits above any sane
+            // mark and is listed again every run, so it is recorded once, remembered on the cursor, and only mentioned after.
             let (dated, undated) = Self.gate(bucket.items, now: clock.now())
+            var recorded = existing ?? cursor
             for item in Self.plan(undated, cursor: cursor, mode: mode, limits: limits, now: clock.now()).items {
-                stats.record(.badDate); notRead += 1
+                guard !recorded.gated.contains(item.key) else { log.info("\(name)/\(bucket.name): \(item.id) still carries an unbelievable date — already recorded"); continue }
+                stats.record(.badDate)
+                recorded.gated = Array((recorded.gated + [item.key]).suffix(Self.gatedRemembered))
                 log.warn("\(name)/\(bucket.name): \(item.id) dated \(item.itemDate.map { "\($0)" } ?? "?") is not believable — dropped before reading")
-                try await store.commit(runID: runID, cursor: existing ?? cursor, bucketName: bucket.name, candidate: item, outcome: Outcome(reason: .badDate), at: clock.now())
+                try await store.commit(runID: runID, cursor: recorded, bucketName: bucket.name, candidate: item, outcome: Outcome(reason: .badDate), at: clock.now())
             }
+            cursor.gated = recorded.gated
             let plan = Self.plan(dated, cursor: cursor, mode: mode, limits: limits, now: clock.now())
             for d in plan.items.compactMap(\.itemDate) { oldest = min(oldest ?? d, d); newest = max(newest ?? d, d) }
             itemsRead += plan.items.count
             if plan.kind == .incremental, let m = cursor.mark, Self.isFutureDateKey(m, now: clock.now()) { log.warn("\(bucket.name): cursor mark was in the future (\(m.order)) — re-reading the newest item to heal it") }
-            stats.deferred += plan.deferred + bucket.deferred
-            log.info("\(name)/\(bucket.name): \(plan.items.count) items (\(plan.kind)), deferred \(plan.deferred + bucket.deferred)")
+            let fresh = plan.deferred + bucket.deferred
+            stats.deferred += fresh
+            log.info("\(name)/\(bucket.name): \(plan.items.count) items (\(plan.kind)), deferred \(fresh)")
+            switch plan.kind {
+            // A first read is the newest word on what lies below it; a later run only adds what it set aside itself.
+            case .initial, .resume: cursor.setAside = fresh; setAside[bucket.id] = fresh
+            case .incremental, .none: setAside[bucket.id] = cursor.setAside + fresh
+            }
+            if plan.kind == .resume, plan.items.isEmpty {
+                // Nothing listed below the floor: the window, the cap, or a slice that slid up since the run that set the
+                // floor has nothing older left to give, so the bottom is reached. The floor collapses into the mark by a
+                // cursor-only write; without it the bucket would wait for ever for items no listing will bring again.
+                cursor.floor = nil
+                try await store.setCursor(cursor, at: clock.now())
+                log.info("\(name)/\(bucket.name): nothing older than the floor is listed any more — the first read is complete")
+            }
 
             for (ii, item) in plan.items.enumerated() {
                 if Task.isCancelled { throw Failure.cancelled }
