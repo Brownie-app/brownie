@@ -95,6 +95,8 @@ public protocol RunStore: Sendable {
     func cursors(for source: SourceID) async throws -> [BucketCursor]
     func commit(runID: Int64, cursor: BucketCursor, bucketName: String, candidate: Candidate, outcome: Outcome, at: Date) async throws
     func clearBucket(_ bucket: BucketID) async throws
+    /// Forgets every cursor of one source, so its next run is a first read again (the way "Read further back" widens a window).
+    func resetCursors(for source: SourceID) async throws
     // summaries (ephemeral)
     func summaries(since: Date?) async throws -> [SummaryRecord]
     func wipeSummaries() async throws

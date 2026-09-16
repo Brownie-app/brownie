@@ -44,6 +44,7 @@ extension AppModel {
     // MARK: reload
 
     func reloadV2() async {
+        FirstRead.current = await FirstRead.load(from: store)
         loops = await LoopLedger.load(store)
         await reloadMCPAsks()
         if let j = try? await store.value(SettingKey.askHistory), let d = j.data(using: .utf8) { asks = (try? JSONDecoder().decode([Asker.Answer].self, from: d)) ?? [] }
@@ -72,6 +73,22 @@ extension AppModel {
         let ls = loops; Task { await LoopLedger.save(ls, store) }
     }
     func setStaleDays(_ d: Int) { staleDays = d; set(SettingKey.staleDays, String(d)); Task { await reload() } }
+
+    // MARK: first read
+
+    /// "Read further back": widen one source's first-read window by a step, remember it, and forget the source's
+    /// cursors so the next run treats its buckets as first reads with the wider window. Already-read items inside
+    /// the old window are read once more on that run; the note builder folds duplicates into the notes it has.
+    func readFurtherBack(_ source: SourceID) {
+        var p = FirstRead.current; p.readFurtherBack(source); FirstRead.current = p
+        objectWillChange.send()
+        let name = allSources.first { $0.id == source }?.descriptor.name ?? source.rawValue
+        announcement = "\(name) will read back \(p.days(for: source)) days on the next run."
+        Task {
+            do { try await p.save(to: store); try await store.resetCursors(for: source) }
+            catch { announcement = "Couldn't widen \(name)'s window: \(error)" }
+        }
+    }
     func setNudgeDays(_ d: Int) { nudgeDays = d; set(SettingKey.nudgeDays, String(d)) }
     func dismissLoop(_ id: String) {
         guard let i = loops.firstIndex(where: { $0.id == id }) else { return }

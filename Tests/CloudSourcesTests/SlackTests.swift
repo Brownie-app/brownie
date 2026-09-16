@@ -82,7 +82,7 @@ let slackHistory = #"""
         #expect(out.count == 1 && out[0].id == BucketID("slack:D1"))
         #expect(t.count("conversations.history") == 1, "only the chosen DM is read")
         let hist = t.calls.first { $0.absoluteString.contains("conversations.history") }!.absoluteString
-        #expect(hist.contains("channel=D1") && hist.contains("oldest=1757095200.000000"), "first read: the last 7 days")
+        #expect(hist.contains("channel=D1") && hist.contains("oldest=1749924000.000000"), "first read: the policy's 90 days")
         let c = try #require(out[0].items.first)
         #expect(c.kind == .directMessage && c.metadata["chat"] == "Meera Nair" && c.isGroup == false)
         #expect(c.itemDate == Date(timeIntervalSince1970: 1757600000.0002))
@@ -92,9 +92,36 @@ let slackHistory = #"""
 
     @Test func incrementalReadStartsAtTheMark() async throws {
         let t = wired()
-        _ = try await source(t).buckets(since: [BucketID("slack:C1"): ItemKey(order: 1757590000.0001, tiebreak: "x")], enabled: [BucketID("slack:C1")])
+        let out = try await source(t).buckets(since: [BucketID("slack:C1"): ItemKey(order: 1757590000.0001, tiebreak: "x")], enabled: [BucketID("slack:C1")])
         let hist = t.calls.first { $0.absoluteString.contains("conversations.history") }!.absoluteString
         #expect(hist.contains("oldest=1757590000.000100"))
+        #expect(out[0].deferred == 0, "nothing is capped once a channel has been read to the bottom")
+    }
+
+    @Test func readFurtherBackMovesTheWindow() async throws {
+        let t = wired()
+        var p = FirstRead(); p.readFurtherBack("slack")
+        _ = try await SlackSource(transport: t, token: { "xoxp-1" }, now: { Date(timeIntervalSince1970: 1_757_700_000) }, policy: { p }).buckets(since: [:], enabled: [BucketID("slack:D1")])
+        let hist = t.calls.first { $0.absoluteString.contains("conversations.history") }!.absoluteString
+        #expect(hist.contains("oldest=1742148000.000000"), "180 days back")
+    }
+
+    @Test func aFirstReadKeepsTheNewestUpToTheCapAndCountsTheRest() async throws {
+        let t = wired()
+        var p = FirstRead(); p.directChatMessages = 2
+        let s = SlackSource(transport: t, token: { "xoxp-1" }, now: { Date(timeIntervalSince1970: 1_757_700_000) }, policy: { p })
+        let out = try await s.buckets(since: [:], enabled: [BucketID("slack:D1")])
+        #expect(out[0].deferred == 1, "three messages in the window, two kept")
+        let c = try #require(out[0].items.first)
+        #expect(Double(c.metadata["firstDate"]!)! == 1757590000.0001, "the oldest message fell off; the window starts at the second")
+    }
+
+    @Test func aPageCapThatStopsShortIsReportedNotSwallowed() async throws {
+        let endless = slackHistory.replacingOccurrences(of: #""next_cursor":""}"#, with: #""next_cursor":"more"}"#)
+        let t = FakeTransport().on("auth.test", #"{"ok":true,"user_id":"U1","user":"vivek"}"#).on("users.list", slackUsers).on("conversations.list", slackList).on("conversations.history", endless)
+        let out = try await source(t).buckets(since: [BucketID("slack:C1"): ItemKey(order: 1757000000, tiebreak: "x")], enabled: [BucketID("slack:C1")])
+        #expect(t.count("conversations.history") == SlackSource.pageCap, "paging stops at the cap")
+        #expect(out[0].deferred == 1, "and the run is told there was more")
     }
 
     @Test func loadRefetchesTheWindowAndRendersIt() async throws {

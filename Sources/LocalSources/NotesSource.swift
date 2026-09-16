@@ -44,7 +44,7 @@ public struct NotesSource: Source {
     }
 
     public func buckets(since marks: [BucketID: ItemKey], enabled: Set<BucketID>?) async throws -> [Bucket] {
-        let items = try WALSafeCopy.withCopy(of: Self.database) { db in
+        let listed = try WALSafeCopy.withCopy(of: Self.database) { db in
             let sc = try Self.schema(db)
             let folderJoin = sc.folder.map { "LEFT JOIN \(sc.table) f ON f.Z_PK=n.\($0)" } ?? ""
             let folderCol = sc.folder != nil ? "f.\(sc.title) AS folder," : "NULL AS folder,"
@@ -62,7 +62,9 @@ public struct NotesSource: Source {
                                             "created": ISO8601DateFormatter().string(from: date), "pk": String(r["pk"].int ?? 0)])
             }
         }
-        if items.isEmpty {
+        // Without a mark the bucket has never been read to the bottom: only notes created inside the first-read window.
+        let items = marks[Self.bucket] == nil ? FirstReadFilter.inWindow(listed, policy: FirstRead.current, source: Self.descriptor.id, now: Date()) : listed
+        if listed.isEmpty {
             let diag = try WALSafeCopy.withCopy(of: Self.database) { db -> String in
                 let sc = try Self.schema(db)
                 let total = try db.query("SELECT COUNT(*) AS n FROM \(sc.table)").first?["n"].int ?? 0
@@ -73,7 +75,7 @@ public struct NotesSource: Source {
                 return "table \(sc.table) rows=\(total) withNoteData(\(sc.noteData))=\(withData) withTitle(\(sc.title))=\(withTitle) ents=\(ents) ZICNOTEDATA rows=\(noteDataRows) cols: title=\(sc.title) ident=\(sc.ident) created=\(sc.created)"
             }
             log.warn("0 notes listed — \(diag)")
-        } else { log.info("\(items.count) notes listed") }
+        } else { log.info("\(listed.count) notes, \(items.count) listed") }
         return [Bucket(id: Self.bucket, name: "Apple Notes", items: items)]
     }
 

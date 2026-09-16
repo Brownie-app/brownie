@@ -6,6 +6,7 @@ public enum SettingKey {
     public static func enabledBuckets(_ s: SourceID) -> String { "sources.\(s.rawValue).buckets" } // JSON [BucketID]
     public static let fileRoots = "sources.files.roots"           // JSON [String]
     public static let recordingsFolder = "sources.recordings.folder"   // path; default ~/Recordings
+    public static let firstRead = "sources.firstRead"             // JSON FirstRead — what a first read of each source covers
     public static let brainEngine = "brain.engine"                // openai | anthropic | openrouter | custom | none
     public static let brainModel = "brain.model"
     public static let brainEffort = "brain.effort"

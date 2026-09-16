@@ -107,7 +107,11 @@ public struct Bucket: Sendable {
     public let name: String
     /// Newest-first. Extra items older than `since` are harmless; the core filters authoritatively.
     public let items: [Candidate]
-    public init(id: BucketID, name: String, items: [Candidate]) { self.id = id; self.name = name; self.items = items }
+    /// What the source knew about but did not list this run: messages past the first-read cap, or left behind
+    /// a paging cap it could not see past (counted as one, since it cannot count what it did not fetch).
+    /// The core adds it to the run's deferred total so the UI never shows a silent gap.
+    public let deferred: Int
+    public init(id: BucketID, name: String, items: [Candidate], deferred: Int = 0) { self.id = id; self.name = name; self.items = items; self.deferred = deferred }
 }
 
 // MARK: - The contract

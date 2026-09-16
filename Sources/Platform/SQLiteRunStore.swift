@@ -107,6 +107,10 @@ public actor SQLiteRunStore: RunStore {
         try db.run("DELETE FROM bucket_cursor WHERE bucket_id=?", [.text(bucket.rawValue)])
     }
 
+    public func resetCursors(for source: SourceID) throws {
+        try db.run("DELETE FROM bucket_cursor WHERE source_id=?", [.text(source.rawValue)])
+    }
+
     // MARK: summaries
 
     public func summaries(since: Date?) throws -> [SummaryRecord] {

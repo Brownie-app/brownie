@@ -124,21 +124,24 @@ public enum TeamsParsing {
 
 // MARK: - The source
 
-/// Microsoft Teams through Graph, as the user: the chats and channels they pick; the last 7 days at first read.
+/// Microsoft Teams through Graph, as the user: the chats and channels they pick; the first-read policy's window at first read.
 public struct TeamsSource: Source {
     public static let descriptor = SourceDescriptor(
         id: "teams", name: "Microsoft Teams", detail: "Sign in with your work account · chats and channels you choose · needs your admin's consent once",
         door: .userCloud, permissions: [], supportsPerBucketOptIn: true, isWork: true)
-    public static let firstReadDays = 7.0
-    public static let pageCap = 10   // × 50 messages
+    /// Pages of 50 one listing fetches at most: enough to cover the first-read caps, so only a busy chat between
+    /// runs can hit it; when it does, the bucket says so instead of losing the rest quietly.
+    public static let pageCap = 14
     static let graph = "https://graph.microsoft.com/v1.0"
     let transport: any JSONTransport
     let token: @Sendable () async throws -> String
     let now: @Sendable () -> Date
+    let policy: @Sendable () -> FirstRead
     private let log = Log("source.teams")
 
-    public init(transport: any JSONTransport = URLSessionTransport(), token: @escaping @Sendable () async throws -> String = { try await MicrosoftAuth.shared.accessToken() }, now: @escaping @Sendable () -> Date = { Date() }) {
-        self.transport = transport; self.token = token; self.now = now
+    public init(transport: any JSONTransport = URLSessionTransport(), token: @escaping @Sendable () async throws -> String = { try await MicrosoftAuth.shared.accessToken() },
+                now: @escaping @Sendable () -> Date = { Date() }, policy: @escaping @Sendable () -> FirstRead = { FirstRead.current }) {
+        self.transport = transport; self.token = token; self.now = now; self.policy = policy
     }
 
     public func availability() async -> Availability {
@@ -166,11 +169,22 @@ public struct TeamsSource: Source {
         guard !infos.isEmpty else { return [] }
         let myID = try await me()
         var out: [Bucket] = []
+        let now = now(), policy = policy()
         for info in infos {
-            let oldest = Date(timeIntervalSince1970: marks[info.id]?.order ?? now().timeIntervalSince1970 - Self.firstReadDays * 86_400)
-            let msgs = try await messages(of: info.id, me: myID, newerThan: oldest)
+            var msgs: [ChatMessage], deferred: Int
+            if let mark = marks[info.id] {
+                // Read to the bottom before: everything since the last message seen.
+                let h = try await messagesPaged(of: info.id, me: myID, newerThan: Date(timeIntervalSince1970: mark.order))
+                msgs = h.messages; deferred = h.hitPageCap ? 1 : 0
+            } else {
+                // A first read: the policy's window, then only its cap of newest messages.
+                let h = try await messagesPaged(of: info.id, me: myID, newerThan: policy.window(for: Self.descriptor.id, now: now))
+                let cut = ChatWindowing.firstReadSlice(h.messages, isGroup: info.isGroup, policy: policy, source: Self.descriptor.id, now: now)
+                msgs = cut.messages; deferred = cut.deferred + (h.hitPageCap ? 1 : 0)
+            }
+            if deferred > 0 { log.info("\(info.name): \(deferred) messages set aside") }
             let items = CloudChat.candidates(source: Self.descriptor.id, bucket: info.id, name: info.name, isGroup: info.isGroup, members: info.count, messages: msgs)
-            out.append(Bucket(id: info.id, name: info.name, items: Array(items)))
+            out.append(Bucket(id: info.id, name: info.name, items: Array(items), deferred: deferred))
         }
         return out
     }
@@ -191,20 +205,26 @@ public struct TeamsSource: Source {
         return "/teams/\(pair.first ?? "")/channels/\(pair.count > 1 ? pair[1] : "")/messages?$top=50"
     }
 
-    /// Newest-first pages until one is older than `newerThan`, capped.
+    struct History { let messages: [ChatMessage]; let hitPageCap: Bool }
+
     func messages(of b: BucketID, me: String, newerThan: Date) async throws -> [ChatMessage] {
+        try await messagesPaged(of: b, me: me, newerThan: newerThan).messages
+    }
+
+    /// Newest-first pages until one is older than `newerThan`, capped; says whether the cap stopped it with more still to fetch.
+    func messagesPaged(of b: BucketID, me: String, newerThan: Date) async throws -> History {
         var all: [ChatMessage] = []
         var next: String? = Self.graph + Self.path(for: b)
-        var pages = 0
-        while let url = next, pages < Self.pageCap {
+        var pages = 0, done = false
+        while let url = next, !done, pages < Self.pageCap {
             let t = try await token()
             let r = try await transport.json(URL(string: url)!, headers: ["Authorization": "Bearer \(t)"])
             let page = TeamsParsing.messages(r, me: me)
             all += page.filter { $0.date > newerThan }
-            if page.contains(where: { $0.date <= newerThan }) { break }
+            done = page.contains(where: { $0.date <= newerThan })
             next = r["@odata.nextLink"] as? String; pages += 1
         }
-        return all.sorted { $0.date < $1.date }
+        return History(messages: all.sorted { $0.date < $1.date }, hitPageCap: !done && next != nil)
     }
 
     func me() async throws -> String {

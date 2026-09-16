@@ -121,20 +121,23 @@ public enum SlackParsing {
 
 // MARK: - The source
 
-/// Slack, read as the user: only the channels and DMs they pick; the last 7 days at first read, then only what is new.
+/// Slack, read as the user: only the channels and DMs they pick; the first-read policy's window at first read, then only what is new.
 public struct SlackSource: Source {
     public static let descriptor = SourceDescriptor(
-        id: "slack", name: "Slack", detail: "Signed in as you · DMs and channels you choose · last 7 days at first read",
+        id: "slack", name: "Slack", detail: "Signed in as you · DMs and channels you choose",
         door: .userCloud, permissions: [], supportsPerBucketOptIn: true, isWork: true)
-    public static let firstReadDays = 7.0
-    public static let pageCap = 5   // × 200 messages per bucket per run
+    /// Pages of 200 one listing fetches at most. The first-read caps are smaller, so only a busy channel between
+    /// runs can hit it; when it does, the bucket says so instead of losing the rest quietly.
+    public static let pageCap = 5
     let transport: any JSONTransport
     let token: @Sendable () -> String?
     let now: @Sendable () -> Date
+    let policy: @Sendable () -> FirstRead
     private let log = Log("source.slack")
 
-    public init(transport: any JSONTransport = URLSessionTransport(), token: @escaping @Sendable () -> String? = { Keychain.get(SlackAuth.tokenKey) }, now: @escaping @Sendable () -> Date = { Date() }) {
-        self.transport = transport; self.token = token; self.now = now
+    public init(transport: any JSONTransport = URLSessionTransport(), token: @escaping @Sendable () -> String? = { Keychain.get(SlackAuth.tokenKey) },
+                now: @escaping @Sendable () -> Date = { Date() }, policy: @escaping @Sendable () -> FirstRead = { FirstRead.current }) {
+        self.transport = transport; self.token = token; self.now = now; self.policy = policy
     }
 
     public func availability() async -> Availability {
@@ -167,11 +170,23 @@ public struct SlackSource: Source {
         let names = try await users(t)
         let me = (try await call("auth.test", t))["user_id"] as? String ?? ""
         var out: [Bucket] = []
+        let now = now(), policy = policy()
         for info in infos {
-            let oldest = marks[info.id]?.order ?? now().timeIntervalSince1970 - Self.firstReadDays * 86_400
-            let msgs = try await history(channel(info.id), t, oldest: oldest, latest: nil, me: me, names: names)
+            var msgs: [ChatMessage], deferred: Int
+            if let mark = marks[info.id] {
+                // Read to the bottom before: everything since the last message seen.
+                let h = try await historyPaged(channel(info.id), t, oldest: mark.order, latest: nil, me: me, names: names)
+                msgs = h.messages; deferred = h.hitPageCap ? 1 : 0
+            } else {
+                // A first read: the policy's window, then only its cap of newest messages.
+                let oldest = policy.window(for: Self.descriptor.id, now: now).timeIntervalSince1970
+                let h = try await historyPaged(channel(info.id), t, oldest: oldest, latest: nil, me: me, names: names)
+                let cut = ChatWindowing.firstReadSlice(h.messages, isGroup: info.isGroup, policy: policy, source: Self.descriptor.id, now: now)
+                msgs = cut.messages; deferred = cut.deferred + (h.hitPageCap ? 1 : 0)
+            }
+            if deferred > 0 { log.info("\(info.name): \(deferred) messages set aside") }
             let items = CloudChat.candidates(source: Self.descriptor.id, bucket: info.id, name: info.name, isGroup: info.isGroup, members: info.count, messages: msgs)
-            out.append(Bucket(id: info.id, name: info.name, items: Array(items)))
+            out.append(Bucket(id: info.id, name: info.name, items: Array(items), deferred: deferred))
         }
         return out
     }
@@ -189,7 +204,14 @@ public struct SlackSource: Source {
 
     func channel(_ b: BucketID) -> String { String(b.rawValue.dropFirst("slack:".count)) }
 
+    struct History { let messages: [ChatMessage]; let hitPageCap: Bool }
+
     func history(_ channel: String, _ t: String, oldest: Double, latest: Double?, me: String, names: [String: String]) async throws -> [ChatMessage] {
+        try await historyPaged(channel, t, oldest: oldest, latest: latest, me: me, names: names).messages
+    }
+
+    /// Ascending messages in the range, and whether the page cap stopped the listing with more still to fetch.
+    func historyPaged(_ channel: String, _ t: String, oldest: Double, latest: Double?, me: String, names: [String: String]) async throws -> History {
         var all: [ChatMessage] = []
         var cursor: String? = nil, pages = 0
         repeat {
@@ -201,7 +223,7 @@ public struct SlackSource: Source {
             cursor = (r["response_metadata"] as? [String: Any])?["next_cursor"] as? String; if cursor?.isEmpty == true { cursor = nil }
             pages += 1
         } while cursor != nil && pages < Self.pageCap
-        return all.sorted { $0.date < $1.date }
+        return History(messages: all.sorted { $0.date < $1.date }, hitPageCap: cursor != nil)
     }
 
     func users(_ t: String) async throws -> [String: String] {
