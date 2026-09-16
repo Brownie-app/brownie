@@ -23,3 +23,10 @@ The first public build.
 - Brownie as an MCP server for Claude Desktop, Cursor and any MCP app, with a log of what they asked.
 - Daytime reads while idle and on power. What left your Mac. This-Mac-only brain. Panic wipe. `brownie://` links for Shortcuts and Siri.
 - Diagnostics export; plain-words banners for every way a run can fail.
+- Notes that stay exact: the first read of a chat takes 90 days (600 messages per direct chat, 300 per group), mail 30 days; the Sources screen says exactly what was read and “Read further back” reaches older messages; a message dated in the future never moves a cursor.
+- One file per person, forever: a registry of everyone seen with their spellings and chat handles, one matcher everywhere, a “may be one person” banner with Merge and Keep separate.
+- A status block under every People note — ⏳ what they asked and what you promised, ✅ when it was answered (with the reply), ⌛ when it was let go — kept by code, never by the brain; a reply that was not about the ask stays open.
+- Code-owned front-matter on every note: `updated` moves only when the substance changes, and an edit made anywhere (Obsidian, the phone, the household) reads as yours.
+- People and Groups notes keep one shape (About · Now · Context · Earlier); bullets are dated, age out of Now after 45 days into one line per month, and a person quiet for 180 days rests in Archive until named again. The file tools refuse a sprawl of folders, thin notes, a bloated README and any delete under People.
+- The Notes screen, rebuilt: rendered Markdown, search as you type with snippets, ⌘K to open any note, backlinks, a header for each person with “Ask about” and “Open the chat”, delete that asks first, an editor that never loses Brownie's block, and a watcher that picks up edits from Obsidian or the phone within seconds.
+- Vault health: every night the vault is measured (notes, words, what is over budget, quiet people, dangling links, the oldest open ask) into a sentence on Settings → Knowledge, and what has aged out is let go.
