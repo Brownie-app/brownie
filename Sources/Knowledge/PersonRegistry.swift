@@ -37,6 +37,10 @@ public actor PersonRegistry {
     public static let file = "people.json"
     public nonisolated let fileURL: URL
     private var records: [Person] = []
+    /// What the file held when it was read, and the merges made here since: `save` reconciles against both, so a
+    /// merge or "keep separate" the app made while a run held its own copy is not written over.
+    private var loaded: [Person] = []
+    private var mergesSinceLoad: [(keep: String, drop: String)] = []
     private let now: @Sendable () -> Date
     private let log = Log("people")
 
@@ -51,16 +55,57 @@ public actor PersonRegistry {
 
     /// Reads the file; a missing or unreadable file is an empty registry, never an error.
     public func load() {
-        guard let d = try? Data(contentsOf: fileURL) else { records = []; return }
-        let dec = JSONDecoder(); dec.dateDecodingStrategy = .iso8601
-        if let f = try? dec.decode(File.self, from: d) { records = f.people.sorted { ($0.firstSeen, $0.id) < ($1.firstSeen, $1.id) } }
-        else { log.warn("people.json could not be read; starting empty"); records = [] }
+        if let d = try? Data(contentsOf: fileURL) {
+            if let people = Self.decode(d) { records = people } else { log.warn("people.json could not be read; starting empty"); records = [] }
+        } else { records = [] }
+        loaded = records; mergesSinceLoad = []
     }
 
+    /// Writes the registry — on top of whatever reached the file since `load`, not over it. The run holds its
+    /// copy for the length of a sync; a merge or "keep separate" the user made in the app meanwhile is taken
+    /// from the file, and this instance's own merges, spellings, handles and note paths are applied to that.
     public func save() throws {
+        if let d = try? Data(contentsOf: fileURL), let disk = Self.decode(d), disk != loaded {
+            records = Self.reconcile(disk: disk, mine: records, loaded: loaded, merges: mergesSinceLoad)
+        }
         try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         let enc = JSONEncoder(); enc.dateEncodingStrategy = .iso8601; enc.outputFormatting = [.prettyPrinted, .sortedKeys]
         try enc.encode(File(people: records)).write(to: fileURL, options: .atomic)
+        loaded = records; mergesSinceLoad = []
+    }
+
+    private static func decode(_ d: Data) -> [Person]? {
+        let dec = JSONDecoder(); dec.dateDecodingStrategy = .iso8601
+        return (try? dec.decode(File.self, from: d))?.people.sorted { ($0.firstSeen, $0.id) < ($1.firstSeen, $1.id) }
+    }
+
+    /// The file's people with this instance's work replayed on them: its merges first, then each of its records
+    /// onto the file's record with the same id — or, when the app merged that id away, onto whichever record now
+    /// carries one of its handles or spellings. A record born here is appended; one the app deleted stays deleted.
+    /// A note path is taken only when the file's record has none, and released only when this instance saw that
+    /// same file vanish. `notSame` lists are united, then pruned to people who still exist.
+    static func reconcile(disk: [Person], mine: [Person], loaded: [Person], merges: [(keep: String, drop: String)]) -> [Person] {
+        var out = disk
+        for m in merges { Self.merge(keep: m.keep, drop: m.drop, in: &out) }
+        for m in mine {
+            let spellings = [m.name] + m.aliases
+            let t = out.firstIndex { $0.id == m.id }
+                ?? out.firstIndex { p in p.handles.contains { m.handles.contains($0) } }
+                ?? out.firstIndex { p in ([p.name] + p.aliases).contains { s in spellings.contains { Self.spellsAlike($0, s) } } }
+            guard let t else {
+                if !loaded.contains(where: { $0.id == m.id }) { out.append(m) }
+                continue
+            }
+            for s in spellings { Self.learn(label: s, into: &out[t]) }
+            for h in m.handles where !out[t].handles.contains(h) { out[t].handles.append(h) }
+            if out[t].notePath == nil, let p = m.notePath, !out.contains(where: { $0.notePath == p }) { out[t].notePath = p }
+            if m.notePath == nil, let was = loaded.first(where: { $0.id == m.id })?.notePath, out[t].notePath == was { out[t].notePath = nil }
+            for n in m.notSame where !out[t].notSame.contains(n) { out[t].notSame.append(n) }
+            out[t].lastSeen = max(out[t].lastSeen, m.lastSeen)
+        }
+        let ids = Set(out.map(\.id))
+        for i in out.indices { let me = out[i].id; out[i].notSame.removeAll { !ids.contains($0) || $0 == me } }
+        return out
     }
 
     public func people() -> [Person] { records }
@@ -69,17 +114,24 @@ public actor PersonRegistry {
     // MARK: seeding from the notes
 
     /// One person per existing People note, once: a note already owned by someone is left alone; a note whose
-    /// title resolves to a person without a note becomes theirs; any other note starts a new person. Notes that
-    /// vanished (renamed or deleted by the brain or the user) release their person's path so a new title can claim it.
+    /// title is a spelling of a person without a note becomes theirs, exact spellings before same-key ones (so
+    /// "Kanika Pandey.md" goes to the Kanika Pandey on file even when "Kanika Pandey Loadmill.md" sorts first);
+    /// any other note starts a new person. Notes that vanished (renamed or deleted by the brain or the user)
+    /// release their person's path so a new title can claim it — but only when a People folder was listed at
+    /// all: a listing that failed on one unreadable file arrives empty, and that must not strip every note path.
     public func seed(from folders: [KnowledgeFolder]) {
+        guard let peopleFolder = folders.first(where: { $0.name == "People" }) else { return }
         let present = Set(folders.flatMap { $0.notes.map(\.relativePath) })
         for i in records.indices where records[i].notePath.map({ !present.contains($0) }) ?? false { records[i].notePath = nil }
-        guard let peopleFolder = folders.first(where: { $0.name == "People" }) else { return }
-        for note in peopleFolder.notes.sorted(by: { $0.relativePath < $1.relativePath }) {
+        let notes = peopleFolder.notes.sorted(by: { $0.relativePath < $1.relativePath })
+        for note in notes where !records.contains(where: { $0.notePath == note.relativePath }) {
+            if let i = exactIndex(label: note.title), records[i].notePath == nil { records[i].notePath = note.relativePath }
+        }
+        for note in notes {
             if records.contains(where: { $0.notePath == note.relativePath }) { continue }
             if let id = resolve(label: note.title, handle: nil), let i = index(id), records[i].notePath == nil {
                 records[i].notePath = note.relativePath
-                learn(label: note.title, at: i)
+                Self.learn(label: note.title, into: &records[i])
                 continue
             }
             records.append(Person(id: Self.newID(), name: PersonKey.displayName(note.title), aliases: [note.title], notePath: note.relativePath, firstSeen: now(), lastSeen: now()))
@@ -88,51 +140,84 @@ public actor PersonRegistry {
 
     // MARK: resolving and registering
 
-    /// Who a label names: the handle decides when known; then any spelling with the same key; then a first
-    /// name alone, but only when exactly one person carries it — two Arjuns and the answer is nobody.
+    /// Who a label names: the handle decides when known; then the one person with a spelling of the same key;
+    /// when two people share the key ("Kanika Pandey" and "Kanika Pandey Loadmill", kept apart by the user or
+    /// not yet merged) the one spelled exactly like the label, and nobody when neither is — never the first on
+    /// file; then a first name alone, but only when exactly one person carries it — two Arjuns and the answer is nobody.
     public func resolve(label: String, handle: String?) -> String? { Self.resolve(label: label, handle: handle, among: records) }
     /// The same rule over a roster handed out by `people()`, for callers that hold the list rather than the registry (the brain's file tools).
     public nonisolated static func resolve(label: String, handle: String?, among records: [Person]) -> String? {
         if let h = handle, !h.isEmpty, let p = records.first(where: { $0.handles.contains(h) }) { return p.id }
         let key = PersonKey.normalise(label)
         guard !key.isEmpty else { return nil }
-        if let p = records.first(where: { $0.keys.contains(key) }) { return p.id }
+        let byKey = records.filter { $0.keys.contains(key) }
+        if byKey.count == 1 { return byKey[0].id }
+        if byKey.count > 1 { return Self.exactIndex(label: label, among: byKey).map { byKey[$0].id } }
         guard !key.contains(" ") else { return nil }
         let byFirstName = records.filter { $0.firstWords.contains(key) }
         return byFirstName.count == 1 ? byFirstName[0].id : nil
     }
 
     /// The person for a label, created when unknown. The label is learned as an alias and the handle as theirs.
+    /// A label that could be either of two people sharing its key, and spells neither exactly, is nobody's to
+    /// learn: nothing is attached (a handle attached by a guess would route every later ask to the wrong note,
+    /// and no "keep separate" could undo it) and no third record is opened; the likelier of the two is returned.
     @discardableResult
     public func register(label: String, handle: String?) -> String {
-        let id = resolve(label: label, handle: handle) ?? {
-            let p = Person(id: Self.newID(), name: PersonKey.displayName(label), aliases: [], firstSeen: now(), lastSeen: now())
-            records.append(p); return p.id
-        }()
-        let i = index(id)!
-        learn(label: label, at: i)
-        if let h = handle, !h.isEmpty, !records[i].handles.contains(h) { records[i].handles.append(h) }
-        records[i].lastSeen = now()
-        return id
+        if let id = resolve(label: label, handle: handle) {
+            let i = index(id)!
+            Self.learn(label: label, into: &records[i])
+            if let h = handle, !h.isEmpty, !records[i].handles.contains(h) { records[i].handles.append(h) }
+            records[i].lastSeen = now()
+            return id
+        }
+        let key = PersonKey.normalise(label), shared = records.filter { $0.keys.contains(key) }
+        if shared.count > 1 { return shared.dropFirst().reduce(shared[0]) { Self.keepFirst($0, $1).0 }.id }
+        var p = Person(id: Self.newID(), name: PersonKey.displayName(label), aliases: [], firstSeen: now(), lastSeen: now())
+        Self.learn(label: label, into: &p)
+        if let h = handle, !h.isEmpty { p.handles.append(h) }
+        records.append(p)
+        return p.id
     }
 
-    /// A new spelling joins the aliases; a fuller name than the one on file ("Kanika Pandey" after "Kanika") becomes the name.
-    private func learn(label: String, at i: Int) {
+    /// A new spelling joins the aliases — every spelling a source used, the name's own included, so an exact
+    /// match can tell "Arjun Mehta" from the "Arjun Mehta (Landlord)" whose shown name is the same; a fuller
+    /// name than the one on file ("Kanika Pandey" after "Kanika") becomes the name.
+    private static func learn(label: String, into p: inout Person) {
         let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        if trimmed != records[i].name, !records[i].aliases.contains(trimmed) { records[i].aliases.append(trimmed) }
+        if !p.aliases.contains(trimmed) { p.aliases.append(trimmed) }
         let shown = PersonKey.displayName(trimmed)
-        if !PersonKey.normalise(records[i].name).contains(" "), PersonKey.normalise(shown).contains(" ") { records[i].name = shown }
+        if !PersonKey.normalise(p.name).contains(" "), PersonKey.normalise(shown).contains(" ") { p.name = shown }
+    }
+
+    /// The one record that was seen spelled as the label (case and surrounding space aside), or failing that the
+    /// one whose shown name is the label; nil when none or several are — "Kanika Pandey" spelled by two records
+    /// decides nothing.
+    private func exactIndex(label: String) -> Int? { Self.exactIndex(label: label, among: records) }
+    private static func exactIndex(label: String, among pool: [Person]) -> Int? {
+        for spellings in [{ (p: Person) in p.aliases }, { (p: Person) in [p.name] }] {
+            let hits = pool.indices.filter { i in spellings(pool[i]).contains { spellsAlike($0, label) } }
+            if hits.count == 1 { return hits[0] }
+            if hits.count > 1 { return nil }
+        }
+        return nil
+    }
+    static func spellsAlike(_ a: String, _ b: String) -> Bool {
+        a.trimmingCharacters(in: .whitespacesAndNewlines).caseInsensitiveCompare(b.trimmingCharacters(in: .whitespacesAndNewlines)) == .orderedSame
     }
 
     public func notePath(for id: String) -> String? { person(id)?.notePath }
     public func setNotePath(_ path: String?, for id: String) { if let i = index(id) { records[i].notePath = path } }
 
-    /// The note for a label: the registry's answer first; otherwise a title with exactly the same key.
+    /// The note for a label: the registry's answer first; otherwise the one title with exactly the same key, or
+    /// among several the one that is the label itself — none of them when the label spells neither.
     /// A first name alone never claims a note by title — that is how "Arjun" leaked into "Arjun Mehta".
     public func notePath(forLabel label: String, handle: String?, amongNotes notes: [Note]) -> String? {
         if let id = resolve(label: label, handle: handle), let p = notePath(for: id) { return p }
-        return notes.first { PersonKey.sameKey($0.title, label) }?.relativePath
+        let same = notes.filter { PersonKey.sameKey($0.title, label) }
+        if same.count == 1 { return same[0].relativePath }
+        return same.first { Self.spellsAlike($0.title, label) }?.relativePath
     }
 
     // MARK: merging and keeping apart
@@ -141,7 +226,14 @@ public actor PersonRegistry {
     /// dropped one's when they had none), and the dropped person is gone from every `notSame` list too.
     @discardableResult
     public func merge(keep: String, drop: String) -> Person? {
-        guard keep != drop, let k = index(keep), let d = index(drop) else { return person(keep) }
+        guard keep != drop, index(keep) != nil, index(drop) != nil else { return person(keep) }
+        Self.merge(keep: keep, drop: drop, in: &records)
+        mergesSinceLoad.append((keep, drop))
+        return person(keep)
+    }
+
+    static func merge(keep: String, drop: String, in records: inout [Person]) {
+        guard keep != drop, let k = records.firstIndex(where: { $0.id == keep }), let d = records.firstIndex(where: { $0.id == drop }) else { return }
         let dropped = records[d]
         for a in [dropped.name] + dropped.aliases where a != records[k].name && !records[k].aliases.contains(a) { records[k].aliases.append(a) }
         for h in dropped.handles where !records[k].handles.contains(h) { records[k].handles.append(h) }
@@ -150,7 +242,6 @@ public actor PersonRegistry {
         records[k].lastSeen = max(records[k].lastSeen, dropped.lastSeen)
         records.remove(at: d)
         for i in records.indices { records[i].notSame.removeAll { $0 == drop } }
-        return person(keep)
     }
 
     public func keepSeparate(_ a: String, _ b: String) {
@@ -200,13 +291,29 @@ public actor PersonRegistry {
 
 /// The text edits a merge makes to the notes, pure so they can be checked without a vault.
 public enum PersonNotes {
-    /// The kept note with the dropped one's body folded in under its own heading; the dropped title line is not repeated.
-    public static func appendMerged(into keptBody: String, droppedBody: String, droppedName: String, date: Date) -> String {
-        let lines = droppedBody.split(separator: "\n", omittingEmptySubsequences: false)
+    /// The kept note with the dropped one's body folded in under its own heading; the dropped title line is not
+    /// repeated, and neither is any block between the given markers — the status block Brownie keeps is rebuilt
+    /// in the kept note's own block on the next run, and a second copy under "Merged from" would never be updated again.
+    public static func appendMerged(into keptBody: String, droppedBody: String, droppedName: String, date: Date, stripping blocks: [(open: String, close: String)] = []) -> String {
+        let lines = removingBlocks(droppedBody, blocks).split(separator: "\n", omittingEmptySubsequences: false)
         let body = (lines.first?.hasPrefix("# ") == true ? lines.dropFirst() : lines[...]).joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "d MMM yyyy"
         let head = "## Merged from \(droppedName) (\(f.string(from: date)))"
         return keptBody.trimmingCharacters(in: .whitespacesAndNewlines) + "\n\n" + head + "\n" + (body.isEmpty ? "_Nothing else was written there._" : body) + "\n"
+    }
+
+    /// The text without every span from an opening marker to its closing one (and the line break after it); an
+    /// opener with no closer after it is left alone.
+    static func removingBlocks(_ text: String, _ blocks: [(open: String, close: String)]) -> String {
+        var out = text
+        for b in blocks {
+            while let s = out.range(of: b.open), let e = out.range(of: b.close, range: s.upperBound..<out.endIndex) {
+                var end = e.upperBound
+                if end < out.endIndex, out[end] == "\n" { end = out.index(after: end) }
+                out.removeSubrange(s.lowerBound..<end)
+            }
+        }
+        return out
     }
 
     /// `[[Old]]` and `[[Old|shown]]` become links to the kept note; other text is untouched. Nil when nothing changed.
@@ -216,5 +323,23 @@ public enum PersonNotes {
         out = out.replacingOccurrences(of: "[[\(old)]]", with: "[[\(new)]]")
         out = out.replacingOccurrences(of: "[[\(old)|", with: "[[\(new)|")
         return out == text ? nil : out
+    }
+}
+
+// MARK: - a merge renames the ledgers' rows
+
+/// `person` is fixed at creation, so a loop or ask under the kept name is rebuilt around it — every other field
+/// carried across, `lapsedAt` and `closedBy` included: a let-go ask that lost its lapse date would be open again.
+public extension Loop {
+    func renamed(to person: String) -> Loop {
+        var n = Loop(id: id, direction: direction, person: person, what: what, quote: quote, sourceLabel: sourceLabel, due: due, dueDate: dueDate, status: status,
+                     openedAt: openedAt, closedAt: closedAt, closedHow: closedHow, closedBy: closedBy, lapsedAt: lapsedAt, firedCardIDs: firedCardIDs, cameBackCount: cameBackCount)
+        n.nudgedForDue = nudgedForDue; n.owner = owner
+        return n
+    }
+}
+public extension Ask {
+    func renamed(to person: String) -> Ask {
+        Ask(id: id, person: person, bucket: bucket, askedAt: askedAt, question: question, answeredAt: answeredAt, reply: reply, addressed: addressed, handle: handle, lapsedAt: lapsedAt)
     }
 }

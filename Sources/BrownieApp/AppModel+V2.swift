@@ -655,7 +655,9 @@ extension AppModel {
             await registry.merge(keep: keep, drop: drop)
             if let dp = d.notePath, let dn = try? await knowledge.note(at: dp) {
                 if let kp = k.notePath, let kn = try? await knowledge.note(at: kp) {
-                    let body = PersonNotes.appendMerged(into: kn.body, droppedBody: dn.body, droppedName: d.name, date: Date())
+                    // The dropped note's status block is not carried over: the next run renders the merged person's items into the kept note's own block.
+                    let body = PersonNotes.appendMerged(into: kn.body, droppedBody: dn.body, droppedName: d.name, date: Date(),
+                                                        stripping: [(StatusBlock.open, StatusBlock.close), (StatusBlock.legacyOpen, StatusBlock.legacyClose)])
                     try? await knowledge.save(Note(relativePath: kp, title: kn.title, body: body, sources: Array(Set(kn.sources + dn.sources)).sorted(), updatedAt: Date(), userEdited: true))
                     await rewriteLinks(from: [Self.fileName(dp), dn.title], to: Self.fileName(kp))
                     try? await knowledge.delete(relativePath: dp)
@@ -664,10 +666,10 @@ extension AppModel {
                 // No kept note: the dropped note is now theirs, and the registry already points at it.
             }
             var ls = await LoopLedger.load(store); var changed = false
-            for i in ls.indices where dropKeys.contains(PersonKey.normalise(ls[i].person)) && !PersonKey.sameKey(ls[i].person, k.name) { ls[i] = Self.renamed(ls[i], to: k.name); changed = true }
+            for i in ls.indices where dropKeys.contains(PersonKey.normalise(ls[i].person)) && !PersonKey.sameKey(ls[i].person, k.name) { ls[i] = ls[i].renamed(to: k.name); changed = true }
             if changed { await LoopLedger.save(ls, store) }
             var asks = RunCoordinator.loadAsks(try? await store.value(SettingKey.asks)); changed = false
-            for i in asks.indices where dropKeys.contains(PersonKey.normalise(asks[i].person)) && !PersonKey.sameKey(asks[i].person, k.name) { asks[i] = Self.renamed(asks[i], to: k.name); changed = true }
+            for i in asks.indices where dropKeys.contains(PersonKey.normalise(asks[i].person)) && !PersonKey.sameKey(asks[i].person, k.name) { asks[i] = asks[i].renamed(to: k.name); changed = true }
             if changed { try? await store.setValue(SettingKey.asks, json(asks)) }
             do { try await registry.save() } catch { announcement = "The people registry couldn't be saved: \(error)" }
             await reload()
@@ -699,16 +701,6 @@ extension AppModel {
         }
     }
     static func fileName(_ relativePath: String) -> String { ((relativePath as NSString).lastPathComponent as NSString).deletingPathExtension }
-    /// The same loop under the kept name: `person` is fixed at creation, so the record is rebuilt around it.
-    static func renamed(_ l: Loop, to person: String) -> Loop {
-        var n = Loop(id: l.id, direction: l.direction, person: person, what: l.what, quote: l.quote, sourceLabel: l.sourceLabel, due: l.due, dueDate: l.dueDate, status: l.status,
-                     openedAt: l.openedAt, closedAt: l.closedAt, closedHow: l.closedHow, firedCardIDs: l.firedCardIDs, cameBackCount: l.cameBackCount)
-        n.nudgedForDue = l.nudgedForDue; n.owner = l.owner
-        return n
-    }
-    static func renamed(_ a: Ask, to person: String) -> Ask {
-        Ask(id: a.id, person: person, bucket: a.bucket, askedAt: a.askedAt, question: a.question, answeredAt: a.answeredAt, reply: a.reply, addressed: a.addressed, handle: a.handle)
-    }
 }
 
 extension Notification.Name {
