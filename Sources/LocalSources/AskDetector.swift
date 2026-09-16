@@ -24,7 +24,7 @@ public enum AskDetector {
             // a burst of their messages with a question in the middle: the reply that counts is the first "Me" after the burst
             let reply = recent[(i + 1)...].first { $0.isMe }
             let id = "ask-" + String("\(bucket.rawValue)|\(m.rowID)".utf8.reduce(into: UInt64(1469598103934665603)) { $0 = ($0 ^ UInt64($1)) &* 1099511628211 }, radix: 16)
-            out.append(Ask(id: id, person: person, bucket: bucket, askedAt: m.date, question: String(m.text.prefix(200)), answeredAt: reply?.date))
+            out.append(Ask(id: id, person: person, bucket: bucket, askedAt: m.date, question: String(m.text.prefix(200)), answeredAt: reply?.date, reply: reply.map { String($0.text.prefix(300)) }))
         }
         return out
     }

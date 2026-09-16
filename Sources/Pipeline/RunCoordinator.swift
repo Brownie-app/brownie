@@ -93,6 +93,8 @@ public actor RunCoordinator {
                         skipped.append("\(source.descriptor.name): couldn't be read (\(Self.short(error)))")
                     }
                 }
+                // Asks in direct chats, judged on-device while the reader is up: did the user's reply actually answer?
+                await Self.scanAsks(deps: deps, store: store, reader: reader, log: log)
                 await reader.unload()
             }
 
@@ -126,16 +128,9 @@ public actor RunCoordinator {
                 let cal = await deps.calendarText()
                 deps.stage("Judge what matters", "\(recent.count) summaries from the last 7 days\(cal == nil ? "" : ", the calendar for 8 days"), \(openLoops.count) open loops")
                 let household = Self.loadHousehold(try await store.value(SettingKey.household))
-                // Asks: read from the direct chats themselves, so a reply the user sent counts the same day.
-                var asks = Self.loadAsks(try await store.value(SettingKey.asks))
-                var found: [Ask] = []
-                for source in deps.sources {
-                    guard let scanner = source as? AskScanning, await source.availability() == .available else { continue }
-                    let enabled = try await enabledBuckets(for: source, store: store)
-                    if let a = try? await scanner.recentAsks(enabled: enabled, since: deps.clock.now().addingTimeInterval(-3 * 86400)) { found += a }
-                }
-                asks = AskLedger.merge(existing: asks, found: found, now: deps.clock.now())
-                try await store.setValue(SettingKey.asks, String(data: JSONEncoder().encode(asks), encoding: .utf8))
+                // Asks were scanned (and judged on-device) in the read phase; without a reader they are scanned here, unjudged.
+                if deps.reader == nil { await Self.scanAsks(deps: deps, store: store, reader: nil, log: log) }
+                let asks = Self.loadAsks(try await store.value(SettingKey.asks))
                 let settled = AskLedger.closures(loops: openLoops, asks: asks, now: deps.clock.now())
                 if settled != openLoops { var all = await LoopLedger.load(store); for l in settled where l.status == .closed { if let i = all.firstIndex(where: { $0.id == l.id }) { all[i] = l } }; await LoopLedger.save(all, store); log.info("\(settled.filter { $0.status == .closed }.count) loop(s) closed by the user's own replies") }
                 let openNow = settled.filter { $0.status == .open }
@@ -302,6 +297,25 @@ public actor RunCoordinator {
         return Set(ids.map(BucketID.init))
     }
 
+    /// Direct chats → asks and the user's replies → judged (rules, then the on-device reader) → the local ledger.
+    static func scanAsks(deps: Dependencies, store: any RunStore, reader: (any LocalModel)?, log: Log) async {
+        var found: [Ask] = []
+        for source in deps.sources {
+            guard let scanner = source as? AskScanning, await source.availability() == .available else { continue }
+            let enabled = try? await Self.enabledBucketsStatic(for: source, store: store)
+            if let a = try? await scanner.recentAsks(enabled: enabled ?? nil, since: deps.clock.now().addingTimeInterval(-3 * 86400)) { found += a }
+        }
+        let merged = AskLedger.merge(existing: loadAsks(try? await store.value(SettingKey.asks)), found: found, now: deps.clock.now())
+        let judged = await AskAnswering.judge(merged, reader: reader)
+        let unsure = judged.filter { $0.answeredAt != nil && $0.addressed == nil }.count
+        log.info("asks: \(judged.count) tracked · \(judged.filter(\.isOpen).count) open · \(judged.filter { $0.addressed == false }.count) replied-but-not-answered · \(unsure) not judged")
+        try? await store.setValue(SettingKey.asks, String(data: JSONEncoder().encode(judged), encoding: .utf8))
+    }
+    static func enabledBucketsStatic(for source: any Source, store: any RunStore) async throws -> Set<BucketID>? {
+        guard source.descriptor.supportsPerBucketOptIn else { return nil }
+        guard let json = try await store.value(SettingKey.enabledBuckets(source.id)), let d = json.data(using: .utf8), let ids = try? JSONDecoder().decode([String].self, from: d) else { return [] }
+        return Set(ids.map(BucketID.init))
+    }
     public static func loadAsks(_ json: String?) -> [Ask] {
         guard let j = json, let d = j.data(using: .utf8) else { return [] }
         return (try? JSONDecoder().decode([Ask].self, from: d)) ?? []

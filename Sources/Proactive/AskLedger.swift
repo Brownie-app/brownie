@@ -8,7 +8,12 @@ public enum AskLedger {
     /// New scans replace what they cover (an answer can arrive later); old asks fall off after the horizon.
     public static func merge(existing: [Ask], found: [Ask], now: Date) -> [Ask] {
         var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
-        for f in found { byID[f.id] = f }
+        for f in found {
+            // a fresh scan brings the reply; the judgement already made about that same reply is kept
+            var f = f
+            if let old = byID[f.id], old.answeredAt == f.answeredAt, old.reply == f.reply { f.addressed = old.addressed }
+            byID[f.id] = f
+        }
         return byID.values.filter { now.timeIntervalSince($0.askedAt) < horizon }.sorted { $0.askedAt > $1.askedAt }
     }
 
@@ -17,7 +22,7 @@ public enum AskLedger {
     public static func closures(loops: [Loop], asks: [Ask], now: Date) -> [Loop] {
         loops.map { l in
             guard l.status == .open, l.direction == .mine, answering.contains(where: { l.what.lowercased().contains($0) }) else { return l }
-            guard let a = asks.first(where: { $0.answeredAt != nil && samePerson($0.person, l.person) && $0.askedAt <= l.openedAt && l.openedAt <= $0.answeredAt! }) else { return l }
+            guard let a = asks.first(where: { $0.isAnswered && samePerson($0.person, l.person) && $0.askedAt <= l.openedAt && l.openedAt <= $0.answeredAt! }) else { return l }
             var l = l; l.status = .closed; l.closedAt = a.answeredAt; l.closedHow = "you replied \(when(a.answeredAt!, now: now))"
             return l
         }
@@ -25,11 +30,14 @@ public enum AskLedger {
 
     /// What the judge is told — dates only, never the words.
     public static func judgeLines(_ asks: [Ask], now: Date) -> String {
-        let open = asks.filter(\.isOpen), answered = asks.filter { !$0.isOpen }
+        let open = asks.filter(\.isOpen), answered = asks.filter(\.isAnswered)
         guard !asks.isEmpty else { return "" }
         let f = DateFormatter(); f.dateFormat = "d MMM HH:mm"
         var lines: [String] = []
-        for a in open.prefix(20) { lines.append("- \(a.person) asked the user something on \(f.string(from: a.askedAt)) · NO REPLY YET (\(when(a.askedAt, now: now)))") }
+        for a in open.prefix(20) {
+            if let r = a.answeredAt { lines.append("- \(a.person) asked the user something on \(f.string(from: a.askedAt)) · the user wrote at \(f.string(from: r)) but NOT about it — still unanswered (\(when(a.askedAt, now: now)))") }
+            else { lines.append("- \(a.person) asked the user something on \(f.string(from: a.askedAt)) · NO REPLY YET (\(when(a.askedAt, now: now)))") }
+        }
         for a in answered.prefix(20) { lines.append("- \(a.person) asked the user something on \(f.string(from: a.askedAt)) · the user replied \(f.string(from: a.answeredAt!)) — done") }
         return "ASKS IN DIRECT CHATS (read from the chats themselves; a reply means it is answered — do not make an item to answer or update that person again unless they wrote after the reply):\n" + lines.joined(separator: "\n") + "\n"
     }
@@ -58,7 +66,9 @@ public enum BetweenYou {
         var lines: [String] = []
         for a in theirAsks {
             let q = a.question.replacingOccurrences(of: "\n", with: " ")
-            lines.append(a.answeredAt.map { "- ✅ \(f.string(from: a.askedAt)) they asked: “\(q)” — you replied \(t.string(from: $0))" } ?? "- ⏳ \(f.string(from: a.askedAt)) they asked: “\(q)” — **no reply yet** (\(AskLedger.when(a.askedAt, now: now)))")
+            if let r = a.answeredAt, a.addressed == false { lines.append("- ⏳ \(f.string(from: a.askedAt)) they asked: “\(q)” — you wrote at \(t.string(from: r)) but **not about this**; still open") }
+            else if let r = a.answeredAt { lines.append("- ✅ \(f.string(from: a.askedAt)) they asked: “\(q)” — you replied \(t.string(from: r))\(a.addressed == nil ? " _(not checked)_" : "")") }
+            else { lines.append("- ⏳ \(f.string(from: a.askedAt)) they asked: “\(q)” — **no reply yet** (\(AskLedger.when(a.askedAt, now: now)))") }
         }
         for l in theirLoops.sorted(by: { ($0.status == .open ? 0 : 1, $0.openedAt) < ($1.status == .open ? 0 : 1, $1.openedAt) }) {
             let who = l.direction == .mine ? "you promised" : "they promised"

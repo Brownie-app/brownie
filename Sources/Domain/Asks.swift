@@ -10,10 +10,17 @@ public struct Ask: Codable, Sendable, Equatable, Identifiable {
     /// The question itself, for the person's note. Local only.
     public let question: String
     public var answeredAt: Date?
-    public init(id: String, person: String, bucket: BucketID, askedAt: Date, question: String, answeredAt: Date? = nil) {
-        self.id = id; self.person = person; self.bucket = bucket; self.askedAt = askedAt; self.question = question; self.answeredAt = answeredAt
+    /// The user's first message after the question. Local only.
+    public var reply: String?
+    /// Did that message actually answer the question? nil = not yet judged.
+    public var addressed: Bool?
+    public init(id: String, person: String, bucket: BucketID, askedAt: Date, question: String, answeredAt: Date? = nil, reply: String? = nil, addressed: Bool? = nil) {
+        self.id = id; self.person = person; self.bucket = bucket; self.askedAt = askedAt; self.question = question; self.answeredAt = answeredAt; self.reply = reply; self.addressed = addressed
     }
-    public var isOpen: Bool { answeredAt == nil }
+    /// Still waiting: no reply at all, or a reply that was about something else.
+    public var isOpen: Bool { answeredAt == nil || addressed == false }
+    /// Settled: a reply that addressed it.
+    public var isAnswered: Bool { answeredAt != nil && addressed != false }
 }
 
 /// A chat source that can tell what was asked of the user lately.
