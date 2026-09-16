@@ -47,6 +47,16 @@ import Platform
         let asks = try JSONDecoder().decode([MCPAsk].self, from: Data((log ?? "[]").utf8))
         #expect(asks.first?.tool == "who_is"); #expect(asks.first?.client == "Test"); #expect(asks.first?.result.contains("People/Karan.md") ?? false)
     }
+    @Test func todayIsNeverSearchedOrRead() async throws {
+        let (s, store, root) = try await makeServer()
+        try await store.setValue(SettingKey.mcpEnabled, "true")
+        try "# Today\n- [ ] **Pay Karan** — villa share <!-- card:a -->\n".write(to: root.appendingPathComponent("Today.md"), atomically: true, encoding: .utf8)
+        let found = await call(s, ["jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": ["name": "search_notes", "arguments": ["query": "villa share"]]])
+        let text = (((found?["result"] as? [String: Any])?["content"] as? [[String: Any]])?.first?["text"] as? String) ?? ""
+        #expect(text.contains("People/Karan.md") && !text.contains("Today.md"))
+        let read = await call(s, ["jsonrpc": "2.0", "id": 8, "method": "tools/call", "params": ["name": "read_note", "arguments": ["path": "Today.md"]]])
+        #expect((((read?["result"] as? [String: Any])?["content"] as? [[String: Any]])?.first?["text"] as? String) == "No note at Today.md.")
+    }
     @Test func testUnknownMethodIsAnError() async throws {
         let (s, _, _) = try await makeServer()
         let r = await call(s, ["jsonrpc": "2.0", "id": 5, "method": "resources/list"])

@@ -90,7 +90,9 @@ public actor PersonRegistry {
 
     /// Who a label names: the handle decides when known; then any spelling with the same key; then a first
     /// name alone, but only when exactly one person carries it — two Arjuns and the answer is nobody.
-    public func resolve(label: String, handle: String?) -> String? {
+    public func resolve(label: String, handle: String?) -> String? { Self.resolve(label: label, handle: handle, among: records) }
+    /// The same rule over a roster handed out by `people()`, for callers that hold the list rather than the registry (the brain's file tools).
+    public nonisolated static func resolve(label: String, handle: String?, among records: [Person]) -> String? {
         if let h = handle, !h.isEmpty, let p = records.first(where: { $0.handles.contains(h) }) { return p.id }
         let key = PersonKey.normalise(label)
         guard !key.isEmpty else { return nil }

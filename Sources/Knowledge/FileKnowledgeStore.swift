@@ -4,14 +4,19 @@ import Platform
 import Support
 
 /// The knowledge base is plain Markdown on disk. This store reads/writes those files and keeps an
-/// FTS5 index beside the app store. Front-matter: `sources:`, `updated:`, `user_edited:`.
+/// FTS5 index beside the app store. Every note carries the code-owned front-matter (`NoteMeta`); the
+/// store is where it is read, where an outside edit is noticed (the body no longer hashes to what
+/// Brownie last wrote) and where it is written back on the next save.
 public actor FileKnowledgeStore: KnowledgeStore {
     public nonisolated let rootURL: URL
     private let index: SQLite
     private let log = Log("knowledge")
+    private let now: @Sendable () -> Date
+    private let timeZone: TimeZone
 
-    public init(root: URL, indexPath: String) throws {
+    public init(root: URL, indexPath: String, now: @escaping @Sendable () -> Date = { Date() }, timeZone: TimeZone = .current) throws {
         rootURL = root
+        self.now = now; self.timeZone = timeZone
         index = try SQLite(path: indexPath)
         try index.exec("CREATE VIRTUAL TABLE IF NOT EXISTS note_fts USING fts5(path UNINDEXED, title, body, tokenize='porter unicode61')")
         try index.exec("CREATE TABLE IF NOT EXISTS note_meta(path TEXT PRIMARY KEY, mtime REAL NOT NULL)")
@@ -32,7 +37,7 @@ public actor FileKnowledgeStore: KnowledgeStore {
 
     public func note(at relativePath: String) throws -> Note? {
         // Only paths inside the vault: an MCP client or a link can name anything, and ".." must not walk out.
-        guard Self.isInsideVault(relativePath) else { return nil }
+        guard Self.isInsideVault(relativePath), Vault.isNote(relativePath) else { return nil }
         let url = rootURL.appendingPathComponent(relativePath)
         guard url.standardizedFileURL.path.hasPrefix(rootURL.standardizedFileURL.path + "/"), FileManager.default.fileExists(atPath: url.path) else { return nil }
         return try read(url)
@@ -44,10 +49,21 @@ public actor FileKnowledgeStore: KnowledgeStore {
         return !parts.contains { $0 == ".." || $0.hasPrefix(".") || $0.isEmpty }
     }
 
+    /// A save from the app is the user's: the block on disk (its `created`, its unknown keys) is kept, `user_edited`
+    /// becomes true, the hash is the new body's and `updated` moves only when that hash changed.
     public func save(_ note: Note) throws {
         let url = rootURL.appendingPathComponent(note.relativePath)
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try Self.render(note, userEdited: true).write(to: url, atomically: true, encoding: .utf8)
+        let onDisk = (try? String(contentsOf: url, encoding: .utf8)).map { NoteMeta.parse($0, path: note.relativePath) }
+        let today = NoteMeta.day(now(), timeZone)
+        var meta = onDisk?.meta ?? note.meta
+        if meta.created.isEmpty { meta.created = today }
+        meta.sources = note.meta.sources
+        meta.userEdited = true
+        let hash = NoteMeta.hash(note.body)
+        if hash != meta.contentHash || meta.updated.isEmpty { meta.updated = today }
+        meta.contentHash = hash
+        try (meta.render() + note.body).write(to: url, atomically: true, encoding: .utf8)
         try reindex()
     }
 
@@ -78,34 +94,26 @@ public actor FileKnowledgeStore: KnowledgeStore {
 
     nonisolated func relative(_ url: URL) -> String { String(url.standardizedFileURL.path.dropFirst(rootURL.standardizedFileURL.path.count + 1)) }
 
+    /// Every note: Markdown that `Vault.isNote` accepts, so Today.md and hidden files are never knowledge.
     func allFiles() throws -> [URL] {
         guard FileManager.default.fileExists(atPath: rootURL.path) else { return [] }
         let e = FileManager.default.enumerator(at: rootURL, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles])
         var out: [URL] = []
-        for case let u as URL in e ?? FileManager.default.enumerator(atPath: "/dev/null")! where u.pathExtension == "md" { out.append(u) }
+        for case let u as URL in e ?? FileManager.default.enumerator(atPath: "/dev/null")! where Vault.isNote(relative(u)) { out.append(u) }
         return out
     }
 
+    /// The note as the app sees it. `user_edited` is true when the block says so or when the body on disk no longer
+    /// hashes to what Brownie last wrote — an edit in Obsidian, on the phone or from the household counts the same.
     func read(_ url: URL) throws -> Note {
         let raw = try String(contentsOf: url, encoding: .utf8)
-        let (meta, body) = Self.splitFrontMatter(raw)
+        let rel = relative(url)
+        let (parsed, body) = NoteMeta.parse(raw, path: rel)
         let mtime = (try? FileManager.default.attributesOfItem(atPath: url.path)[.modificationDate] as? Date) ?? Date()
         let title = body.split(separator: "\n").first(where: { $0.hasPrefix("# ") }).map { String($0.dropFirst(2)) } ?? url.deletingPathExtension().lastPathComponent
-        return Note(relativePath: relative(url), title: title, body: body, sources: (meta["sources"] ?? "").split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) },
-                    updatedAt: mtime, userEdited: meta["user_edited"] == "true")
-    }
-
-    static func splitFrontMatter(_ s: String) -> ([String: String], String) {
-        guard s.hasPrefix("---\n"), let end = s.range(of: "\n---\n", range: s.index(s.startIndex, offsetBy: 4)..<s.endIndex) else { return ([:], s) }
-        var meta: [String: String] = [:]
-        for line in s[s.index(s.startIndex, offsetBy: 4)..<end.lowerBound].split(separator: "\n") {
-            if let c = line.firstIndex(of: ":") { meta[String(line[..<c]).trimmingCharacters(in: .whitespaces)] = String(line[line.index(after: c)...]).trimmingCharacters(in: .whitespaces) }
-        }
-        return (meta, String(s[end.upperBound...]))
-    }
-
-    static func render(_ n: Note, userEdited: Bool) -> String {
-        "---\nsources: \(n.sources.joined(separator: ", "))\nupdated: \(ISO8601DateFormatter().string(from: Date()))\nuser_edited: \(userEdited)\n---\n" + n.body
+        var meta = parsed ?? NoteMeta(brownie: NoteMeta.kind(forPath: rel), created: "", updated: "")
+        if meta.bodyDiffers(body) { meta.userEdited = true }
+        return Note(relativePath: rel, title: title, body: body, meta: meta, updatedAt: NoteMeta.date(meta.updated, timeZone) ?? mtime)
     }
 
     func reindex() throws {
@@ -128,12 +136,7 @@ public actor FileKnowledgeStore: KnowledgeStore {
 }
 
 enum Fingerprint {
-    static func sha256(_ s: String) -> String {
-        // CryptoKit-free FNV-1a 64 folded twice — good enough for change detection, no extra import.
-        var h1: UInt64 = 0xcbf29ce484222325, h2: UInt64 = 0x84222325cbf29ce4
-        for b in s.utf8 { h1 = (h1 ^ UInt64(b)) &* 0x100000001b3; h2 = (h2 &+ UInt64(b)) &* 0x100000001b3 }
-        return String(format: "%016llx%016llx", h1, h2)
-    }
+    static func sha256(_ s: String) -> String { ContentHash.of(s) }
 }
 
 /// Turns a question into an FTS5 query that finds notes instead of demanding every word:

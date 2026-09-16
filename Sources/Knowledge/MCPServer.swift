@@ -67,12 +67,13 @@ public final class MCPServer {
         switch name {
         case "search_notes":
             let q = a["query"] as? String ?? ""
-            let notes = (try? await knowledge.search(q, limit: 8)) ?? []
+            // The store already leaves Today.md and hidden files out of the index; the filter keeps that true whatever store is behind the server.
+            let notes = ((try? await knowledge.search(q, limit: 8)) ?? []).filter { Vault.isNote($0.relativePath) }
             if notes.isEmpty { return ("No notes match “\(q)”.", "0 notes") }
             return (notes.map { "## \($0.relativePath)\n\($0.body.prefix(400))" }.joined(separator: "\n\n"), "\(notes.count) notes · " + notes.prefix(3).map(\.relativePath).joined(separator: ", "))
         case "read_note":
             let path = a["path"] as? String ?? ""
-            guard let n = try? await knowledge.note(at: path) else { return ("No note at \(path).", "not found") }
+            guard Vault.isNote(path), let n = try? await knowledge.note(at: path) else { return ("No note at \(path).", "not found") }
             return (n.body, "1 note · \(path)")
         case "who_is":
             let name = a["name"] as? String ?? ""

@@ -15,6 +15,8 @@ public enum QuietCheck {
     /// You wrote to someone this recently → no card asking you to write to them again, unless a date or a came-back says so.
     public static let recentReplyHours = 6.0
 
+    /// `noteUpdated` answers with the day a note's substance last changed (`Note.updatedAt`, from its front-matter's
+    /// `updated`), never the file's mtime — the nightly status-block rewrite and iCloud must not make a note look fresh.
     public static func run(cards: [Card], loops: [Loop], past: [Card], noteUpdated: (String) -> Date?, fileExists: (String) -> Bool, now: Date, staleDays: Int) -> Result {
         var r = Result()
         for c in cards where c.state == .ready {

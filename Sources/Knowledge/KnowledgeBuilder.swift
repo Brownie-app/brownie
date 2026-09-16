@@ -144,10 +144,12 @@ public actor KnowledgeBuilder {
     private func runPart(isBuild: Bool, corpus: String, in staging: URL, onEvent: @escaping @Sendable (AgentEvent) -> Void) async throws -> Usage {
         let system = isBuild ? buildPrompt : updatePrompt
         let input = await header() + "Working directory: the knowledge base root (use relative paths).\n\nSUMMARIES:\n\n" + corpus
+        // One set of tools per part: the roster it checks People/ paths against, the day it stamps, and what it has read.
+        let part = FileTools.Part(root: staging, people: await people(), today: NoteMeta.day(now(), timeZone))
         if let agentic = brain as? AgenticBrain, brain.descriptor.capabilities.contains(.files) {
             let effort: Effort = isBuild ? .high : .medium   // first build thinks hard; nightly merges don't need to
             let ended = FinishBox()
-            let tools = FileTools.make(root: staging).map { tool -> Tool in
+            let tools = FileTools.make(part).map { tool -> Tool in
                 switch tool.name {
                 case "finish":
                     // finish is the last word: its output ends the brain's loop, which then returns normally with
@@ -183,7 +185,8 @@ public actor KnowledgeBuilder {
         let r = try await brain.complete(BrainRequest(system: system + "\n\nYou have no file tools. Reply with JSON {\"files\":[{\"path\":…,\"content\":…}]} containing every file to write or overwrite (full contents).",
                                                      input: "EXISTING FILES:\n\(existing)\n\n" + input, schema: schema, maxOutputTokens: 32_000))
         guard let data = r.jsonData, let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let files = obj["files"] as? [[String: Any]] else { throw BrainError.badResponse("no file map") }
-        for f in files { if let p = f["path"] as? String, let c = f["content"] as? String { _ = try? FileTools.write(root: staging, path: p, content: c) } }
+        // No read step exists here, so the read-first rule is waived; every other rule and the re-attached front-matter still apply.
+        for f in files { if let p = f["path"] as? String, let c = f["content"] as? String { _ = try? FileTools.write(part, path: p, content: c, requireRead: false) } }
         return r.usage
     }
 
@@ -275,25 +278,49 @@ private actor FinishBox {
     func finish() { finished = true }
 }
 
-/// File tools scoped to one directory. Paths are relative; `..` is refused.
+/// File tools scoped to one directory. Paths are relative; `..` is refused. The brain writes prose and code owns the
+/// file: what `read_file` returns is the body with Brownie's front-matter and status block taken out, and what
+/// `write_file` lands is that prose with both put back exactly as they were. A write that would break the vault's
+/// shape — a blind overwrite, an eleventh root folder, a ninth note in a topic folder, a bloated README, a title
+/// that is a period-stamped or near-duplicate copy of another, a second file for a known person — is refused with
+/// one sentence saying what to do instead; the agent loop hands that sentence back as the tool's error.
 enum FileTools {
-    static func make(root: URL) -> [Tool] {
+    static let maxRootFolders = 10, maxNotesPerFolder = 8, readmeWords = 350
+    static let months = "(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)"
+
+    /// One sentence the brain can act on.
+    struct Refusal: Error, CustomStringConvertible, Equatable { let description: String; init(_ s: String) { description = s } }
+
+    /// What one part's tools know: the root, who exists (so `People/` never gets a second file for one person), the
+    /// day, and which notes the brain has read so far — an existing note may only be overwritten after it was read.
+    final class Part: @unchecked Sendable {
+        let root: URL, people: [Person], today: String
+        private let lock = NSLock()
+        private var read = Set<String>()
+        init(root: URL, people: [Person], today: String) { self.root = root; self.people = people; self.today = today }
+        func markRead(_ p: String) { lock.withLock { _ = read.insert(p) } }
+        func hasRead(_ p: String) -> Bool { lock.withLock { read.contains(p) } }
+        func forget(_ p: String) { lock.withLock { _ = read.remove(p) } }
+    }
+
+    static func make(root: URL, people: [Person] = [], today: String = NoteMeta.day(Date(), .current)) -> [Tool] {
+        make(Part(root: root, people: people, today: today))
+    }
+    static func make(_ part: Part) -> [Tool] {
         [
-            Tool(name: "list_dir", description: "List files and folders under a relative path ('' for the root).", parametersSchema: #"{"type":"object","properties":{"path":{"type":"string"}},"required":[]}"#) { data in
-                let p = (arg(data)["path"] as? String) ?? ""
-                return listing(root, sub: p).joined(separator: "\n").ifEmpty("(empty)")
+            Tool(name: "list_dir", description: "List the notes and folders under a relative path ('' for the root).", parametersSchema: #"{"type":"object","properties":{"path":{"type":"string"}},"required":[]}"#) { data in
+                let p = clean((arg(data)["path"] as? String) ?? "")
+                return listing(part.root, sub: p).joined(separator: "\n").ifEmpty("(empty)")
             },
-            Tool(name: "read_file", description: "Read a file at a relative path.", parametersSchema: #"{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}"#) { data in
-                let p = arg(data)["path"] as? String ?? ""
-                let url = try resolve(root, p)
-                return try String(contentsOf: url, encoding: .utf8)
+            Tool(name: "read_file", description: "Read a note's prose at a relative path. Brownie's front-matter and status block are kept out of what you see and put back when you write, so never write them yourself. An existing note must be read before write_file may overwrite it.", parametersSchema: #"{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}"#) { data in
+                try read(part, path: arg(data)["path"] as? String ?? "")
             },
-            Tool(name: "write_file", description: "Create or overwrite a file at a relative path with the full content.", parametersSchema: #"{"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"}},"required":["path","content"]}"#) { data in
+            Tool(name: "write_file", description: "Create or overwrite a note at a relative path with its full prose (no front-matter, no status block). `sources` optionally names the apps the note draws on. Refused, with the reason, when the note was not read first, when it would be the eleventh root folder or the ninth note in a folder other than People/ or Groups/, when README.md would pass 350 words, when the title is period-stamped or differs from an existing note only by case or punctuation, or when it would be a second People/ note for someone who already has one.", parametersSchema: #"{"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"},"sources":{"type":"array","items":{"type":"string"}}},"required":["path","content"]}"#) { data in
                 let a = arg(data)
-                return try write(root: root, path: a["path"] as? String ?? "", content: a["content"] as? String ?? "")
+                return try write(part, path: a["path"] as? String ?? "", content: a["content"] as? String ?? "", sources: a["sources"] as? [String])
             },
-            Tool(name: "delete_file", description: "Delete a file at a relative path.", parametersSchema: #"{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}"#) { data in
-                try FileManager.default.removeItem(at: try resolve(root, arg(data)["path"] as? String ?? "")); return "deleted"
+            Tool(name: "delete_file", description: "Delete a note at a relative path. Nothing under People/ or Groups/ can be deleted.", parametersSchema: #"{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}"#) { data in
+                try delete(part, path: arg(data)["path"] as? String ?? "")
             },
             Tool(name: "finish", description: "Call when every note is written. Give a one-line summary.", parametersSchema: #"{"type":"object","properties":{"summary":{"type":"string"}},"required":["summary"]}"#) { data in
                 "finished: \(arg(data)["summary"] as? String ?? "")"
@@ -303,17 +330,142 @@ enum FileTools {
 
     static func arg(_ d: Data) -> [String: Any] { (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] ?? [:] }
 
+    /// "./People/A.md" and "People/A.md" are one path.
+    static func clean(_ p: String) -> String {
+        var s = p.trimmingCharacters(in: .whitespaces)
+        while s.hasPrefix("./") { s.removeFirst(2) }
+        while s.hasSuffix("/") { s.removeLast() }
+        return s
+    }
+
     static func resolve(_ root: URL, _ p: String) throws -> URL {
-        guard !p.contains(".."), !p.hasPrefix("/") else { throw NSError(domain: "FileTools", code: 1, userInfo: [NSLocalizedDescriptionKey: "path must be relative"]) }
+        guard !p.contains(".."), !p.hasPrefix("/"), !p.hasPrefix("~") else { throw Refusal("paths are relative to the knowledge base root; \(p) is not") }
         return root.appendingPathComponent(p)
     }
 
+    // MARK: read
+
+    static func read(_ part: Part, path: String) throws -> String {
+        let p = clean(path)
+        let url = try resolve(part.root, p)
+        guard p != TodayNote.path else { throw Refusal("Today.md is Brownie's own checklist for the phone, not a note; leave it alone") }
+        guard FileManager.default.fileExists(atPath: url.path) else { throw Refusal("there is no file at \(p); list_dir shows what exists") }
+        let raw = try String(contentsOf: url, encoding: .utf8)
+        part.markRead(p)
+        guard Vault.isNote(p) else { return raw }
+        return NoteStatus.strip(NoteMeta.parse(raw, path: p).body)
+    }
+
+    // MARK: write
+
+    /// The guarded write. `requireRead` is off only for brains without file tools, which have no way to read first.
     @discardableResult
-    static func write(root: URL, path: String, content: String) throws -> String {
-        let url = try resolve(root, path)
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try content.write(to: url, atomically: true, encoding: .utf8)
-        return "wrote \(path) (\(content.utf8.count) bytes)"
+    static func write(_ part: Part, path: String, content: String, sources: [String]? = nil, requireRead: Bool = true) throws -> String {
+        let p = clean(path)
+        let url = try resolve(part.root, p)
+        let fm = FileManager.default
+        guard p != TodayNote.path else { throw Refusal("Today.md is Brownie's own checklist for the phone and is never written by the brain") }
+        guard Vault.isNote(p) else { throw Refusal("notes are Markdown files (.md) in visible folders; \(p) is not one") }
+        let parts = p.split(separator: "/").map(String.init)
+        guard parts.count <= 2 else { throw Refusal("notes live one level deep (Folder/Note.md); \(p) is nested deeper") }
+        let folder = parts.count == 2 ? parts[0] : "", title = String(parts.last!.dropLast(3))
+        // Spelled exactly: the Mac's file system would say "invoices.md" exists when only "Invoices.md" does, and that is a duplicate, not an overwrite.
+        let siblings = notes(in: folder, of: part.root)
+        let exists = siblings.contains(title)
+
+        // One note per subject: a period-stamped title, or one that differs from a neighbour only by case, punctuation or such a suffix, goes into the note that exists.
+        if let bare = periodStripped(title), !exists {
+            let existing = siblings.first { sameTitle($0, bare) || sameTitle($0, title) }.map { notePath(folder, $0) } ?? notePath(folder, bare)
+            throw Refusal("\"\(title)\" is a period-stamped title; keep one note per subject and write the dated section into \(existing) instead")
+        }
+        if !exists, let dup = siblings.first(where: { $0 != title && sameTitle($0, title) }) {
+            throw Refusal("\(p) differs from \(notePath(folder, dup)) only by case, punctuation or a date suffix; write into \(notePath(folder, dup)) instead")
+        }
+        // One file per person, whatever the spelling: the registry says where they are written.
+        let person = folder == "People" ? PersonRegistry.resolve(label: title, handle: nil, among: part.people).flatMap { id in part.people.first { $0.id == id } } : nil
+        if !exists, let person, let np = person.notePath, np != p, fm.fileExists(atPath: part.root.appendingPathComponent(np).path) {
+            throw Refusal("\(person.name) already has a note at \(np); write about them there, not in \(p)")
+        }
+        // The vault's shape: ten root folders, eight notes in any folder but People/ and Groups/.
+        if !exists, !folder.isEmpty, !fm.fileExists(atPath: part.root.appendingPathComponent(folder).path) {
+            let have = rootFolders(of: part.root)
+            if have.count >= maxRootFolders { throw Refusal("the knowledge base already has its \(maxRootFolders) root folders (\(have.joined(separator: ", "))); put this note in one of them instead of creating \(folder)/") }
+        }
+        if !exists, folder != "People", folder != "Groups", siblings.count >= maxNotesPerFolder {
+            throw Refusal("\(folder.isEmpty ? "the root" : folder + "/") already holds \(maxNotesPerFolder) notes (\(siblings.sorted().joined(separator: ", "))); fold this into one of them instead of adding a ninth")
+        }
+        // The portrait stays a portrait.
+        if p == "README.md" {
+            let words = content.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count
+            if words > readmeWords { throw Refusal("README.md would be \(words) words; the portrait stays under \(readmeWords) — write a shorter one") }
+        }
+        // Never a blind overwrite: the brain must have seen the note it replaces in this part.
+        if exists, requireRead, !part.hasRead(p) { throw Refusal("read \(p) before overwriting it") }
+
+        // The brain's prose only — front-matter or a status block it wrote anyway are dropped; code puts the real ones back.
+        let body = NoteStatus.strip(NoteMeta.parse(content, path: p).body)
+        let text: String
+        if exists {
+            let (old, oldBody) = NoteMeta.parse(try String(contentsOf: url, encoding: .utf8), path: p)
+            var meta = old ?? NoteMeta(brownie: NoteMeta.kind(forPath: p), created: part.today, updated: part.today)
+            if meta.created.isEmpty { meta.created = part.today }
+            if meta.bodyDiffers(oldBody) { meta.userEdited = true }   // an outside edit noticed now is remembered
+            if let sources { meta.sources = dedupe(sources) }
+            let hash = NoteMeta.hash(body)
+            if hash != meta.contentHash || meta.updated.isEmpty { meta.updated = part.today }
+            meta.contentHash = hash
+            text = meta.render() + (NoteStatus.extract(from: oldBody).map { NoteStatus.insert($0, into: body) } ?? body)
+        } else {
+            let aliases = person.map { ([$0.name] + $0.aliases).filter { $0 != title } } ?? []
+            text = NoteMeta.fresh(path: p, body: body, today: part.today, id: person?.id, aliases: dedupe(aliases), sources: dedupe(sources ?? [])).render() + body
+        }
+        try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try text.write(to: url, atomically: true, encoding: .utf8)
+        part.markRead(p)
+        return "wrote \(p) (\(body.utf8.count) bytes)"
+    }
+
+    // MARK: delete
+
+    static func delete(_ part: Part, path: String) throws -> String {
+        let p = clean(path)
+        let url = try resolve(part.root, p)
+        guard Vault.isNote(p) else { throw Refusal("only notes can be deleted; \(p) is not one") }
+        if p.hasPrefix("People/") || p.hasPrefix("Groups/") {
+            throw Refusal("notes under People/ and Groups/ are never deleted by the brain; leave \(p) and write in the note that fits, or fold the facts in and leave the file")
+        }
+        guard FileManager.default.fileExists(atPath: url.path) else { throw Refusal("there is no note at \(p)") }
+        try FileManager.default.removeItem(at: url)
+        part.forget(p)
+        return "deleted \(p)"
+    }
+
+    // MARK: titles and shape
+
+    /// "Invoices (Sep–Nov 2026)" → "Invoices", "Goa (2026)" → "Goa"; nil when the title carries no period.
+    static func periodStripped(_ title: String) -> String? {
+        let re = try! NSRegularExpression(pattern: #"\s*\((\#(months)[–-]\w{3} \d{4}|\#(months) \d{4}|\d{4})\)\s*$"#)
+        let r = NSRange(title.startIndex..., in: title)
+        guard let m = re.firstMatch(in: title, range: r), let range = Range(m.range, in: title) else { return nil }
+        let bare = String(title[..<range.lowerBound]).trimmingCharacters(in: .whitespaces)
+        return bare.isEmpty ? nil : bare
+    }
+    /// Case, punctuation and a period suffix fold away; what is left is what a title is.
+    static func titleKey(_ t: String) -> String {
+        let bare = periodStripped(t) ?? t
+        return bare.lowercased().folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil).split(whereSeparator: { !$0.isLetter && !$0.isNumber }).joined(separator: " ")
+    }
+    static func sameTitle(_ a: String, _ b: String) -> Bool { let ka = titleKey(a); return !ka.isEmpty && ka == titleKey(b) }
+    static func notePath(_ folder: String, _ title: String) -> String { folder.isEmpty ? title + ".md" : folder + "/" + title + ".md" }
+    static func dedupe(_ xs: [String]) -> [String] { xs.reduce(into: []) { if !$0.contains($1) { $0.append($1) } } }
+
+    /// The titles of the notes directly in a folder ("" for the root).
+    static func notes(in folder: String, of root: URL) -> [String] {
+        let dir = folder.isEmpty ? root : root.appendingPathComponent(folder)
+        return ((try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []).filter { Vault.isNote(notePath(folder, String($0.dropLast(3)))) && $0.hasSuffix(".md") }.map { String($0.dropLast(3)) }
+    }
+    static func rootFolders(of root: URL) -> [String] {
+        ((try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? []).filter { !$0.hasPrefix(".") && (try? root.appendingPathComponent($0).resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }.sorted()
     }
 
     static func listing(_ root: URL, sub: String = "") -> [String] {
@@ -324,6 +476,7 @@ enum FileTools {
         var out: [String] = []
         for case let u as URL in e {
             let rel = String(u.standardizedFileURL.path.dropFirst(root.path.count + 1))
+            if rel == TodayNote.path { continue }   // Brownie's checklist for the phone is not knowledge
             out.append((try? u.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true ? rel + "/" : rel)
         }
         return out.sorted()
