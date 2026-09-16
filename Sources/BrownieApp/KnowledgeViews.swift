@@ -182,7 +182,7 @@ struct ExcludedView: View {
     func kind(_ r: VerdictReason) -> String { switch r.verdict { case .sensitive: return "Sensitive"; case .drop: return r == .loadFailed || r == .readerFailed || r == .parseFailed ? "Couldn't read" : "Not worth keeping"; case .keep: return "Kept" } }
     func reason(_ r: VerdictReason) -> String {
         switch r { case .modelDrop: return "The reader judged it not vault-worthy"; case .emptySummary: return "Nothing to say about it"; case .parseFailed: return "The reader's reply couldn't be read (dropped, fail-closed)"
-        case .modelSensitive: return "The reader flagged it sensitive"; case .piiBackstop: return "Matched an ID / card / account pattern"; case .loadFailed: return "The item couldn't be opened"; case .readerFailed: return "The reader errored"; case .kept: return "" }
+        case .modelSensitive: return "The reader flagged it sensitive"; case .piiBackstop: return "Matched an ID / card / account pattern"; case .loadFailed: return "The item couldn't be opened"; case .readerFailed: return "The reader errored"; case .badDate: return "Dated years ahead or too far back to be believed"; case .kept: return "" }
     }
 }
 

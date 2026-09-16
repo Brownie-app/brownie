@@ -90,11 +90,12 @@ public struct RecipeExecutor: CardExecutor {
 
 extension RecipeExecutor {
     /// The event's times from the card, or a sensible proposal when none was agreed: the next weekday at 10:00, for an hour.
+    /// A start the brain put years away is treated as no start at all, so the proposal wins over a 2033 event.
     static func eventTimes(startISO: String, endISO: String, now: Date = Date(), calendar: Calendar = .current) -> (Date, Date) {
         let iso = ISO8601DateFormatter(); let isoFrac = ISO8601DateFormatter(); isoFrac.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let local = DateFormatter(); local.calendar = calendar; local.timeZone = calendar.timeZone; local.dateFormat = "yyyy-MM-dd'T'HH:mm"
         func parse(_ t: String) -> Date? { let t = t.trimmingCharacters(in: .whitespaces); return iso.date(from: t) ?? isoFrac.date(from: t) ?? local.date(from: String(t.prefix(16))) }
-        if let s = parse(startISO) {
+        if let s = DateSanity.due(parse(startISO), now: now) {
             let e = parse(endISO).flatMap { $0 > s ? $0 : nil } ?? s.addingTimeInterval(3600)
             return (s, e)
         }

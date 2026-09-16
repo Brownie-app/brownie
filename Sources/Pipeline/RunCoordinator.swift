@@ -69,6 +69,7 @@ public actor RunCoordinator {
                 let triage = try Triage()
                 let ingest = IngestRun(store: store, reader: reader, triage: triage, policy: deps.policy, clock: deps.clock)
                 if !(await reader.isLoaded) { try await reader.load() }
+                var coverage = SourceCoverage.decode(try? await store.value(SettingKey.coverage))
                 for source in deps.sources {
                     if Task.isCancelled { throw CancellationError() }
                     // A source that can't be read is skipped with a reason — it never kills the run.
@@ -85,6 +86,7 @@ public actor RunCoordinator {
                             onEvent(.progress(p))
                         }
                         stats = stats + s
+                        if let c = await ingest.coverage(of: source.id) { coverage = SourceCoverage.merge(coverage, with: c); try? await store.setValue(SettingKey.coverage, SourceCoverage.encode(coverage)) }
                     } catch is CancellationError { throw CancellationError() }
                     catch IngestRun.Failure.cancelled { throw IngestRun.Failure.cancelled }
                     catch IngestRun.Failure.readerStuck { throw IngestRun.Failure.readerStuck }

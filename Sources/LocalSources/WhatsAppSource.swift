@@ -73,7 +73,7 @@ public struct WhatsAppSource: Source {
         return try WALSafeCopy.withCopy(of: Self.database) { db in
             try infos.map { info in
                 let pk = Int64(info.id.rawValue.dropFirst("whatsapp:".count)) ?? 0
-                var msgs = ChatWindowing.sane(try Self.messages(db, session: pk), now: Date())
+                var msgs = try Self.messages(db, session: pk)
                 // First read of a chat: the newest 1,000 messages. Older history rarely makes cards and would cost an hour on a big group.
                 if marks[info.id] == nil, msgs.count > Self.firstReadCap { msgs = Array(msgs.suffix(Self.firstReadCap)) }
                 let chat = ChatInfo(id: info.id.rawValue, name: info.name, isGroup: info.isGroup, memberCount: 0)

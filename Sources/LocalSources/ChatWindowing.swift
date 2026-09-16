@@ -40,6 +40,7 @@ public enum ChatWindowing {
     public static let hardCapBytes = 48 * 1024
 
     static let time: DateFormatter = { let f = DateFormatter(); f.dateFormat = "d MMM HH:mm"; return f }()
+    static let timeWithYear: DateFormatter = { let f = DateFormatter(); f.dateFormat = "d MMM yyyy HH:mm"; return f }()
 
     /// Messages a chat database can hold that no reader should see as "the newest": ones dated in the future.
     /// WhatsApp keeps the odd row stamped years ahead (a scheduled or malformed message); windowed as-is it becomes
@@ -48,14 +49,21 @@ public enum ChatWindowing {
         messages.filter { $0.date <= now.addingTimeInterval(slack) }
     }
 
-    /// Ascending messages → windows (ascending). Every message lands in exactly one window.
-    public static func windows(_ messages: [ChatMessage], chat: ChatInfo) -> [ChatWindow] {
+    /// Ascending messages → windows (ascending). Every believable message lands in exactly one window; the
+    /// future-dated ones are dropped here, so every chat source gets the same gate without remembering to ask.
+    /// Lines carry the year whenever a window's first or last message is from a different year than `now`,
+    /// so the reader never mistakes a 2023 plan for this year's.
+    public static func windows(_ messages: [ChatMessage], chat: ChatInfo, now: Date = Date()) -> [ChatWindow] {
+        let messages = sane(messages, now: now)
+        let thisYear = Calendar.current.component(.year, from: now)
+        func year(_ d: Date) -> Int { Calendar.current.component(.year, from: d) }
         var out: [ChatWindow] = []
         var buf: [ChatMessage] = []
         var bytes = 0
         func flush() {
             guard let f = buf.first, let l = buf.last else { return }
-            let body = buf.map(line).joined(separator: "\n")
+            let withYear = year(f.date) != thisYear || year(l.date) != thisYear
+            let body = buf.map { line($0, withYear: withYear) }.joined(separator: "\n")
             let mine = buf.filter(\.isMe).count
             let header = "Chat: \(chat.name) · \(chat.isGroup ? "GROUP (\(chat.memberCount) members)" : "direct message") · \(buf.count) messages, \(mine) of them sent by Me (the user)."
             out.append(ChatWindow(chat: chat, firstRowID: f.rowID, lastRowID: l.rowID, firstDate: f.date, lastDate: l.date,
@@ -63,7 +71,7 @@ public enum ChatWindowing {
             buf.removeAll(); bytes = 0
         }
         for m in messages {
-            let n = line(m).utf8.count + 1
+            let n = line(m, withYear: year(m.date) != thisYear).utf8.count + 1
             if bytes + n > targetBytes, !buf.isEmpty { flush() }
             buf.append(m); bytes += n
         }
@@ -71,9 +79,9 @@ public enum ChatWindowing {
         return out
     }
 
-    static func line(_ m: ChatMessage) -> String {
+    static func line(_ m: ChatMessage, withYear: Bool = false) -> String {
         let t = m.text.replacingOccurrences(of: "\n", with: " ").prefix(2000)
-        return "[\(time.string(from: m.date))] \(m.isMe ? "Me" : m.sender): \(t)"
+        return "[\((withYear ? timeWithYear : time).string(from: m.date))] \(m.isMe ? "Me" : m.sender): \(t)"
     }
 
     /// Backstop so a prompt can never exceed the model context.

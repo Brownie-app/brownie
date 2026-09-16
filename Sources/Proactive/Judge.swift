@@ -84,13 +84,14 @@ public struct Judge: Sendable {
         """
     }
 
-    /// "2026-09-23" → that day at 9 AM local, so "due Tuesday" sorts before the day is over. Anything else → nil.
+    /// "2026-09-23" → that day at 9 AM local, so "due Tuesday" sorts before the day is over. Anything else → nil,
+    /// and so is a date the brain invented years out or long past: the loop keeps its words ("by Tuesday") but no date.
     static func date(_ iso: String?, clock: Clock) -> Date? {
         guard let iso, iso.count == 10 else { return nil }
         var cal = Calendar(identifier: .gregorian); cal.timeZone = clock.timeZone
         let p = iso.split(separator: "-").compactMap { Int($0) }
         guard p.count == 3 else { return nil }
-        return cal.date(from: DateComponents(year: p[0], month: p[1], day: p[2], hour: 9))
+        return DateSanity.due(cal.date(from: DateComponents(year: p[0], month: p[1], day: p[2], hour: 9)), now: clock.now())
     }
 
     static func now(_ clock: Clock) -> String {
