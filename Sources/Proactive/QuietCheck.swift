@@ -58,7 +58,11 @@ public enum QuietCheck {
 
     static func samePerson(_ a: String?, _ b: String) -> Bool {
         guard let a else { return false }
-        func key(_ s: String) -> String { s.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }).prefix(2).joined(separator: " ") }
+        // "Nitesh (+919540752593)" and "Nitesh" are one person: drop the number, compare the first two words
+        func key(_ s: String) -> String {
+            var t = s; if let r = t.range(of: "(") { t = String(t[..<r.lowerBound]) }
+            return t.lowercased().split(whereSeparator: { !$0.isLetter }).prefix(2).joined(separator: " ")
+        }
         return key(a) == key(b)
     }
     static func ago(_ t: TimeInterval) -> String {
