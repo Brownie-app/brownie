@@ -92,7 +92,7 @@ public final class AXSession {
 
     /// Every element in the window whose label, value or role says these words — the whole tree, not the numbered cap.
     /// A web page has thousands of nodes; the product links Hands wants are deep. Matches are numbered on top of the current snapshot.
-    public func search(_ query: String, limit: Int = 12, maxNodes: Int = 6000, budget: TimeInterval = 2.5) -> [UISnapshot.Element] {
+    public func search(_ query: String, limit: Int = 12, maxNodes: Int = 20000, budget: TimeInterval = 4) -> [UISnapshot.Element] {
         let q = query.lowercased().trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty, let app = NSWorkspace.shared.frontmostApplication else { return [] }
         let axApp = AXUIElementCreateApplication(app.processIdentifier)
@@ -100,26 +100,39 @@ public final class AXSession {
         AXUIElementCopyAttributeValue(axApp, kAXFocusedWindowAttribute as CFString, &winRef)
         let root: AXUIElement = (winRef as! AXUIElement?) ?? axApp
         var out: [UISnapshot.Element] = []
+        var taken: [AXUIElement] = []
         var next = (refs.keys.max() ?? 0) + 1
-        var queue: [(AXUIElement, Int)] = [(root, 0)]
+        // each queued node remembers the nearest link/button above it: a product's title is plain text, the thing to press is the link around it
+        var queue: [(AXUIElement, Int, AXUIElement?)] = [(root, 0, nil)]
         var head = 0, seen = 0
         let started = Date()
         while head < queue.count, seen < maxNodes, out.count < limit, Date().timeIntervalSince(started) < budget {
-            let (el, depth) = queue[head]; head += 1; seen += 1
+            let (el, depth, pressable) = queue[head]; head += 1; seen += 1
             let role = attr(el, kAXRoleAttribute) as? String ?? "?"
             let title = (attr(el, kAXTitleAttribute) as? String) ?? (attr(el, kAXDescriptionAttribute) as? String) ?? (attr(el, kAXPlaceholderValueAttribute) as? String) ?? ""
             var value = ""
             if let v = attr(el, kAXValueAttribute) { value = (v as? String) ?? ((v as? NSNumber).map { $0.stringValue } ?? "") }
             let shortRole = String(role.dropFirst(2))
+            let isPressable = ["AXLink", "AXButton", "AXMenuItem", "AXCheckBox", "AXRadioButton", "AXPopUpButton", "AXRow", "AXCell", "AXTextField", "AXTextArea", "AXComboBox", "AXSearchField"].contains(role)
             if title.lowercased().contains(q) || value.lowercased().contains(q) || shortRole.lowercased() == q {
-                var actionsRef: CFArray?
-                AXUIElementCopyActionNames(el, &actionsRef)
-                let actions = ((actionsRef as? [String]) ?? []).map { $0.replacingOccurrences(of: "AX", with: "") }
-                let e = UISnapshot.Element(id: next, role: shortRole, title: title, value: value, frame: frame(el), actions: actions, depth: depth)
-                refs[next] = el; descs[next] = e; next += 1
-                out.append(e)
+                // plain text inside a link: hand back the link, carrying the text as its label
+                let target = (!isPressable && (role == "AXStaticText" || role == "AXImage") && pressable != nil) ? pressable! : el
+                if !taken.contains(where: { CFEqual($0, target) }) {
+                    taken.append(target)
+                    let tRole = target == el ? shortRole : String((attr(target, kAXRoleAttribute) as? String ?? "AX?").dropFirst(2))
+                    let tTitle = target == el ? title : ((attr(target, kAXTitleAttribute) as? String).flatMap { $0.isEmpty ? nil : $0 } ?? (title.isEmpty ? value : title))
+                    var actionsRef: CFArray?
+                    AXUIElementCopyActionNames(target, &actionsRef)
+                    let actions = ((actionsRef as? [String]) ?? []).map { $0.replacingOccurrences(of: "AX", with: "") }
+                    let e = UISnapshot.Element(id: next, role: tRole, title: tTitle, value: target == el ? value : "", frame: frame(target), actions: actions, depth: depth)
+                    refs[next] = target; descs[next] = e; next += 1
+                    out.append(e)
+                }
             }
-            if depth < 30, let kids = attr(el, kAXChildrenAttribute) as? [AXUIElement] { for k in kids { queue.append((k, depth + 1)) } }
+            if depth < 40, let kids = attr(el, kAXChildrenAttribute) as? [AXUIElement] {
+                let below: AXUIElement? = (role == "AXLink" || role == "AXButton") ? el : pressable
+                for k in kids { queue.append((k, depth + 1, below)) }
+            }
         }
         return out
     }
@@ -131,10 +144,17 @@ public final class AXSession {
         guard let want = descs[id] else { return nil }
         let keep = (refs, descs)
         guard let fresh = snapshot() else { refs = keep.0; descs = keep.1; return nil }
-        let again = Self.rematch(want, in: fresh.elements)
-        let found = again.flatMap { refs[$0.id] }
-        // keep the caller's numbering: the old id now points at the re-found element
+        var found = Self.rematch(want, in: fresh.elements).flatMap { refs[$0.id] }
         refs = keep.0; descs = keep.1
+        if found == nil, !(want.title.isEmpty && want.value.isEmpty) {
+            // deep nodes (a product on a web page) never appear in the shallow snapshot: look for the same words near the same place
+            let words = want.title.isEmpty ? want.value : want.title
+            let hits = search(String(words.prefix(40)), limit: 8)
+            let best = hits.filter { $0.role == want.role }.min(by: { Self.dist($0.frame, want.frame) < Self.dist($1.frame, want.frame) }) ?? hits.first
+            found = best.flatMap { refs[$0.id] }
+            refs = keep.0; descs = keep.1
+        }
+        // keep the caller's numbering: the old id now points at the re-found element
         if let found { refs[id] = found }
         return found
     }

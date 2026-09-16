@@ -212,10 +212,16 @@ public actor Hands {
             return "STOP: “\(session.titleOf(id))” is irreversible; Hands never presses it. Call need_user now."
         }
         let label = session.titleOf(id), role = session.snapshotRole(id)
-        guard session.perform("Press", on: id) else { return "could not press [\(id)] \(role) “\(label)” — it may not be pressable; try click on its frame" }
-        try? await Task.sleep(nanoseconds: 400_000_000)
+        var how = "pressed"
+        if !session.perform("Press", on: id) {
+            // plain text, an image, a card on a web page: no AXPress, so click its middle for real
+            guard let f = session.frame(of: id), f.width > 0, f.height > 0 else { return "could not press [\(id)] \(role) “\(label)” — it isn't on screen any more; find it again" }
+            await MainActor.run { VirtualInput.click(CGPoint(x: f.midX, y: f.midY)) }
+            how = "clicked the middle of"
+        }
+        try? await Task.sleep(nanoseconds: 600_000_000)
         let w = session.snapshot(maxElements: 10)?.window ?? "?"
-        return "pressed [\(id)] \(role) “\(label)” · window now “\(w)”"
+        return "\(how) [\(id)] \(role) “\(label)” · window now “\(w)”"
     }
 
     // MARK: skills
