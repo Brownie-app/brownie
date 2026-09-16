@@ -17,8 +17,11 @@ public enum AskDetector {
     }
 
     /// Asks in one direct chat (ascending messages), each with the user's first reply after it — or, for an ask whose
-    /// first reply was already judged to be about something else (`judged`, by ask id), the user's next message after
-    /// that reply. Until there is one the judged reply stands, so the ask still reads "you wrote, but not about this".
+    /// reply was already judged to be about something else (`judged`, by ask id), the user's newest message after
+    /// that reply, with every user message between the two in the text the judge reads (oldest first, the newest
+    /// `repliesShown` of them), so one night's verdict moves past all of them: an answer buried behind five unrelated
+    /// messages is found the night it is read, not five nights on. Until there is a newer message the judged reply
+    /// stands, with the same text as before, so the ask still reads "you wrote, but not about this" and is not judged again.
     public static func detect(_ messages: [ChatMessage], person: String, bucket: BucketID, since: Date, handle: String? = nil, judged: [String: Date] = [:]) -> [Ask] {
         var out: [Ask] = []
         let recent = messages.filter { $0.date >= since }.sorted { $0.date < $1.date }
@@ -26,10 +29,21 @@ public enum AskDetector {
             let id = "ask-" + String("\(bucket.rawValue)|\(m.rowID)".utf8.reduce(into: UInt64(1469598103934665603)) { $0 = ($0 ^ UInt64($1)) &* 1099511628211 }, radix: 16)
             // a burst of their messages with a question in the middle: the reply that counts is the first "Me" after the burst
             let replies = recent[(i + 1)...].filter(\.isMe)
-            let reply = judged[id].flatMap { j in replies.first { $0.date > j } ?? replies.first { $0.date == j } } ?? replies.first
-            out.append(Ask(id: id, person: person, bucket: bucket, askedAt: m.date, question: String(m.text.prefix(200)), answeredAt: reply?.date, reply: reply.map { String($0.text.prefix(300)) }, handle: handle))
+            let reply = judged[id].flatMap { j in replies.last { $0.date > j } ?? replies.first { $0.date == j } } ?? replies.first
+            out.append(Ask(id: id, person: person, bucket: bucket, askedAt: m.date, question: String(m.text.prefix(200)), answeredAt: reply?.date, reply: reply.map { replyText(replies, upTo: $0) }, handle: handle))
         }
         return out
+    }
+
+    /// How many of the user's messages the judge is shown at once, and the room they share — the judge's prompt cuts at 400.
+    static let repliesShown = 6, replyRoom = 390
+    /// The text an ask's reply carries: the paired message alone, or with the user's messages before it back to the
+    /// question, newest last and each cut to its share of the room. Fixed by the messages up to the paired one, so a
+    /// rescan that pairs the same message yields the same text and the judgement made about it is kept.
+    static func replyText(_ replies: [ChatMessage], upTo reply: ChatMessage) -> String {
+        let shown = Array(replies.prefix { $0.date <= reply.date }.suffix(repliesShown))
+        guard shown.count > 1 else { return String(reply.text.prefix(300)) }
+        return shown.map { String($0.text.prefix(replyRoom / shown.count)) }.joined(separator: "\n")
     }
 }
 

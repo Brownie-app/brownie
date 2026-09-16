@@ -16,6 +16,14 @@ import Domain
         #expect(AskAnswering.quick(question: "Brownie would you like to have a beer", reply: "Hi Nitesh, I'm still checking how to obtain the PostgreSQL URL needed for the first test. I'll share the exact steps once confirmed.") == false)
         #expect(AskAnswering.quick(question: "can you list down all the tasks that you have in pipeline", reply: "Also I think the approach wont work as their network is secure, I will implement the feature you sent") == false)
     }
+    @Test func anAnswerAmongSeveralMessagesIsStillAnAnswer() {
+        // the detector hands the judge the user's last few messages at once, newest last: the answer at the end is found, and six unrelated ones are a no
+        let chatter = ["ha", "see you at the ground", "traffic is mad today", "did you watch the match", "lunch at 1", "running late"]
+        #expect(AskAnswering.quick(question: "can you send the estimates?", reply: (chatter.dropFirst() + ["here are the estimates, sorry for the wait"]).joined(separator: "\n")) == true)
+        #expect(AskAnswering.quick(question: "can you send the estimates?", reply: chatter.joined(separator: "\n")) == false)
+        #expect(AskLedger.scan(existing: [Ask(id: "a", person: "N", bucket: BucketID("w:1"), askedAt: Date(timeIntervalSince1970: 1_758_000_000), question: "q?", answeredAt: Date(timeIntervalSince1970: 1_758_003_600), reply: "ha\nlunch at 1", addressed: false)], now: Date(timeIntervalSince1970: 1_758_010_000)).judgedReplies == ["a": Date(timeIntervalSince1970: 1_758_003_600)], "the newest of them is the reply the next scan moves past")
+    }
+
     @Test func shortUnrelatedRepliesAreLeftToTheReader() {
         #expect(AskAnswering.quick(question: "beer tonight?", reply: "let's see") == nil)
         #expect(AskAnswering.quick(question: "???", reply: "hmm") == nil)

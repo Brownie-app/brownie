@@ -16,7 +16,9 @@ public enum TranscriptPromises {
     static let youCan = try! NSRegularExpression(pattern: #"^(can you|could you|will you|would you|please)\b"#, options: .caseInsensitive)
 
     /// Loops from one transcript summary. `recording` names the file; `date` is when it was recorded. A file stamped
-    /// in the future or absurdly far back still holds real promises, so they are kept but opened as of `now`.
+    /// in the future or absurdly far back still holds real promises, so they are kept but opened as of `now`. Every
+    /// loop is noticed as of `now` too: a recording read months late ("Read further back", an old memo dropped in the
+    /// folder) opens a loop dated by the recording that has its whole term ahead of it, not one born lapsed.
     public static func parse(summary: String, recording: String, date: Date, now: Date) -> [Found] {
         let ns = summary as NSString
         let date = DateSanity.item(date, now: now) ?? now
@@ -44,7 +46,7 @@ public enum TranscriptPromises {
             let what = tidy(quote)
             let f = DateFormatter(); f.dateFormat = "EEE d MMM"
             let loop = Loop(id: "rec-" + stableID(recording, stamp, quote), direction: direction, person: person, what: what, quote: quote,
-                            sourceLabel: "Recording · \(recording) · \(stamp)", due: dueWords(quote), dueDate: nil, status: .open, openedAt: date)
+                            sourceLabel: "Recording · \(recording) · \(stamp)", due: dueWords(quote), dueDate: nil, status: .open, openedAt: date, noticedAt: now)
             out.append(Found(loop: loop, seconds: secondsOf(stamp)))
         }
         return out

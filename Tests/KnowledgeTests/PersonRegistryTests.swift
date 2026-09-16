@@ -226,6 +226,70 @@ import Platform
         #expect(knownPath == "People/Kanika Pandey.md" && knownCount == 2)
     }
 
+    @Test func aKnownPersonWithoutANoteNeverGetsANamesakesNote() async throws {
+        // two Kanikas from two notes, kept separate; the plain one's note is then deleted (or renamed) in Obsidian
+        let v = try Self.vault(); let r = v.registry()
+        let plainNote = Self.note("People/Kanika Pandey.md", "Kanika Pandey"), loadmillNote = Self.note("People/Kanika Pandey Loadmill.md", "Kanika Pandey Loadmill")
+        await r.seed(from: [KnowledgeFolder(name: "People", notes: [plainNote, loadmillNote])])
+        let plain = try #require(await r.people().first { $0.notePath == "People/Kanika Pandey.md" }), loadmill = try #require(await r.people().first { $0.notePath == "People/Kanika Pandey Loadmill.md" })
+        await r.keepSeparate(plain.id, loadmill.id)
+        #expect(await r.register(label: "Kanika Pandey", handle: "whatsapp:+1") == plain.id)
+        await r.seed(from: [KnowledgeFolder(name: "People", notes: [loadmillNote])])
+        let plainPath = await r.notePath(for: plain.id), loadmillPath = await r.notePath(for: loadmill.id)
+        #expect(plainPath == nil && loadmillPath == "People/Kanika Pandey Loadmill.md", "the vanished note is released; the other stays hers")
+        #expect(await r.resolve(label: "Kanika Pandey", handle: "whatsapp:+1") == plain.id)
+        #expect(await r.notePath(forLabel: "Kanika Pandey", handle: "whatsapp:+1", amongNotes: [loadmillNote]) == nil, "her asks and loops go to no note rather than into the note of the person the user keeps apart")
+        #expect(await r.notePath(forLabel: "Kanika Pandey", handle: nil, amongNotes: [loadmillNote]) == nil)
+        #expect(await r.notePath(forLabel: "Kanika Pandey (work)", handle: nil, amongNotes: [loadmillNote]) == nil, "a label that is neither of two who share a key is nobody's, however many of their notes remain")
+        #expect(await r.notePath(forLabel: "Kanika Pandey Loadmill", handle: nil, amongNotes: [loadmillNote]) == "People/Kanika Pandey Loadmill.md")
+        #expect(await r.notePath(forLabel: "Nitesh", handle: nil, amongNotes: [loadmillNote, Self.note("People/Nitesh.md", "Nitesh")]) == "People/Nitesh.md", "a label the registry knows nothing of still finds its own title")
+    }
+
+    @Test func seedReleasesDeadPathsWhenThePeopleFolderHoldsNoNoteAtAll() async throws {
+        // the store lists folders from the notes it read, so a People folder emptied by the user is not listed at all
+        let v = try Self.vault(); let r = v.registry()
+        try v.put("People/Kanika Pandey.md", "# Kanika Pandey\n")
+        await r.seed(from: try await v.kb.folders())
+        let id = try #require(await r.people().first?.id)
+        #expect(await r.notePath(for: id) == "People/Kanika Pandey.md")
+        try FileManager.default.removeItem(at: v.root.appendingPathComponent("People/Kanika Pandey.md"))
+        let listed = try await v.kb.folders()
+        #expect(!listed.contains { $0.name == "People" })
+        await r.seed(from: listed)
+        #expect(await r.notePath(for: id) == nil, "the folder is there and empty: the path is dead, and released")
+        // seeded again after the brain writes her under another spelling, she gets that note instead of a second person
+        try v.put("People/Kanika Pandey Loadmill.md", "# Kanika Pandey Loadmill\n")
+        await r.seed(from: try await v.kb.folders())
+        let claimed = await r.notePath(for: id), count = await r.people().count
+        #expect(claimed == "People/Kanika Pandey Loadmill.md" && count == 1)
+        // the People directory gone altogether releases too; a directory with a note the store could not read does not
+        try FileManager.default.removeItem(at: v.root.appendingPathComponent("People"))
+        await r.seed(from: try await v.kb.folders())
+        #expect(await r.notePath(for: id) == nil)
+        try v.put("People/Kanika Pandey Loadmill.md", "# Kanika Pandey Loadmill\n")
+        await r.seed(from: try await v.kb.folders())
+        try Data([0x23, 0x20, 0x4A, 0xF6, 0x72, 0x67, 0x0A]).write(to: v.root.appendingPathComponent("People/Jorg.md"))
+        await r.seed(from: (try? await v.kb.folders()) ?? [])
+        #expect(await r.notePath(for: id) == "People/Kanika Pandey Loadmill.md", "a failed listing strips nothing")
+    }
+
+    @Test func aMergeRenamesOnlyTheRowsThatWereTheDroppedPersons() async throws {
+        // K "Kanika" from Slack with a note, D "Kanika Pandey" whose note was deleted, T "Kanika Pandey Loadmill" the user keeps apart from D
+        let v = try Self.vault(); let r = v.registry()
+        let all = Self.folders([("People/Kanika.md", "Kanika"), ("People/Kanika Pandey.md", "Kanika Pandey"), ("People/Kanika Pandey Loadmill.md", "Kanika Pandey Loadmill")])
+        await r.seed(from: all)
+        let d = try #require(await r.people().first { $0.notePath == "People/Kanika Pandey.md" }), t = try #require(await r.people().first { $0.notePath == "People/Kanika Pandey Loadmill.md" })
+        await r.keepSeparate(d.id, t.id)
+        await r.seed(from: Self.folders([("People/Kanika.md", "Kanika"), ("People/Kanika Pandey Loadmill.md", "Kanika Pandey Loadmill")]))
+        let before = await r.people()
+        #expect(PersonRegistry.belonged(label: "Kanika Pandey", handle: nil, to: d.id, among: before), "the dropped person's own spelling")
+        #expect(!PersonRegistry.belonged(label: "Kanika Pandey Loadmill", handle: nil, to: d.id, among: before), "the same key, but the kept-apart person's rows: left alone")
+        #expect(!PersonRegistry.belonged(label: "Kanika", handle: nil, to: d.id, among: before), "the kept person's own rows")
+        #expect(!PersonRegistry.belonged(label: "Kanika Pandey (work)", handle: nil, to: d.id, among: before), "a spelling that is neither resolves to nobody")
+        _ = await r.register(label: "Kanika Pandey", handle: "whatsapp:+2")
+        #expect(PersonRegistry.belonged(label: "K. Pandey", handle: "whatsapp:+2", to: d.id, among: await r.people()), "a handle finds the dropped person whatever the chat is called")
+    }
+
     @Test func seedLeavesEveryNotePathAloneWhenNoPeopleFolderWasListed() async throws {
         let v = try Self.vault(); let r = v.registry()
         try v.put("People/Nitesh.md", "# Nitesh\n\nRecurring.\n")

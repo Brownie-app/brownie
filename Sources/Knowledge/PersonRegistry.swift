@@ -36,6 +36,8 @@ public actor PersonRegistry {
     public static let directory = ".brownie"
     public static let file = "people.json"
     public nonisolated let fileURL: URL
+    /// The vault's People directory — asked, when the listing shows no People folder, whether it holds any note at all.
+    private nonisolated let peopleURL: URL
     private var records: [Person] = []
     /// What the file held when it was read, and the merges made here since: `save` reconciles against both, so a
     /// merge or "keep separate" the app made while a run held its own copy is not written over.
@@ -48,6 +50,7 @@ public actor PersonRegistry {
 
     public init(vault: URL, now: @escaping @Sendable () -> Date = { Date() }) {
         fileURL = vault.appendingPathComponent(Self.directory, isDirectory: true).appendingPathComponent(Self.file)
+        peopleURL = vault.appendingPathComponent("People", isDirectory: true)
         self.now = now
     }
 
@@ -117,12 +120,15 @@ public actor PersonRegistry {
     /// title is a spelling of a person without a note becomes theirs, exact spellings before same-key ones (so
     /// "Kanika Pandey.md" goes to the Kanika Pandey on file even when "Kanika Pandey Loadmill.md" sorts first);
     /// any other note starts a new person. Notes that vanished (renamed or deleted by the brain or the user)
-    /// release their person's path so a new title can claim it — but only when a People folder was listed at
-    /// all: a listing that failed on one unreadable file arrives empty, and that must not strip every note path.
+    /// release their person's path so a new title can claim it. A listing with no People folder is one of two
+    /// things: the folder holds no note (every path into it is dead, and is released), or the listing failed on one
+    /// unreadable file and arrived empty — the directory itself tells which, and a failed listing strips nothing.
     public func seed(from folders: [KnowledgeFolder]) {
-        guard let peopleFolder = folders.first(where: { $0.name == "People" }) else { return }
         let present = Set(folders.flatMap { $0.notes.map(\.relativePath) })
+        let peopleFolder = folders.first(where: { $0.name == "People" })
+        guard peopleFolder != nil || peopleDirectoryHoldsNoNote() else { return }
         for i in records.indices where records[i].notePath.map({ !present.contains($0) }) ?? false { records[i].notePath = nil }
+        guard let peopleFolder else { return }
         let notes = peopleFolder.notes.sorted(by: { $0.relativePath < $1.relativePath })
         for note in notes where !records.contains(where: { $0.notePath == note.relativePath }) {
             if let i = exactIndex(label: note.title), records[i].notePath == nil { records[i].notePath = note.relativePath }
@@ -136,6 +142,13 @@ public actor PersonRegistry {
             }
             records.append(Person(id: Self.newID(), name: PersonKey.displayName(note.title), aliases: [note.title], notePath: note.relativePath, firstSeen: now(), lastSeen: now()))
         }
+    }
+
+    /// True when the People directory is missing or has no Markdown note anywhere beneath it (Archive/ included).
+    private func peopleDirectoryHoldsNoNote() -> Bool {
+        guard let e = FileManager.default.enumerator(at: peopleURL, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles]) else { return true }
+        for case let u as URL in e where u.pathExtension == "md" && (try? u.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true { return false }
+        return true
     }
 
     // MARK: resolving and registering
@@ -210,11 +223,17 @@ public actor PersonRegistry {
     public func notePath(for id: String) -> String? { person(id)?.notePath }
     public func setNotePath(_ path: String?, for id: String) { if let i = index(id) { records[i].notePath = path } }
 
-    /// The note for a label: the registry's answer first; otherwise the one title with exactly the same key, or
-    /// among several the one that is the label itself — none of them when the label spells neither.
+    /// The note for a label: the registry's answer, and nothing else once the registry knows who the label is —
+    /// a known person with no note of their own gets no note, because every same-key title on file is somebody
+    /// else's (a namesake the user keeps separate, once the person's own note was deleted or renamed), and
+    /// nobody's note is better than the wrong person's. When the registry knows nobody by the label, and nobody by
+    /// its key either, the one title with exactly the same key answers, or among several the one that is the label
+    /// itself — none of them when the label spells neither.
     /// A first name alone never claims a note by title — that is how "Arjun" leaked into "Arjun Mehta".
     public func notePath(forLabel label: String, handle: String?, amongNotes notes: [Note]) -> String? {
-        if let id = resolve(label: label, handle: handle), let p = notePath(for: id) { return p }
+        if let id = resolve(label: label, handle: handle) { return notePath(for: id) }
+        let key = PersonKey.normalise(label)
+        guard !key.isEmpty, !records.contains(where: { $0.keys.contains(key) }) else { return nil }
         let same = notes.filter { PersonKey.sameKey($0.title, label) }
         if same.count == 1 { return same[0].relativePath }
         return same.first { Self.spellsAlike($0.title, label) }?.relativePath
@@ -264,6 +283,13 @@ public actor PersonRegistry {
             }
         }
         return out
+    }
+
+    /// After a merge, whether a ledger row under `label` (and `handle`) was the dropped person's — by the roster as it
+    /// stood before the merge, so the row is renamed only when it resolved to them: never merely because it shares
+    /// their key, which a third person the user keeps apart ("Kanika Pandey Loadmill" beside "Kanika Pandey") does too.
+    public nonisolated static func belonged(label: String, handle: String?, to dropped: String, among before: [Person]) -> Bool {
+        resolve(label: label, handle: handle, among: before) == dropped
     }
 
     static func keepFirst(_ a: Person, _ b: Person) -> (Person, Person) {
@@ -333,7 +359,7 @@ public enum PersonNotes {
 public extension Loop {
     func renamed(to person: String) -> Loop {
         var n = Loop(id: id, direction: direction, person: person, what: what, quote: quote, sourceLabel: sourceLabel, due: due, dueDate: dueDate, status: status,
-                     openedAt: openedAt, closedAt: closedAt, closedHow: closedHow, closedBy: closedBy, lapsedAt: lapsedAt, firedCardIDs: firedCardIDs, cameBackCount: cameBackCount)
+                     openedAt: openedAt, noticedAt: noticedAt, closedAt: closedAt, closedHow: closedHow, closedBy: closedBy, lapsedAt: lapsedAt, firedCardIDs: firedCardIDs, cameBackCount: cameBackCount)
         n.nudgedForDue = nudgedForDue; n.owner = owner
         return n
     }

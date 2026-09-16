@@ -65,6 +65,61 @@ let now = Date(timeIntervalSince1970: 1_758_000_000)
         let merged = HouseholdLedger.merge([entry("stale", "book the table", closed: true, ago: 91), entry("kept", "renew the passport", closed: true, ago: 89)], [entry("open", "call the plumber", closed: false, ago: 200)], now: now)
         #expect(merged.map(\.loopID).sorted() == ["kept", "open"], "a closure every Mac has long seen is dropped; an open line stays however old")
         #expect(HouseholdLedger.merge(merged, [entry("stale", "book the table", closed: true, ago: 91)], now: now).map(\.loopID).sorted() == ["kept", "open"], "the other Mac's stale copy does not bring it back")
+        // "Not a loop" on a household loop writes a dismissed line; it is settled and leaves by the same rule, not kept for ever
+        var dismissed = entry("gone", "order the cake", closed: false, ago: 91); dismissed.status = .dismissed
+        #expect(HouseholdLedger.merge([dismissed], [], now: now).isEmpty, "a dismissed line older than ninety days leaves too")
+        #expect(HouseholdLedger.merge([dismissed], [], now: now.addingTimeInterval(-2 * 86400)).map(\.loopID) == ["gone"], "until then it stays")
+    }
+
+    @Test func aClosureLeavesTheLedgerOnlyOnceEveryMembersMacHasMergedIt() {
+        // Vivek closes L on 1 June; Priya's Mac is shut for the whole summer
+        let hers = Household(members: [HouseholdMember(id: "m-v", name: "Vivek Upreti", isMe: false), HouseholdMember(id: "m-p", name: "Priya Upreti", isMe: true)], folderPath: "/x", since: now)
+        let june = now.addingTimeInterval(-100 * 86400)
+        var mineClosed = loop("L", what: "book the villa", owner: "either", closed: true); mineClosed.closedAt = june; mineClosed.closedBy = "user"
+        var file = HouseholdLedger.merge([], HouseholdLedger.entries(from: [mineClosed], me: "m-v", now: june), now: june, household: h)
+        #expect(file.count == 1 && file[0].seenBy == ["m-v"], "the merging Mac stamps every settled line as seen")
+        // every night since, his Mac merges again — his own copy left his ledger long ago — and the line is a hundred days old
+        for night in stride(from: 90.0, through: 100, by: 1) { file = HouseholdLedger.merge(file, [], now: june.addingTimeInterval(night * 86400), household: h) }
+        #expect(file.map(\.loopID) == ["L"] && file[0].seenBy == ["m-v"], "older than ninety days, but her Mac has not merged it: it waits")
+        // her Mac wakes: her open copy (opened in May, like his) meets the closure, her loop closes, and now everyone has seen it
+        let herLoop = Loop(id: "L", direction: .mine, person: "Upreti Family", what: "book the villa", quote: "", sourceLabel: "WhatsApp", due: nil, openedAt: june.addingTimeInterval(-10 * 86400)).with(owner: "either")
+        let merged = HouseholdLedger.merge(file, HouseholdLedger.entries(from: [herLoop], me: "m-p", now: now), now: now, household: hers)
+        #expect(merged.count == 1 && merged[0].status == .closed && merged[0].closedBy == "m-v" && merged[0].seenBy == ["m-v", "m-p"])
+        let closed = HouseholdLedger.closures(for: [herLoop], ledger: merged, household: hers, now: now)
+        #expect(closed[0].status == .closed && closed[0].closedBy == "household:m-v" && closed[0].closedHow == "Vivek did it — booked")
+        #expect(HouseholdLedger.merge(merged, [], now: now.addingTimeInterval(86400), household: h).isEmpty, "seen by all and past ninety days: gone")
+        // a file written by a build before the stamp existed reads as seen by nobody, so it waits for everyone too
+        let old = try? JSONDecoder().decode([HouseholdEntry].self, from: #"[{"loopID":"L","memberID":"m-v","person":"Upreti Family","what":"book the villa","direction":"mine","owner":"either","status":"closed","closedBy":"m-v","updatedAt":\#(june.timeIntervalSinceReferenceDate)}]"#.data(using: .utf8)!)
+        #expect(old?.first?.seenBy == nil)
+        #expect(HouseholdLedger.merge(old ?? [], [], now: now, household: h).first?.seenBy == ["m-v"])
+    }
+
+    @Test func aClosureFromTheHouseholdGoesBackUnderTheClosersNameNotMine() {
+        let hers = Household(members: [HouseholdMember(id: "m-v", name: "Vivek Upreti", isMe: false), HouseholdMember(id: "m-p", name: "Priya Upreti", isMe: true)], folderPath: "/x", since: now)
+        let mon = now.addingTimeInterval(-2 * 86400), tue = now.addingTimeInterval(-86400)
+        // Monday: Priya closes L herself
+        var herLoop = loop("L", what: "book the villa", owner: "either", closed: true); herLoop.closedAt = mon; herLoop.closedBy = "user"
+        var file = HouseholdLedger.merge([], HouseholdLedger.entries(from: [herLoop], me: "m-p", now: mon), now: mon, household: hers)
+        // Tuesday: Vivek's sync closes his copy over hers
+        var mine = loop("L", what: "book the villa", owner: "either")
+        file = HouseholdLedger.merge(file, HouseholdLedger.entries(from: [mine], me: "m-v", now: tue), now: tue, household: h)
+        mine = HouseholdLedger.closures(for: [mine], ledger: file, household: h, now: tue)[0]
+        #expect(mine.status == .closed && mine.closedBy == "household:m-p" && mine.closedHow == "Priya did it — booked")
+        // Wednesday: his copy goes back to the file — under her name, with no words of his
+        let back = HouseholdLedger.entries(from: [mine], me: "m-v", now: now)
+        #expect(back[0].status == .closed && back[0].closedBy == "m-p" && back[0].closedHow == nil && back[0].updatedAt == tue)
+        file = HouseholdLedger.merge(file, back, now: now, household: h)
+        #expect(file.count == 1 && file[0].closedBy == "m-p" && file[0].closedHow == "booked", "his newer line does not take the closure from her")
+        // so on her Mac her own card is not "done by Vivek", and a third Mac says Priya did it
+        var c = Card(id: "c", title: "Book the villa", sourceLabel: "s", why: "", actionLabel: "", dueLine: "", urgency: .medium, draftLabel: "", draft: "", recipe: .browser(url: "u"), evidence: [], verification: .verified, verifiedLine: "", createdAt: now, loopID: "L")
+        c.owner = "either"
+        #expect(HouseholdLedger.markHandled([c], ledger: file, household: hers)[0].handledBy == nil)
+        #expect(HouseholdLedger.markHandled([c], ledger: file, household: h)[0].handledBy == "Priya")
+        let ammas = Household(members: [HouseholdMember(id: "m-v", name: "Vivek Upreti", isMe: false), priya, HouseholdMember(id: "m-a", name: "Lakshmi Devi", isMe: true)], folderPath: "/x", since: now)
+        #expect(HouseholdLedger.closures(for: [loop("L", what: "book the villa", owner: "either")], ledger: file, household: ammas, now: now)[0].closedHow == "Priya did it — booked")
+        // a loop an older build closed with a bare "household" names nobody rather than me
+        var bare = mine; bare.closedBy = "household"
+        #expect(HouseholdLedger.entries(from: [bare], me: "m-v", now: now)[0].closedBy == nil)
     }
 
     @Test func cardsSheHandledAreMarkedAndMyLoopsClose() {

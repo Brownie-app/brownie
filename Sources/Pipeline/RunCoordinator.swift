@@ -424,7 +424,7 @@ public actor RunCoordinator {
         var loops = await LoopLedger.load(store)
         let mine = HouseholdLedger.entries(from: loops, me: h.me?.id ?? "me", now: now)
         let ledgerURL = shared.appendingPathComponent(HouseholdLedger.file)
-        let merged = HouseholdLedger.merge(HouseholdLedger.read(ledgerURL), mine, now: now)
+        let merged = HouseholdLedger.merge(HouseholdLedger.read(ledgerURL), mine, now: now, household: h)
         try HouseholdLedger.write(merged, to: ledgerURL)
         let closed = HouseholdLedger.closures(for: loops, ledger: merged, household: h, now: now)
         if closed != loops { loops = closed; await LoopLedger.save(loops, store) }

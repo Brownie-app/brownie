@@ -31,9 +31,14 @@ public struct Loop: Codable, Sendable, Identifiable, Equatable {
     public var nudgedForDue: Bool?
     public var status: LoopStatus
     public let openedAt: Date
+    /// When Brownie first learned of it — the night it was found, whereas `openedAt` is when it was said. A promise
+    /// from an old recording read late is dated by the recording but counts as news from here, so it is not let go
+    /// the night it is found. Absent in ledgers written before the field existed: then `openedAt` stands in.
+    public var noticedAt: Date?
     public var closedAt: Date?
     public var closedHow: String?
-    /// What closed it: "reply" (the user's own message), "judge", "user" (the Loops screen), "lapsed", "household".
+    /// What closed it: "reply" (the user's own message), "judge", "user" (the Loops screen), "lapsed", or
+    /// "household:<member id>" when another member's Brownie closed it (older ledgers hold a bare "household").
     public var closedBy: String?
     /// When it was let go for want of news; `closedAt` is set to the same moment.
     public var lapsedAt: Date?
@@ -44,10 +49,10 @@ public struct Loop: Codable, Sendable, Identifiable, Equatable {
     public var owner: String?
 
     public init(id: String = UUID().uuidString, direction: LoopDirection, person: String, what: String, quote: String, sourceLabel: String,
-                due: String?, dueDate: Date? = nil, status: LoopStatus = .open, openedAt: Date, closedAt: Date? = nil, closedHow: String? = nil,
+                due: String?, dueDate: Date? = nil, status: LoopStatus = .open, openedAt: Date, noticedAt: Date? = nil, closedAt: Date? = nil, closedHow: String? = nil,
                 closedBy: String? = nil, lapsedAt: Date? = nil, firedCardIDs: [String] = [], cameBackCount: Int = 0) {
         self.id = id; self.direction = direction; self.person = person; self.what = what; self.quote = quote; self.sourceLabel = sourceLabel
-        self.due = due; self.dueDate = dueDate; self.status = status; self.openedAt = openedAt; self.closedAt = closedAt; self.closedHow = closedHow
+        self.due = due; self.dueDate = dueDate; self.status = status; self.openedAt = openedAt; self.noticedAt = noticedAt; self.closedAt = closedAt; self.closedHow = closedHow
         self.closedBy = closedBy; self.lapsedAt = lapsedAt; self.firedCardIDs = firedCardIDs; self.cameBackCount = cameBackCount
     }
 
