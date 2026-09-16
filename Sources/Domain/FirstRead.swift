@@ -88,8 +88,17 @@ public struct FirstRead: Sendable, Codable, Equatable {
         now.addingTimeInterval(-Double(days(for: source)) * 86_400)
     }
 
-    /// The most messages a first read keeps of one chat.
+    /// The most messages a first read keeps of one chat, before "Read further back" is taken into account.
     public func chatCap(isGroup: Bool) -> Int { isGroup ? groupChatMessages : directChatMessages }
+
+    /// The most messages a first read keeps of one chat from this source: the base cap, plus one more base cap
+    /// for every step of "Read further back" the user asked for. A busy chat is bounded by the cap long before
+    /// the window, so widening the days alone would re-slice the same newest messages off the top and reach
+    /// nothing older; growing the cap with the days is what makes the press reach further back.
+    public func chatCap(isGroup: Bool, for source: SourceID) -> Int {
+        let base = chatCap(isGroup: isGroup)
+        return base + base * ((extraDays[source.rawValue] ?? 0) / Self.stepDays)
+    }
 
     /// "Read further back": one more step of days for this source.
     public mutating func readFurtherBack(_ source: SourceID) {
@@ -100,7 +109,7 @@ public struct FirstRead: Sendable, Codable, Equatable {
     public func describe(for source: SourceID) -> String? {
         let d = days(for: source)
         switch Self.shape(of: source) {
-        case .chat: return "first read: last \(d) days, up to \(directChatMessages) messages per direct chat and \(groupChatMessages) per group"
+        case .chat: return "first read: last \(d) days, up to \(chatCap(isGroup: false, for: source)) messages per direct chat and \(chatCap(isGroup: true, for: source)) per group"
         case .mail: return "first read: last \(d) days, up to \(mailThreads) threads, the newest \(mailNewestMessages) messages of each"
         case .files: return "first read: files added in the last \(d) days"
         case .notes: return "first read: notes created in the last \(d) days"

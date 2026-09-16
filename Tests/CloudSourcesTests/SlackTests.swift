@@ -116,12 +116,30 @@ let slackHistory = #"""
         #expect(Double(c.metadata["firstDate"]!)! == 1757590000.0001, "the oldest message fell off; the window starts at the second")
     }
 
-    @Test func aPageCapThatStopsShortIsReportedNotSwallowed() async throws {
+    @Test func aFirstReadStoppedByThePageCapIsReportedNotSwallowed() async throws {
         let endless = slackHistory.replacingOccurrences(of: #""next_cursor":""}"#, with: #""next_cursor":"more"}"#)
         let t = FakeTransport().on("auth.test", #"{"ok":true,"user_id":"U1","user":"vivek"}"#).on("users.list", slackUsers).on("conversations.list", slackList).on("conversations.history", endless)
-        let out = try await source(t).buckets(since: [BucketID("slack:C1"): ItemKey(order: 1757000000, tiebreak: "x")], enabled: [BucketID("slack:C1")])
-        #expect(t.count("conversations.history") == SlackSource.pageCap, "paging stops at the cap")
+        let out = try await source(t).buckets(since: [:], enabled: [BucketID("slack:C1")])
+        #expect(t.count("conversations.history") == SlackSource.pageCap, "a first read stops at the cap")
         #expect(out[0].deferred == 1, "and the run is told there was more")
+    }
+
+    /// A channel that gathered more than the page cap's worth of messages since the last run: the read is bounded by the
+    /// mark, so it pages all the way down to it instead of stopping short and letting the mark leap past what it never saw.
+    @Test func aReadSinceTheMarkPagesDownToTheMarkPastThePageCap() async throws {
+        let pages = SlackSource.pageCap + 1
+        func page(_ k: Int) -> String {
+            let ts = 1_757_600_000 - k * 1_000
+            let next = k < pages ? "p\(k + 1)" : ""
+            return #"{"ok":true,"messages":[{"type":"message","user":"U2","text":"page \#(k)","ts":"\#(ts).000100"}],"response_metadata":{"next_cursor":"\#(next)"}}"#
+        }
+        let t = FakeTransport().on("auth.test", #"{"ok":true,"user_id":"U1","user":"vivek"}"#).on("users.list", slackUsers).on("conversations.list", slackList).on("conversations.history", page(1))
+        for k in 2...pages { t.on("history?channel=C1&cursor=p\(k)", page(k)) }
+        let out = try await source(t).buckets(since: [BucketID("slack:C1"): ItemKey(order: 1_757_000_000, tiebreak: "x")], enabled: [BucketID("slack:C1")])
+        #expect(t.count("conversations.history") == pages, "every page down to the mark, one more than the cap")
+        #expect(out[0].deferred == 0, "nothing was set aside")
+        let oldest = out[0].items.compactMap { Double($0.metadata["firstDate"] ?? "") }.min()
+        #expect(pages == 6 && oldest == 1_757_594_000.0001, "the message on the last page is listed")
     }
 
     @Test func loadRefetchesTheWindowAndRendersIt() async throws {

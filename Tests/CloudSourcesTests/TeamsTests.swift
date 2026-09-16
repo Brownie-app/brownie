@@ -110,12 +110,33 @@ let teamsOldPage = #"{"value":[{"id":"1","messageType":"message","createdDateTim
         #expect(out[0].items.count == 1 && out[0].items[0].itemDate == Date(timeIntervalSince1970: 1757600000))
     }
 
-    @Test func aPageCapThatStopsShortIsReportedNotSwallowed() async throws {
+    @Test func aFirstReadStoppedByThePageCapIsReportedNotSwallowed() async throws {
         let endless = teamsMessages.replacingOccurrences(of: #"{"value":["#, with: #"{"@odata.nextLink":"https://graph.microsoft.com/v1.0/me/chats/19:a/messages?$top=50&$skiptoken=x","value":["#)
         let t = FakeTransport().on("/me/chats", teamsChats).on("/me/joinedTeams", teamsTeams).on("/teams/T1/channels", teamsChannels).on("/me/chats/19:a/messages", endless).on("/me", teamsMe)
-        let out = try await source(t).buckets(since: [BucketID("teams:chat:19:a"): ItemKey(order: 1757000000, tiebreak: "")], enabled: [BucketID("teams:chat:19:a")])
-        #expect(t.count("/me/chats/19:a/messages") == TeamsSource.pageCap, "paging stops at the cap")
+        let out = try await source(t).buckets(since: [:], enabled: [BucketID("teams:chat:19:a")])
+        #expect(t.count("/me/chats/19:a/messages") == TeamsSource.pageCap, "a first read stops at the cap")
         #expect(out[0].deferred == 1, "and the run is told there was more")
+    }
+
+    /// A chat that gathered more than the page cap's worth of messages since the last run: the read is bounded by the
+    /// mark, so it pages all the way down to it instead of stopping short and letting the mark leap past what it never saw.
+    @Test func aReadSinceTheMarkPagesDownToTheMarkPastThePageCap() async throws {
+        let pages = TeamsSource.pageCap + 1
+        func message(_ k: Int) -> String {
+            #"{"id":"\#(k)","messageType":"message","createdDateTime":"2025-09-11T14:\#(String(format: "%02d", 30 - k)):00Z","from":{"user":{"id":"U2","displayName":"Meera Nair"}},"body":{"contentType":"text","content":"page \#(k)"}}"#
+        }
+        func page(_ k: Int) -> String {
+            let next = k < pages ? #""@odata.nextLink":"https://graph.microsoft.com/v1.0/me/chats/19:a/messages?$top=50&$skiptoken=p\#(k + 1)","# : ""
+            let older = k == pages ? "," + message(k).replacingOccurrences(of: "2025-09-11T14:15:00Z", with: "2025-09-01T09:00:00Z") : ""
+            return "{" + next + #""value":["# + message(k) + older + "]}"
+        }
+        let t = FakeTransport().on("/me/chats", teamsChats).on("/me/joinedTeams", teamsTeams).on("/teams/T1/channels", teamsChannels).on("/me/chats/19:a/messages", page(1)).on("/me", teamsMe)
+        for k in 2...pages { t.on("19:a/messages?$top=50&$skiptoken=p\(k)", page(k)) }
+        let out = try await source(t).buckets(since: [BucketID("teams:chat:19:a"): ItemKey(order: 1_757_000_000, tiebreak: "")], enabled: [BucketID("teams:chat:19:a")])
+        #expect(t.count("/me/chats/19:a/messages") == pages, "every page down to the one that holds the mark, one more than the cap")
+        #expect(out[0].deferred == 0, "nothing was set aside")
+        let oldest = out[0].items.compactMap { Double($0.metadata["firstDate"] ?? "") }.min()
+        #expect(oldest == 1_757_600_100, "the message on the last page, just above the mark, is listed; the one below it is not")
     }
 
     @Test func loadRendersTheWindow() async throws {
