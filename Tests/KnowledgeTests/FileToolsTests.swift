@@ -111,12 +111,26 @@ import Domain
 
     @Test func aNinthNoteInATopicFolderIsRefusedButPeopleAndGroupsGrow() async throws {
         let w = try Self.world()
-        for i in 1...8 { try w.put("Work/N\(i).md", "# N\(i)\n"); try w.put("People/P\(i).md", "# P\(i)\n") }
+        for i in 1...8 { try w.put("Work/N\(i).md", "# N\(i)\n"); try w.put("People/P\(i).md", "# P\(i)\n"); try w.put("Groups/G\(i).md", "# G\(i)\n") }
         let r = await w.refusal("write_file", ["path": "Work/N9.md", "content": "# N9\n"])
         #expect(r == "Work/ already holds 8 notes (N1, N2, N3, N4, N5, N6, N7, N8); fold this into one of them instead of adding a ninth")
         _ = try await w.read("Work/N3.md")
         #expect(await w.refusal("write_file", ["path": "Work/N3.md", "content": "# N3\nmore\n"]) == nil, "an existing note can still be updated")
         #expect(await w.refusal("write_file", ["path": "People/P9.md", "content": "# P9\n"]) == nil)
+        #expect(await w.refusal("write_file", ["path": "Groups/G9.md", "content": "# G9\n"]) == nil)
+        #expect(w.raw("Groups/G9.md")?.hasPrefix("---\nbrownie: group\n") == true, "a ninth group note is written, as a group")
+    }
+
+    @Test func peopleAndGroupsAreCreatedPastTheRootFolderCap() async throws {
+        // A first build from mail and files alone can fill the ten folders without Groups/; the vault's own folders must still open.
+        let w = try Self.world()
+        for f in ["Work", "Money", "Health", "Trips", "Home", "Admin", "Ideas", "Family", "Pets", "Cars"] { try w.put("\(f)/One.md", "# One\n") }
+        #expect(await w.refusal("write_file", ["path": "Books/Dune.md", "content": "# Dune\n"])?.hasPrefix("the knowledge base already has its 10 root folders") == true)
+        #expect(await w.refusal("write_file", ["path": "Groups/Founders.md", "content": "# Founders\n"]) == nil)
+        #expect(await w.refusal("write_file", ["path": "People/Arif.md", "content": "# Arif\n"]) == nil)
+        #expect(w.raw("Groups/Founders.md")?.hasPrefix("---\nbrownie: group\n") == true && w.raw("People/Arif.md")?.hasPrefix("---\nbrownie: person\n") == true)
+        #expect(FileTools.rootFolders(of: w.root).count == 12, "neither counts towards the cap")
+        #expect(await w.refusal("write_file", ["path": "Books/Dune.md", "content": "# Dune\n"]) != nil, "and the cap still holds for the rest")
     }
 
     @Test func readmeOverBudgetIsRefused() async throws {
@@ -138,6 +152,50 @@ import Domain
         #expect(m.id == "p-2" && m.brownie == "person" && m.created == Self.today && m.updated == Self.today && m.aliases.isEmpty)
         #expect(await w.refusal("write_file", ["path": "People/Someone New.md", "content": "# Someone New\n"]) == nil, "a stranger gets a file")
         #expect(NoteMeta.parse(w.raw("People/Someone New.md")!, path: "People/Someone New.md").meta?.id == nil)
+    }
+
+    @Test func aNewPeopleNoteCarriesNamesOnlyAsAliases() async throws {
+        // The registry learns chat labels verbatim — numbers, handles and all; the note's aliases are the names among them.
+        let labels = ["Nitesh (+919540752593)", "nitesh", "Nitesh Kumar", "Nitesh Kumar (Loadmill)", "@nitesh", "919540752593@s.whatsapp.net", "+91 95407 52593", "nitesh@example.com", "whatsapp:+919540752593", "Nitesh K"]
+        let w = try Self.world(people: [Self.person("p-2", "Nitesh", aliases: labels, note: nil)])
+        #expect(await w.refusal("write_file", ["path": "People/Nitesh.md", "content": "# Nitesh\n"]) == nil)
+        let raw = try #require(w.raw("People/Nitesh.md"))
+        let m = try #require(NoteMeta.parse(raw, path: "People/Nitesh.md").meta)
+        #expect(m.aliases == ["Nitesh Kumar", "Nitesh K"], "names only, the title not repeated, each spelling once")
+        #expect(!raw.contains("9540752593") && !raw.contains("@") && !raw.contains("whatsapp:"), "no number, address, handle or JID anywhere in the file")
+    }
+
+    @Test func aFolderSpelledInAnotherCaseIsRefusedNamingTheSpellingThatExists() async throws {
+        // The Mac's file system folds "people/" onto People/, so a miscased path would slip past every rule keyed on the folder.
+        let w = try Self.world(people: [Self.person("p-1", "Arjun Mehta", aliases: ["Arjun"], note: "People/Arjun Mehta.md")])
+        try w.put("People/Arjun Mehta.md", Self.owned("# Arjun Mehta\n", path: "People/Arjun Mehta.md"))
+        try w.put("Money/Rent.md", Self.owned("# Rent\n", path: "Money/Rent.md"))
+        #expect(await w.refusal("write_file", ["path": "people/Arjun.md", "content": "# Arjun\n"]) == "the folder is spelled People/; spell it People/Arjun.md, not people/Arjun.md")
+        #expect(await w.refusal("write_file", ["path": "PEOPLE/Someone New.md", "content": "# Someone New\n"]) == "the folder is spelled People/; spell it People/Someone New.md, not PEOPLE/Someone New.md")
+        #expect(await w.refusal("write_file", ["path": "groups/Founders.md", "content": "# Founders\n"]) == "the folder is spelled Groups/; spell it Groups/Founders.md, not groups/Founders.md", "Brownie's own folders are spelled one way even before they exist")
+        #expect(await w.refusal("write_file", ["path": "money/Bills.md", "content": "# Bills\n"]) == "Money/ already exists and money/Bills.md differs from it only by case; spell it Money/Bills.md")
+        #expect(await w.refusal("write_file", ["path": "readme.md", "content": "# Me\n"]) == "the portrait is README.md; spell it so, not readme.md")
+        #expect(await w.refusal("write_file", ["path": "today.md", "content": "x"]) != nil)
+        #expect(Set(try FileManager.default.contentsOfDirectory(atPath: w.root.appendingPathComponent("People").path)) == ["Arjun Mehta.md"], "no second file for a known person, and nothing stamped as a topic")
+        #expect(w.raw("Money/Bills.md") == nil && w.raw("Groups/Founders.md") == nil && w.raw("README.md") == nil && w.raw("Today.md") == nil)
+        // Spelled right, the same writes go through — and the ninth-note exemption sees People/ whatever the case would have been.
+        for i in 1...8 { try w.put("People/P\(i).md", "# P\(i)\n") }
+        #expect(await w.refusal("write_file", ["path": "People/Someone New.md", "content": "# Someone New\n"]) == nil)
+        #expect(await w.refusal("write_file", ["path": "Money/Bills.md", "content": "# Bills\n"]) == nil)
+        #expect(await w.refusal("write_file", ["path": "MONEY/Bills.md", "content": "# Bills\n"])?.contains("spell it Money/Bills.md") == true, "an existing note is not overwritten through another spelling either")
+    }
+
+    @Test func deletingAMiscasedPeopleOrGroupsPathIsRefused() async throws {
+        let w = try Self.world()
+        try w.put("People/Arif.md", "# Arif\n"); try w.put("Groups/Founders.md", "# Founders\n"); try w.put("Work/Old.md", "# Old\n"); try w.put("Today.md", "# Today\n")
+        #expect(await w.refusal("delete_file", ["path": "people/Arif.md"])?.hasPrefix("notes under People/ and Groups/ are never deleted by the brain") == true)
+        #expect(await w.refusal("delete_file", ["path": "GROUPS/founders.md"])?.hasPrefix("notes under People/ and Groups/ are never deleted by the brain") == true)
+        #expect(await w.refusal("delete_file", ["path": "People/Archive/Arif.md"]) != nil)
+        #expect(await w.refusal("delete_file", ["path": "people/archive/Arif.md"]) != nil)
+        #expect(await w.refusal("delete_file", ["path": "work/Old.md"]) == "Work/ already exists and work/Old.md differs from it only by case; spell it Work/Old.md")
+        #expect(await w.refusal("delete_file", ["path": "today.md"]) != nil)
+        #expect(w.raw("People/Arif.md") != nil && w.raw("Groups/Founders.md") != nil && w.raw("Work/Old.md") != nil && w.raw("Today.md") != nil, "nothing went")
+        #expect(try await w.call("delete_file", ["path": "Work/Old.md"]) == "deleted Work/Old.md")
     }
 
     @Test func deletingUnderPeopleOrGroupsIsRefused() async throws {

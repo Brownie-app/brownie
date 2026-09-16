@@ -62,14 +62,16 @@ public struct RunStats: Sendable, Equatable, Codable {
     public var read = 0, kept = 0, dropped = 0, sensitive = 0, failed = 0, deferred = 0
     /// Items turned away at the date gate before the reader saw them: neither read nor "not worth keeping".
     public var badDated = 0
+    /// Notes a brain without file tools proposed that the vault's rules refused: lost, unless the whole part was refused and is fed again.
+    public var refused = 0
     public init() {}
-    /// Stats written before the gate had its own tally decode with it at zero.
+    /// Stats written before the gate or the refusal tally had their own counts decode with them at zero.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         read = try c.decodeIfPresent(Int.self, forKey: .read) ?? 0; kept = try c.decodeIfPresent(Int.self, forKey: .kept) ?? 0
         dropped = try c.decodeIfPresent(Int.self, forKey: .dropped) ?? 0; sensitive = try c.decodeIfPresent(Int.self, forKey: .sensitive) ?? 0
         failed = try c.decodeIfPresent(Int.self, forKey: .failed) ?? 0; deferred = try c.decodeIfPresent(Int.self, forKey: .deferred) ?? 0
-        badDated = try c.decodeIfPresent(Int.self, forKey: .badDated) ?? 0
+        badDated = try c.decodeIfPresent(Int.self, forKey: .badDated) ?? 0; refused = try c.decodeIfPresent(Int.self, forKey: .refused) ?? 0
     }
     public mutating func record(_ reason: VerdictReason) {
         if reason == .badDate { badDated += 1; return }

@@ -126,7 +126,10 @@ public actor RunCoordinator {
                                                        coverage: { [tz = deps.clock.timeZone] in let all = SourceCoverage.decode(try? await store.value(SettingKey.coverage)); return all.isEmpty ? nil : CoverageLine.render(all, timeZone: tz) },
                                                        people: { await registry.people() })
                     let readStats = stats
-                    usage = try await builder.sync(summaries: summaries, progress: { p in var p = p; p.stats = readStats; onEvent(.progress(p)) }, onEvent: { e in if case .message(let m) = e { onEvent(.thought(m)) } })
+                    // The notes a brain without file tools lost to a refusal are counted whether or not the sync went through.
+                    do { usage = try await builder.sync(summaries: summaries, progress: { p in var p = p; p.stats = readStats; onEvent(.progress(p)) }, onEvent: { e in if case .message(let m) = e { onEvent(.thought(m)) } }) }
+                    catch { stats.refused = await builder.refusals; throw error }
+                    stats.refused = await builder.refusals
                 }
                 // The judge and the preparer see only what the notes hold: the rows merged tonight, or on an
                 // earlier night whose chain broke before the judge. A row that arrived since and waits for the
@@ -451,6 +454,6 @@ public actor RunCoordinator {
 extension RunStats {
     static func + (a: RunStats, b: RunStats) -> RunStats {
         var r = RunStats(); r.read = a.read + b.read; r.kept = a.kept + b.kept; r.dropped = a.dropped + b.dropped
-        r.sensitive = a.sensitive + b.sensitive; r.failed = a.failed + b.failed; r.deferred = a.deferred + b.deferred; r.badDated = a.badDated + b.badDated; return r
+        r.sensitive = a.sensitive + b.sensitive; r.failed = a.failed + b.failed; r.deferred = a.deferred + b.deferred; r.badDated = a.badDated + b.badDated; r.refused = a.refused + b.refused; return r
     }
 }

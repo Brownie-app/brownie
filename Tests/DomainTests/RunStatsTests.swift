@@ -14,8 +14,8 @@ import Foundation
     @Test func statsWrittenBeforeTheGateHadATallyDecodeWithItAtZero() throws {
         let old = #"{"read":4,"kept":1,"dropped":1,"sensitive":0,"failed":0,"deferred":2}"#
         let s = try JSONDecoder().decode(RunStats.self, from: Data(old.utf8))
-        #expect(s.read == 4 && s.kept == 1 && s.dropped == 1 && s.deferred == 2 && s.badDated == 0)
-        var fresh = RunStats(); fresh.record(.badDate); fresh.record(.kept)
+        #expect(s.read == 4 && s.kept == 1 && s.dropped == 1 && s.deferred == 2 && s.badDated == 0 && s.refused == 0)
+        var fresh = RunStats(); fresh.record(.badDate); fresh.record(.kept); fresh.refused = 1
         let back = try JSONDecoder().decode(RunStats.self, from: try JSONEncoder().encode(fresh))
         #expect(back == fresh, "round-trips with the new tally")
     }
