@@ -220,7 +220,42 @@ struct KnowledgePane: View {
             }
             SettingRow(title: "Wikilinks between notes", detail: "[[Priya]] instead of plain text, so people, groups and trips connect — here and in Obsidian. Always on.") { Toggle2(on: .constant(true)).disabled(true) }.padding(.horizontal, 16)
         } }
+        VaultHealthCard()
         MCPSection()
+    }
+}
+
+/// Last night's measure of the vault: the sentence, then the lists behind it, each row opening its note.
+struct VaultHealthCard: View {
+    @EnvironmentObject var m: AppModel
+    @Environment(\.theme) var t
+    var body: some View {
+        H2(text: "Vault health")
+        if let h = m.vaultHealth {
+            Sub(text: "\(h.line) · measured \(DateFormatter.localizedString(from: h.at, dateStyle: .medium, timeStyle: .none))\(h.netWordsPerWeek.map { " · \($0 >= 0 ? "+" : "")\($0) words this week" } ?? "")\(h.oldestPendingDays.map { " · oldest open ask \($0) days" } ?? "")")
+            CardBox(padding: 0) { VStack(alignment: .leading, spacing: 0) {
+                section("Largest notes", h.largest.map { ($0.path, "\($0.words) words") })
+                if !h.overBudget.isEmpty { Divider(); section("Over budget", h.overBudget.map { ($0.path, "\($0.words) words · budget \(budget($0.path))") }) }
+                if !h.quietPeople.isEmpty { Divider(); section("Quiet people — nothing new in \(VaultHealth.quietAfterDays) days", h.quietPeople.map { ($0, "") }) }
+                if !h.danglingLinks.isEmpty { Divider(); section("Dangling links — [[names]] with no note", h.danglingLinks.map { ($0.path, "[[\($0.name)]]") }) }
+                if !h.duplicateSuspects.isEmpty { Divider(); section("May be one person", h.duplicateSuspects.flatMap { [($0.a, "with \(name($0.b))"), ($0.b, "with \(name($0.a))")] }) }
+            } }
+        } else {
+            Sub(text: "Measured after the first overnight run: notes, words, what is over budget, links that lead nowhere, people who may be written twice.")
+        }
+    }
+    func name(_ path: String) -> String { String(path.split(separator: "/").last ?? "").replacingOccurrences(of: ".md", with: "") }
+    func budget(_ path: String) -> Int { path == "README.md" ? VaultHealth.readmeBudget : (path.hasPrefix("People/") || path.hasPrefix("Groups/") ? VaultHealth.personBudget : VaultHealth.noteBudget) }
+    @ViewBuilder func section(_ title: String, _ rows: [(String, String)]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Eyebrow(text: title).padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 4)
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, r in
+                Button { m.openNote(r.0) } label: {
+                    HStack { Text(name(r.0)).fontWeight(.medium); if !r.1.isEmpty { Text(r.1).font(.system(size: 11)).foregroundStyle(t.ink2) }; Spacer(); Image(systemName: "arrow.up.right").font(.system(size: 10)).foregroundStyle(t.ink2) }
+                        .padding(.horizontal, 16).padding(.vertical, 6).contentShape(Rectangle())
+                }.buttonStyle(.plain)
+            }
+        }.padding(.bottom, 8)
     }
 }
 

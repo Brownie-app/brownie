@@ -80,6 +80,7 @@ let package = Package(
         ),
 
         // ── Tests ───────────────────────────────────────────────────────────────────────
+        .testTarget(name: "SupportTests", dependencies: ["Support"]),
         .testTarget(name: "DomainTests", dependencies: ["Domain"]),
         .testTarget(name: "PrivacyTests", dependencies: ["Privacy"]),
         .testTarget(name: "IngestTests", dependencies: ["Ingest", "Domain", "Platform"]),

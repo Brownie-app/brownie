@@ -28,10 +28,10 @@ import Domain
     @Test func householdLoopsFoldByTheSameRule() {
         let a = HouseholdEntry(loopID: "A", memberID: "m-v", person: "Nitesh (+919540752593)", what: "book the table for 12", direction: .mine, owner: "either", status: .open, updatedAt: now)
         let b = HouseholdEntry(loopID: "B", memberID: "m-p", person: "Nitesh", what: "table for 12 to book", direction: .mine, owner: "either", status: .closed, closedBy: "m-p", updatedAt: now.addingTimeInterval(60))
-        let merged = HouseholdLedger.merge([a], [b])
+        let merged = HouseholdLedger.merge([a], [b], now: now)
         #expect(merged.count == 1 && merged[0].loopID == "A" && merged[0].status == .closed, "the other Mac's closure lands on the earlier id")
         let c = HouseholdEntry(loopID: "C", memberID: "m-p", person: "Priya", what: "table for 12 to book", direction: .mine, owner: "either", status: .open, updatedAt: now)
-        #expect(HouseholdLedger.merge([a], [c]).count == 2)
+        #expect(HouseholdLedger.merge([a], [c], now: now).count == 2)
     }
 
     @Test func cardsToOnePersonUnderTwoSpellingsAreOneCard() {

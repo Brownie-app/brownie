@@ -32,7 +32,9 @@ public enum HouseholdLedger {
 
     /// Union by loop id; the newer line wins, except that a closure is never undone by an older open line.
     /// Loops the two Macs found separately (same person, same words) are folded onto the earlier id.
-    public static func merge(_ a: [HouseholdEntry], _ b: [HouseholdEntry]) -> [HouseholdEntry] {
+    /// An entry closed more than `closedKeepDays` before `now` leaves the file — its closure has long since reached every Mac.
+    public static let closedKeepDays = 90
+    public static func merge(_ a: [HouseholdEntry], _ b: [HouseholdEntry], now: Date = Date()) -> [HouseholdEntry] {
         var out: [String: HouseholdEntry] = [:]
         for e in (a + b).sorted(by: { $0.updatedAt < $1.updatedAt }) {
             let key = out.values.first(where: { $0.loopID == e.loopID || sameLoop($0, e) })?.loopID ?? e.loopID
@@ -42,7 +44,8 @@ public enum HouseholdLedger {
                 out[key] = cur
             } else { out[key] = e }
         }
-        return out.values.sorted { $0.updatedAt > $1.updatedAt }
+        let floor = now.addingTimeInterval(-Double(closedKeepDays) * 86400)
+        return out.values.filter { !($0.status == .closed && $0.updatedAt < floor) }.sorted { $0.updatedAt > $1.updatedAt }
     }
 
     static func sameLoop(_ a: HouseholdEntry, _ b: HouseholdEntry) -> Bool {

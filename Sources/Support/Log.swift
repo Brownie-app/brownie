@@ -22,6 +22,34 @@ public struct Log: Sendable {
         logger.log(level: level, "\(message, privacy: .public)")
         FileLog.shared.write(category: category, level: level, message: message)
     }
+
+    /// Rotation for the app's own log folder: every `<category>.log` over `maxBytes` becomes `.log.1`, the older copies
+    /// shift up, and copies past `keep` are deleted. Returns the categories rotated. Called nightly at FINISH.
+    @discardableResult
+    public static func rotate(maxBytes: Int = 5 * 1024 * 1024, keep: Int = 2) -> [String] {
+        FileLog.shared.rotate(maxBytes: maxBytes, keep: keep)
+    }
+
+    /// The same rotation over any folder — the pure file work, for tests and for folders the app does not write to.
+    @discardableResult
+    public static func rotate(in directory: URL, maxBytes: Int, keep: Int) -> [String] {
+        let fm = FileManager.default
+        guard let names = try? fm.contentsOfDirectory(atPath: directory.path) else { return [] }
+        var rotated: [String] = []
+        for name in names.sorted() where name.hasSuffix(".log") {
+            let url = directory.appendingPathComponent(name)
+            let size = (try? fm.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
+            guard size > maxBytes else { continue }
+            try? fm.removeItem(at: directory.appendingPathComponent("\(name).\(keep)"))
+            for i in stride(from: keep - 1, through: 1, by: -1) {
+                let old = directory.appendingPathComponent("\(name).\(i)")
+                if fm.fileExists(atPath: old.path) { try? fm.moveItem(at: old, to: directory.appendingPathComponent("\(name).\(i + 1)")) }
+            }
+            if keep >= 1 { try? fm.moveItem(at: url, to: directory.appendingPathComponent("\(name).1")) } else { try? fm.removeItem(at: url) }
+            rotated.append(String(name.dropLast(4)))
+        }
+        return rotated
+    }
 }
 
 /// Per-category rolling text logs. Never receives content (summaries, messages) — callers log
@@ -42,6 +70,16 @@ public final class FileLog: @unchecked Sendable {
     }
 
     public var directoryURL: URL { directory }
+
+    /// Rotates on the writer's own queue with every handle closed first, so the next line opens a fresh file rather
+    /// than following the renamed one.
+    fileprivate func rotate(maxBytes: Int, keep: Int) -> [String] {
+        queue.sync {
+            for h in handles.values { try? h.close() }
+            handles.removeAll()
+            return Log.rotate(in: directory, maxBytes: maxBytes, keep: keep)
+        }
+    }
 
     fileprivate func write(category: String, level: OSLogType, message: String) {
         queue.async {

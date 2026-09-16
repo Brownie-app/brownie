@@ -32,6 +32,7 @@ public enum SettingKey {
     public static let icloudMode = "knowledge.icloudMode"        // off | mirror | twoway
     public static let lastSync = "knowledge.lastSync"            // JSON SyncReport
     public static let coverage = "sources.coverage"              // JSON [SourceCoverage]: how far back each source has been read
+    public static let vaultHealth = "knowledge.vaultHealth"      // JSON [VaultHealth], one per day, newest first, 90 kept
     public static let mcpEnabled = "knowledge.mcp"               // answer other apps over MCP
     public static let mcpLog = "knowledge.mcpLog"
     public static let askHistory = "proactive.ask"
