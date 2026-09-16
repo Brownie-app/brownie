@@ -88,6 +88,41 @@ import Foundation
         #expect(read("People/A.md", in: phone) == "v1", "the Mac is the truth for deletions")
     }
 
+    @Test func deletedOnTheMacIsTakenOffThePhoneNotCopiedBack() throws {
+        let (mac, phone) = try fresh()
+        try put("v1", "People/A.md", in: mac)
+        try put("keep", "People/B.md", in: mac)
+        _ = try Vault.sync(mac, to: phone)
+        try fm.removeItem(at: mac.appendingPathComponent("People/A.md"))
+        let r = try Vault.sync(mac, to: phone)
+        #expect(r.deletedOnMac == 1 && r.fromPhone == 0 && r.toPhone == 0)
+        #expect(read("People/A.md", in: mac) == nil, "the note does not come back")
+        #expect(read("People/A.md", in: phone) == nil, "and it is gone from the phone")
+        #expect(read("People/A.md", in: mac.appendingPathComponent(".sync")) == nil, "its base copy is dropped")
+        #expect(read("People/B.md", in: phone) == "keep")
+        let again = try Vault.sync(mac, to: phone)
+        #expect(again.deletedOnMac == 0 && again.fromPhone == 0 && again.toPhone == 0)
+    }
+
+    @Test func goneOnBothSidesDropsTheBase() throws {
+        let (mac, phone) = try fresh()
+        try put("v1", "People/A.md", in: mac)
+        _ = try Vault.sync(mac, to: phone)
+        #expect(read("People/A.md", in: mac.appendingPathComponent(".sync")) == "v1")
+        try fm.removeItem(at: mac.appendingPathComponent("People/A.md"))
+        try fm.removeItem(at: phone.appendingPathComponent("People/A.md"))
+        let r = try Vault.sync(mac, to: phone)
+        #expect(r.toPhone == 0 && r.fromPhone == 0 && r.deletedOnMac == 0)
+        #expect(read("People/A.md", in: mac.appendingPathComponent(".sync")) == nil)
+        #expect(read("People/A.md", in: mac) == nil && read("People/A.md", in: phone) == nil, "nothing is resurrected")
+    }
+
+    @Test func aReportSavedBeforeDeletedOnMacExistedStillReads() throws {
+        let old = #"{"toPhone":1,"fromPhone":2,"conflicts":0,"removedOnPhone":0,"at":0}"#
+        let r = try JSONDecoder().decode(SyncReport.self, from: Data(old.utf8))
+        #expect(r.toPhone == 1 && r.fromPhone == 2 && r.deletedOnMac == 0)
+    }
+
     @Test func mergeShape() {
         let m = Vault.merge(yours: "yours\n\n", brownies: "\nbrownies", at: Date(timeIntervalSince1970: 0))
         #expect(m.hasPrefix("yours\n\n## Brownie's version ("))

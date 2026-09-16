@@ -50,6 +50,8 @@ import Platform
             return try JSONDecoder().decode(KnowledgeBuilder.ResumeToken.self, from: Data(s.utf8))
         }
         func read(_ rel: String, in root: URL? = nil) -> String? { try? String(contentsOf: (root ?? live).appendingPathComponent(rel), encoding: .utf8) }
+        /// The prose of a note the brain wrote: code prefixes its front-matter, so raw bytes are not what the brain said.
+        func body(_ rel: String, in root: URL? = nil) -> String? { read(rel, in: root).map { NoteMeta.parse($0, path: rel).body } }
         func put(_ text: String, _ rel: String) throws {
             let u = live.appendingPathComponent(rel)
             try FileManager.default.createDirectory(at: u.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -134,7 +136,7 @@ import Platform
         let t = try #require(try await w.token())
         let staging = URL(fileURLWithPath: t.stagingPath)
         #expect(t.nextPart == 1)
-        #expect(w.read("Notes/call1.md", in: staging) == "# 1", "part 1's work stays")
+        #expect(w.body("Notes/call1.md", in: staging) == "# 1", "part 1's work stays")
         #expect(w.read("Notes/call2.md", in: staging) == nil && w.read("Notes/half.md", in: staging) == nil, "part 2's writes are gone")
         #expect(!FileManager.default.fileExists(atPath: w.live.path), "nothing was swapped live")
         let orphans = try FileManager.default.contentsOfDirectory(atPath: w.dir.path).filter { $0.hasPrefix(".brownie-kb-snapshot-") }
@@ -193,7 +195,7 @@ import Platform
         let usage = try await w.builder(brain).sync(summaries: rows, progress: { _ in }, onEvent: { _ in })
         #expect(usage == Usage(inputTokens: 10, outputTokens: 1), "a part ended by finish returns normally, usage and all — no cancellation to swallow")
         #expect(await landed.count == 0)
-        #expect(w.read("README.md") == "# Done before finish")
+        #expect(w.body("README.md") == "# Done before finish")
         #expect(w.read("Notes/after0.md") == nil)
         #expect(try await w.token() == nil)
         #expect(try await w.store.unmergedSummaries().isEmpty, "the part counts as merged")
@@ -244,7 +246,7 @@ import Platform
         let writing = ScriptedBrain { n, tools in try await Self.write(tools, "Notes/call\(n).md", "# \(n)") }
         _ = try await w.builder(writing).sync(summaries: try await w.store.unmergedSummaries(), progress: { _ in }, onEvent: { _ in })
         #expect(try await w.token() == nil)
-        #expect(w.read("Notes/call1.md") == "# 1", "the notes are live")
+        #expect(w.body("Notes/call1.md") == "# 1", "the notes are live")
         #expect(Self.sids(in: writing.recorded[0].input) == first.map { $0.sid! }, "the frozen part is what was fed")
         #expect(Set(try await w.store.unmergedSummaries().map(\.id)) == Set(late.map(\.id)), "the new rows wait for the next sync")
         _ = try await w.builder(writing).sync(summaries: try await w.store.unmergedSummaries(), progress: { _ in }, onEvent: { _ in })
@@ -265,7 +267,7 @@ import Platform
         let brain = ScriptedBrain { _, tools in try await Self.write(tools, "README.md", "# Portrait") }
         _ = try await w.builder(brain).sync(summaries: fresh, progress: { _ in }, onEvent: { _ in })
         #expect(Self.sids(in: try #require(brain.recorded.first?.input)) == fresh.map { $0.sid! }, "tonight's rows were fed, not nothing")
-        #expect(w.read("README.md") == "# Portrait")
+        #expect(w.body("README.md") == "# Portrait")
         #expect(try await w.token() == nil)
         #expect(!FileManager.default.fileExists(atPath: staging.path), "the wedged staging dir is gone")
         #expect(try await w.store.unmergedSummaries().isEmpty)
@@ -298,7 +300,7 @@ import Platform
         let input = try #require(brain.recorded.first?.input)
         #expect(input.contains("\nPEOPLE (one file per person; write about each only in the file listed, whatever spelling the summaries use):\n  Kanika Pandey — People/Kanika Pandey.md (also: Kanika Pandey Loadmill)\n  Nitesh — no note yet\n\nWorking directory:"))
         #expect(!input.contains("+919540752593"), "an alias is shown as a name, never as a number")
-        let none = ScriptedBrain { _, tools in try await Self.write(tools, "README.md", "# x") }
+        let none = ScriptedBrain { _, tools in _ = try await Self.call(tools, "read_file", ["path": "README.md"]); try await Self.write(tools, "README.md", "# x") }   // the second night updates: read first
         _ = try await w.builder(none).sync(summaries: try await w.seed(1, from: 5, tag: "b"), progress: { _ in }, onEvent: { _ in })
         #expect(!(try #require(none.recorded.first?.input)).contains("PEOPLE"), "no registry, no roster")
     }
@@ -346,6 +348,7 @@ import Platform
         try w.put("# D\nwill be deleted", "People/D.md")
         let rows = try await w.seed(2, from: 0)
         let brain = ScriptedBrain { _, tools in
+            _ = try await Self.call(tools, "read_file", ["path": "People/A.md"])   // an existing note is read before it is overwritten
             try await Self.write(tools, "People/A.md", "# A\nthe brain's A")
             try await Self.write(tools, "People/B.md", "# B\nthe brain's B")
             // Meanwhile the user edits A, adds C and deletes D in the live vault.
@@ -355,7 +358,8 @@ import Platform
         }
         _ = try await w.builder(brain).sync(summaries: rows, progress: { _ in }, onEvent: { _ in })
         #expect(w.read("People/A.md") == "# A\nthe user's A, with more words than before", "the user's edit wins")
-        #expect(w.read("People/B.md") == "# B\nthe brain's B", "the brain's new note lands")
+        #expect(w.body("People/B.md") == "# B\nthe brain's B", "the brain's new note lands")
+        #expect(w.read("People/B.md")?.hasPrefix("---\nbrownie: person\n") == true, "with Brownie's front-matter on top")
         #expect(w.read("People/C.md") == "# C\nthe user's C", "the user's new note survives the swap")
         #expect(w.read("People/D.md") == nil, "a note the user deleted and the brain left alone stays deleted")
         #expect(w.read("README.md") == "# Me\nportrait")

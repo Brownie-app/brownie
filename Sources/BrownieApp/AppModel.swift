@@ -170,6 +170,9 @@ final class AppModel: ObservableObject {
         try? await store.prune()
         await loadSettings()
         await refreshPermissions()
+        // Every note gets Brownie's front-matter once; a note that has it already is not touched, so this is cheap on every start.
+        let registry = PersonRegistry(vault: knowledge.rootURL); await registry.load()
+        await VaultMigration.addFrontMatter(root: knowledge.rootURL, registry: registry, now: Date())
         await reload()
         rebuildBrain()
         rebuildReader()

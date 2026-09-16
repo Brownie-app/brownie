@@ -49,7 +49,8 @@ struct KnowledgeView: View {
                                 if n.userEdited { Chip(text: "edited by you") }
                                 if editing { BButton(title: "Save", kind: .primary) { save(n) }; BButton(title: "Cancel", kind: .quiet) { editing = false } }
                                 else { BButton(title: "Edit", kind: .quiet) { draft = n.body; editing = true }; BButton(title: "Delete", kind: .destructive) { Task { try? await m.knowledge.delete(relativePath: n.relativePath); await m.reload() } } } }
-                            Text("Sources: \(n.sources.joined(separator: ", ")) · updated \(n.updatedAt.formatted(date: .abbreviated, time: .shortened))").font(.system(size: 12)).foregroundStyle(t.ink2)
+                            // `updated` is the day the note's substance last changed (its front-matter), not the file's mtime: the nightly status-block rewrite and iCloud do not move it.
+                            Text("Sources: \(n.sources.joined(separator: ", ")) · updated \(n.meta.updated.isEmpty ? n.updatedAt.formatted(date: .abbreviated, time: .omitted) : n.meta.updated)").font(.system(size: 12)).foregroundStyle(t.ink2)
                             if editing { TextEditor(text: $draft).font(.system(size: 13, design: .monospaced)).frame(minHeight: 400).scrollContentBackground(.hidden).background(t.code).cornerRadius(6) }
                             else { WikiText(body: n.body) }
                             CardBox(padding: 12) { HStack(spacing: 10) { Image(systemName: "lock").foregroundStyle(t.ink2); Text("Anything you delete here is gone from the knowledge base for good.").font(.system(size: 11)).foregroundStyle(t.ink2) } }

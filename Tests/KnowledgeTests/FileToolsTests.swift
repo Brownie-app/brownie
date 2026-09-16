@@ -1,0 +1,163 @@
+import Testing
+import Foundation
+import Domain
+@testable import Knowledge
+
+/// The brain's file tools, driven as a scripted brain would: prose in, prose out, and one sentence back for
+/// every write that would break the vault's shape.
+@Suite struct FileToolsTests {
+    static let today = "2026-09-16"
+    static let block = "<!-- brownie:status -->\n## Between you\n- ⏳ 3 Sep — they asked: “lunch?” — no reply yet\n<!-- /brownie:status -->"
+    struct World {
+        let root: URL
+        var tools: [Tool]
+        func put(_ rel: String, _ text: String) throws {
+            let u = root.appendingPathComponent(rel)
+            try FileManager.default.createDirectory(at: u.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try text.write(to: u, atomically: true, encoding: .utf8)
+        }
+        func raw(_ rel: String) -> String? { try? String(contentsOf: root.appendingPathComponent(rel), encoding: .utf8) }
+        func call(_ name: String, _ args: [String: Any]) async throws -> String {
+            try await tools.first { $0.name == name }!.run(try JSONSerialization.data(withJSONObject: args)).text
+        }
+        func read(_ p: String) async throws -> String { try await call("read_file", ["path": p]) }
+        func write(_ p: String, _ c: String) async throws -> String { try await call("write_file", ["path": p, "content": c]) }
+        /// The one sentence a refused call hands the brain, or nil when it went through.
+        func refusal(_ name: String, _ args: [String: Any]) async -> String? {
+            do { _ = try await call(name, args); return nil } catch let r as FileTools.Refusal { return r.description } catch { return "\(error)" }
+        }
+    }
+    static func world(people: [Person] = []) throws -> World {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("tools-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        return World(root: root, tools: FileTools.make(root: root, people: people, today: today))
+    }
+    static func owned(_ body: String, path: String, extra: String = "") -> String {
+        var m = NoteMeta.fresh(path: path, body: body, today: "2026-09-01"); m.updated = "2026-09-10"; m.sources = ["whatsapp"]
+        return m.render().replacingOccurrences(of: "\n---\n", with: extra.isEmpty ? "\n---\n" : "\n\(extra)\n---\n") + body
+    }
+    static let t0 = Date(timeIntervalSince1970: 1_789_560_000)
+    static func person(_ id: String, _ name: String, aliases: [String] = [], note: String?) -> Person { Person(id: id, name: name, aliases: aliases, notePath: note, firstSeen: t0, lastSeen: t0) }
+
+    @Test func writeBeforeReadIsRefusedAndReadThenWriteGoesThrough() async throws {
+        let w = try Self.world()
+        try w.put("People/Arif.md", Self.owned("# Arif\n\nA friend.\n", path: "People/Arif.md"))
+        #expect(await w.refusal("write_file", ["path": "People/Arif.md", "content": "# Arif\n\nrewritten\n"]) == "read People/Arif.md before overwriting it")
+        #expect(w.raw("People/Arif.md")!.hasSuffix("# Arif\n\nA friend.\n"), "nothing was written")
+        #expect(try await w.read("People/Arif.md") == "# Arif\n\nA friend.\n", "the brain sees prose, not the front-matter")
+        #expect(try await w.write("People/Arif.md", "# Arif\n\nA friend from Pune.\n") == "wrote People/Arif.md (28 bytes)")
+        #expect(w.raw("People/Arif.md")!.hasSuffix("---\n# Arif\n\nA friend from Pune.\n"))
+        #expect(try await w.write("Work/New.md", "# New\n") == "wrote Work/New.md (6 bytes)", "a new note needs no read")
+    }
+
+    @Test func frontMatterAndStatusBlockComeBackByteIdentical() async throws {
+        let w = try Self.world()
+        let body = "# Arif\n\n" + Self.block + "\n\nA friend.\n"
+        let file = Self.owned(body, path: "People/Arif.md", extra: "tags: [friend]")
+        try w.put("People/Arif.md", file)
+        #expect(try await w.read("People/Arif.md") == "# Arif\n\nA friend.\n", "the status block is invisible to the brain")
+        // The same prose back: the file does not change at all — same hash, same updated day.
+        _ = try await w.write("People/Arif.md", "# Arif\n\nA friend.\n")
+        #expect(w.raw("People/Arif.md") == file, "nothing moved, byte for byte")
+        // New prose: the front-matter keeps created, sources and the user's key; updated moves to today; the block is back after the title.
+        _ = try await w.write("People/Arif.md", "# Arif\n\nA friend from Pune.\n")
+        let after = try #require(w.raw("People/Arif.md"))
+        let (meta, newBody) = NoteMeta.parse(after, path: "People/Arif.md")
+        let m = try #require(meta)
+        #expect(m.created == "2026-09-01" && m.updated == Self.today && m.sources == ["whatsapp"] && m.extra["tags"] == " [friend]" && !m.userEdited)
+        #expect(m.contentHash == NoteMeta.hash("# Arif\n\nA friend from Pune.\n"))
+        #expect(newBody == "# Arif\n\n" + Self.block + "\n\nA friend from Pune.\n")
+        // Front-matter or a block the brain wrote anyway are dropped, never doubled.
+        _ = try await w.write("People/Arif.md", "---\nbrownie: person\nupdated: 1999-01-01\n---\n# Arif\n\n<!-- brownie:status -->\nfake\n<!-- /brownie:status -->\n\nA colleague.\n")
+        let third = try #require(w.raw("People/Arif.md"))
+        #expect(third.components(separatedBy: "brownie:status -->").count == 3 && !third.contains("fake") && !third.contains("1999") && third.contains("created: 2026-09-01\n"))
+    }
+
+    @Test func anOutsideEditIsPersistedAsTheUsersOnTheNextWrite() async throws {
+        let w = try Self.world()
+        try w.put("People/Arif.md", Self.owned("# Arif\n\nA friend.\n", path: "People/Arif.md").replacingOccurrences(of: "A friend.", with: "A friend, edited in Obsidian."))
+        _ = try await w.read("People/Arif.md")
+        _ = try await w.write("People/Arif.md", "# Arif\n\nA friend, edited in Obsidian. Moved to Pune.\n")
+        #expect(w.raw("People/Arif.md")!.contains("user_edited: true\n"))
+    }
+
+    @Test func periodStampedTitlesAreRefusedWithTheNoteToUse() async throws {
+        let w = try Self.world()
+        try w.put("Money/Invoices.md", Self.owned("# Invoices\n", path: "Money/Invoices.md"))
+        #expect(await w.refusal("write_file", ["path": "Money/Invoices (Sep–Nov 2026).md", "content": "# Invoices (Sep–Nov 2026)\n"])
+                == "\"Invoices (Sep–Nov 2026)\" is a period-stamped title; keep one note per subject and write the dated section into Money/Invoices.md instead")
+        #expect(await w.refusal("write_file", ["path": "Money/Invoices (Sep-Nov 2026).md", "content": "x"])?.hasSuffix("into Money/Invoices.md instead") == true, "a plain hyphen too")
+        #expect(await w.refusal("write_file", ["path": "Trips/Goa (2026).md", "content": "x"]) == "\"Goa (2026)\" is a period-stamped title; keep one note per subject and write the dated section into Trips/Goa.md instead", "no existing note: the bare path is named")
+        #expect(await w.refusal("write_file", ["path": "Trips/Goa (Oct 2026).md", "content": "x"])?.contains("Trips/Goa.md") == true)
+        #expect(await w.refusal("write_file", ["path": "Work/Plan (v2).md", "content": "# Plan (v2)\n"]) == nil, "parentheses that are not a period are fine")
+    }
+
+    @Test func nearDuplicateTitlesAreRefused() async throws {
+        let w = try Self.world()
+        try w.put("Money/Invoices.md", Self.owned("# Invoices\n", path: "Money/Invoices.md"))
+        #expect(await w.refusal("write_file", ["path": "Money/invoices.md", "content": "x"]) == "Money/invoices.md differs from Money/Invoices.md only by case, punctuation or a date suffix; write into Money/Invoices.md instead")
+        #expect(await w.refusal("write_file", ["path": "Money/Invoices!.md", "content": "x"])?.contains("write into Money/Invoices.md") == true)
+        #expect(await w.refusal("write_file", ["path": "Work/Invoices.md", "content": "x"]) == nil, "another folder is another subject")
+    }
+
+    @Test func anEleventhRootFolderIsRefused() async throws {
+        let w = try Self.world()
+        for f in ["People", "Groups", "Work", "Money", "Health", "Trips", "Home", "Admin", "Ideas", "Family"] { try w.put("\(f)/One.md", "# One\n") }
+        let r = await w.refusal("write_file", ["path": "Pets/Bruno.md", "content": "# Bruno\n"])
+        #expect(r == "the knowledge base already has its 10 root folders (Admin, Family, Groups, Health, Home, Ideas, Money, People, Trips, Work); put this note in one of them instead of creating Pets/")
+        #expect(await w.refusal("write_file", ["path": "Home/Bruno.md", "content": "# Bruno\n"]) == nil)
+        #expect(await w.refusal("write_file", ["path": "Bruno.md", "content": "# Bruno\n"]) == nil, "the root is not a folder")
+    }
+
+    @Test func aNinthNoteInATopicFolderIsRefusedButPeopleAndGroupsGrow() async throws {
+        let w = try Self.world()
+        for i in 1...8 { try w.put("Work/N\(i).md", "# N\(i)\n"); try w.put("People/P\(i).md", "# P\(i)\n") }
+        let r = await w.refusal("write_file", ["path": "Work/N9.md", "content": "# N9\n"])
+        #expect(r == "Work/ already holds 8 notes (N1, N2, N3, N4, N5, N6, N7, N8); fold this into one of them instead of adding a ninth")
+        _ = try await w.read("Work/N3.md")
+        #expect(await w.refusal("write_file", ["path": "Work/N3.md", "content": "# N3\nmore\n"]) == nil, "an existing note can still be updated")
+        #expect(await w.refusal("write_file", ["path": "People/P9.md", "content": "# P9\n"]) == nil)
+    }
+
+    @Test func readmeOverBudgetIsRefused() async throws {
+        let w = try Self.world()
+        let long = "# Me\n\n" + Array(repeating: "word", count: 400).joined(separator: " ")
+        #expect(await w.refusal("write_file", ["path": "README.md", "content": long]) == "README.md would be 402 words; the portrait stays under 350 — write a shorter one")
+        #expect(await w.refusal("write_file", ["path": "README.md", "content": "# Me\n\n" + Array(repeating: "word", count: 200).joined(separator: " ")]) == nil)
+        #expect(w.raw("README.md")?.hasPrefix("---\nbrownie: portrait\n") == true)
+    }
+
+    @Test func aSecondPeoplePathForAKnownPersonIsRefused() async throws {
+        let w = try Self.world(people: [Self.person("p-1", "Arjun Mehta", aliases: ["Arjun"], note: "People/Arjun Mehta.md"), Self.person("p-2", "Nitesh", note: nil)])
+        try w.put("People/Arjun Mehta.md", Self.owned("# Arjun Mehta\n", path: "People/Arjun Mehta.md"))
+        #expect(await w.refusal("write_file", ["path": "People/Arjun.md", "content": "# Arjun\n"]) == "Arjun Mehta already has a note at People/Arjun Mehta.md; write about them there, not in People/Arjun.md")
+        #expect(await w.refusal("write_file", ["path": "People/arjun mehta.md", "content": "x"])?.contains("People/Arjun Mehta.md") == true)
+        // A person without a note yet gets one, stamped with the registry's id and spellings.
+        #expect(await w.refusal("write_file", ["path": "People/Nitesh.md", "content": "# Nitesh\n"]) == nil)
+        let m = try #require(NoteMeta.parse(w.raw("People/Nitesh.md")!, path: "People/Nitesh.md").meta)
+        #expect(m.id == "p-2" && m.brownie == "person" && m.created == Self.today && m.updated == Self.today && m.aliases.isEmpty)
+        #expect(await w.refusal("write_file", ["path": "People/Someone New.md", "content": "# Someone New\n"]) == nil, "a stranger gets a file")
+        #expect(NoteMeta.parse(w.raw("People/Someone New.md")!, path: "People/Someone New.md").meta?.id == nil)
+    }
+
+    @Test func deletingUnderPeopleOrGroupsIsRefused() async throws {
+        let w = try Self.world()
+        try w.put("People/Arif.md", "# Arif\n"); try w.put("Groups/Founders.md", "# Founders\n"); try w.put("Work/Old.md", "# Old\n")
+        #expect(await w.refusal("delete_file", ["path": "People/Arif.md"])?.hasPrefix("notes under People/ and Groups/ are never deleted by the brain") == true)
+        #expect(await w.refusal("delete_file", ["path": "Groups/Founders.md"]) != nil)
+        #expect(w.raw("People/Arif.md") != nil && w.raw("Groups/Founders.md") != nil)
+        #expect(try await w.call("delete_file", ["path": "Work/Old.md"]) == "deleted Work/Old.md")
+        #expect(w.raw("Work/Old.md") == nil)
+    }
+
+    @Test func todayIsNeitherListedNorReadNorWritten() async throws {
+        let w = try Self.world()
+        try w.put(TodayNote.path, "# Today\n"); try w.put("People/Arif.md", "# Arif\n"); try w.put(".brownie/people.json", "{}")
+        #expect(try await w.call("list_dir", [:]) == "People/\nPeople/Arif.md")
+        #expect(await w.refusal("read_file", ["path": "Today.md"]) == "Today.md is Brownie's own checklist for the phone, not a note; leave it alone")
+        #expect(await w.refusal("write_file", ["path": "Today.md", "content": "x"]) != nil)
+        #expect(await w.refusal("write_file", ["path": "notes.txt", "content": "x"]) != nil)
+        #expect(await w.refusal("write_file", ["path": "../escape.md", "content": "x"]) != nil)
+        #expect(await w.refusal("write_file", ["path": "Work/Deep/Nested.md", "content": "x"]) != nil)
+    }
+}

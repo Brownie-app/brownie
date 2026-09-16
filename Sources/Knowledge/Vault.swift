@@ -13,6 +13,13 @@ public enum Vault {
         return u.appendingPathComponent("Brownie")
     }
 
+    /// Whether a vault-relative path is knowledge: Markdown, not hidden, and not `Today.md` — Brownie's own checklist
+    /// for the phone, which lives in the vault so it syncs but is never indexed, searched, counted or shown to the brain.
+    public static func isNote(_ rel: String) -> Bool {
+        guard rel.hasSuffix(".md"), !rel.hasPrefix("."), !rel.contains("/.") else { return false }
+        return rel != TodayNote.path
+    }
+
     public static var obsidianInstalled: Bool {
         NSWorkspace.shared.urlForApplication(withBundleIdentifier: "md.obsidian") != nil
     }
@@ -60,8 +67,18 @@ public enum Vault {
 /// What one sync did, for the Settings line: "2 notes came back from your iPhone and were merged · 0 conflicts".
 public struct SyncReport: Sendable, Equatable, Codable {
     public var toPhone = 0, fromPhone = 0, conflicts = 0, removedOnPhone = 0
+    /// Notes deleted on the Mac since the last sync, so taken off the phone too instead of coming back.
+    public var deletedOnMac = 0
     public var at: Date
     public init(at: Date) { self.at = at }
+    enum CodingKeys: String, CodingKey { case toPhone, fromPhone, conflicts, removedOnPhone, deletedOnMac, at }
+    /// A report saved before `deletedOnMac` existed still reads.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        toPhone = try c.decodeIfPresent(Int.self, forKey: .toPhone) ?? 0; fromPhone = try c.decodeIfPresent(Int.self, forKey: .fromPhone) ?? 0
+        conflicts = try c.decodeIfPresent(Int.self, forKey: .conflicts) ?? 0; removedOnPhone = try c.decodeIfPresent(Int.self, forKey: .removedOnPhone) ?? 0
+        deletedOnMac = try c.decodeIfPresent(Int.self, forKey: .deletedOnMac) ?? 0; at = try c.decode(Date.self, forKey: .at)
+    }
     public var line: String {
         var parts: [String] = []
         if fromPhone > 0 { parts.append("\(fromPhone) note\(fromPhone == 1 ? "" : "s") came back from your iPhone and \(fromPhone == 1 ? "was" : "were") merged") }
@@ -77,7 +94,9 @@ extension Vault {
     /// - changed only on the phone → the phone's text replaces the Mac's (your words come back);
     /// - changed only on the Mac → copied to the phone (Brownie's night's work goes out);
     /// - changed on both → the phone's text stays on top, Brownie's version goes under its own heading — nothing you wrote is overwritten;
-    /// - new on the phone → added; deleted on the phone → restored from the Mac (the Mac is the truth for deletions).
+    /// - new on the phone → added; deleted on the phone → restored from the Mac (the Mac is the truth for deletions);
+    /// - deleted on the Mac (gone here, its base copy still there) → taken off the phone too, never copied back;
+    /// - gone on both sides → its base copy is dropped.
     public static func sync(_ root: URL, to dest: URL, now: Date = Date(), base baseName: String = ".sync", include: (String) -> Bool = { _ in true }) throws -> SyncReport {
         let fm = FileManager.default
         try fm.createDirectory(at: dest, withIntermediateDirectories: true)
@@ -85,6 +104,7 @@ extension Vault {
         try fm.createDirectory(at: base, withIntermediateDirectories: true)
         var report = SyncReport(at: now)
         let macNotes = notes(under: root).filter { include($0.key) }, phoneNotes = notes(under: dest).filter { include($0.key) }
+        for rel in notes(under: base).keys where include(rel) && macNotes[rel] == nil && phoneNotes[rel] == nil { try? fm.removeItem(at: base.appendingPathComponent(rel)) }
         for rel in Set(macNotes.keys).union(phoneNotes.keys) {
             let macURL = root.appendingPathComponent(rel), phoneURL = dest.appendingPathComponent(rel), baseURL = base.appendingPathComponent(rel)
             let mac = macNotes[rel], phone = phoneNotes[rel]
@@ -94,6 +114,10 @@ extension Vault {
                 if baseText != nil, baseText == m { /* deleted on the phone; the Mac is the truth for deletions */ report.removedOnPhone += 1 }
                 try copy(macURL, to: phoneURL); try copy(macURL, to: baseURL); report.toPhone += 1
             case (nil, let p?):
+                if baseText != nil {
+                    // It was here at the last sync and the user removed it on the Mac: the deletion goes out; the note does not come back.
+                    try? fm.removeItem(at: phoneURL); try? fm.removeItem(at: baseURL); report.deletedOnMac += 1; continue
+                }
                 try write(p, to: macURL); try write(p, to: baseURL); report.fromPhone += 1
             case (let m?, let p?):
                 if m == p { if baseText != m { try write(m, to: baseURL) }; continue }

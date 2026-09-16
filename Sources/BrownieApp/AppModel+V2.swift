@@ -682,15 +682,18 @@ extension AppModel {
         }
     }
 
-    /// `[[Old]]` → `[[New]]` in every note, written straight to the files so no note counts as the user's edit.
+    /// `[[Old]]` → `[[New]]` in every note, written straight to the files with the front-matter's hash moved along, so no note counts as the user's edit.
     private func rewriteLinks(from olds: [String], to new: String) async {
         for f in (try? await knowledge.folders()) ?? [] {
             for n in f.notes {
                 let url = knowledge.rootURL.appendingPathComponent(n.relativePath)
-                guard var text = try? String(contentsOf: url, encoding: .utf8) else { continue }
-                var touched = false
-                for old in Set(olds) where old != new { if let t = PersonNotes.rewriteLinks(in: text, from: old, to: new) { text = t; touched = true } }
-                if touched { try? text.write(to: url, atomically: true, encoding: .utf8) }
+                guard let raw = try? String(contentsOf: url, encoding: .utf8) else { continue }
+                let rewritten = NoteMeta.restamp(raw, path: n.relativePath) { body in
+                    var text = body, touched = false
+                    for old in Set(olds) where old != new { if let t = PersonNotes.rewriteLinks(in: text, from: old, to: new) { text = t; touched = true } }
+                    return touched ? text : nil
+                }
+                if let rewritten { try? rewritten.write(to: url, atomically: true, encoding: .utf8) }
             }
         }
     }
