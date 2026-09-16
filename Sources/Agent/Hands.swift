@@ -62,7 +62,7 @@ public actor Hands {
 
         FIRST, always: call `plan` with 2–6 short steps in the user's own words ("Open Chrome", "Go to amazon.com", "Search for iPhone", "Open the first result", "Add it to the cart — then stop for you"). The user watches this list. When a step is complete, call `step_done` with its number and a few words on what you saw. Never skip the plan.
 
-        HOW TO ACT. Prefer the skills: `open_url` for any web page (it opens the browser, goes there and waits for the page), `open_chat` for a WhatsApp or Messages conversation (it opens and verifies the right chat), `type_message` to put words in a chat's message box. Otherwise: `screen` to see, `find` to locate an element by its words instead of reading the whole tree, `press` numbered elements, `set_value` for text fields, `type` at the focus. After acting, confirm with `find` or `wait_for` — `wait_for` waits until something appears; do not `wait` blindly. Every result tells you what actually happened (which element, whether the text landed, the window's title now): read it, and if it didn't land, do it differently rather than again.
+        HOW TO ACT. Prefer the skills: `open_url` for any web page (it opens the browser, goes there and waits for the page), `open_chat` for a WhatsApp or Messages conversation (it opens and verifies the right chat), `type_message` to put words in a chat's message box. Otherwise: `find` to locate anything by its words — it searches the whole window, deep into web pages, and lists links and buttons first — then `press` its number; `set_value` for text fields; `screen` only for a general look (it is capped and shallow); `type` at the focus. On a web page, a result or a product is a Link: `find "iPhone"` then `press` the first Link. If nothing matches, scroll (`key pagedown`) and `find` again. Never `click` by coordinates without a screenshot from `look`, and never Tab around a page. After acting, confirm with `find` or `wait_for` — `wait_for` waits until something appears; do not `wait` blindly. Every result tells you what actually happened (which element, whether the text landed, the window's title now): read it, and if it didn't land, do it differently rather than again.
 
         The one rule you can never break: you do not send, pay, submit, delete, purchase, post or transfer. When the next step is one of those, stop, call `need_user` with what is ready, and let the user press it. If the request itself is to send something, get everything in place and stop the same way.
 
@@ -111,15 +111,19 @@ public actor Hands {
             },
             Tool(name: "find", description: "Elements whose label or value contains these words, with their numbers. Cheaper and surer than reading the whole tree.", parametersSchema: #"{"type":"object","properties":{"text":{"type":"string"}},"required":["text"]}"#) { d in
                 let q = arg(d)["text"] as? String ?? ""
-                guard let snap = await self.snap() else { return "(no frontmost window)" }
-                let hits = snap.matching(q)
-                return hits.isEmpty ? "nothing on screen says “\(q)” (window: \(snap.window))" : hits.prefix(12).map { "[\($0.id)] \($0.role) “\($0.title)”" + ($0.value.isEmpty ? "" : " = \($0.value.prefix(60))") }.joined(separator: "\n")
+                let hits = await self.search(q)
+                let w = await self.windowTitle()
+                // links and buttons first: those are what gets pressed
+                let ranked = hits.sorted { a, b in Self.rank(a.role) < Self.rank(b.role) }
+                return ranked.isEmpty ? "nothing in this window says “\(q)” (window: \(w)) — try other words, or scroll with key pagedown and look again" : ranked.map { "[\($0.id)] \($0.role) “\($0.title.prefix(90))”" + ($0.value.isEmpty ? "" : " = \($0.value.prefix(60))") }.joined(separator: "\n")
             },
             Tool(name: "wait_for", description: "Wait until something with these words is on screen (up to 10 s). Use this instead of wait.", parametersSchema: #"{"type":"object","properties":{"text":{"type":"string"},"seconds":{"type":"number"}},"required":["text"]}"#) { d in
                 let a = arg(d); let q = a["text"] as? String ?? ""; let limit = min(10, a["seconds"] as? Double ?? 6)
                 let started = Date()
                 while Date().timeIntervalSince(started) < limit {
-                    if let snap = await self.snap(250), snap.contains(q) { return "“\(q)” is on screen after \(Int(Date().timeIntervalSince(started)))s (window: \(snap.window))" }
+                    let w = await self.windowTitle()
+                    let hit = await self.search(q, limit: 1)
+                    if w.lowercased().contains(q.lowercased()) || !hit.isEmpty { return "“\(q)” is on screen after \(Int(Date().timeIntervalSince(started)))s (window: \(w))" }
                     try? await Task.sleep(nanoseconds: 500_000_000)
                 }
                 let w = await self.windowTitle()
@@ -194,6 +198,8 @@ public actor Hands {
     private func windowTitle() -> String { session.snapshot(maxElements: 10)?.window ?? "?" }
     private func focused() -> UISnapshot.Element? { session.focusedTextElement() }
     private func canType() -> Bool { session.hasKeyWindow() }
+    private func search(_ q: String, limit: Int = 12) -> [UISnapshot.Element] { session.search(q, limit: limit) }
+    static func rank(_ role: String) -> Int { switch role { case "Link", "Button": return 0; case "TextField", "TextArea", "SearchField", "ComboBox", "PopUpButton", "MenuItem", "Row", "Cell": return 1; case "Heading", "StaticText": return 2; default: return 3 } }
     private func narrate(_ tool: String, _ args: String) -> String { HandsNarrator.line(tool: tool, args: args, label: { session.titleOf($0) }) }
     private func snapshotText() -> String { session.snapshot()?.text ?? "(no frontmost window)" }
     private func endLoop() { task?.cancel() }

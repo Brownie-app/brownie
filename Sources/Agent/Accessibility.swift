@@ -90,6 +90,40 @@ public final class AXSession {
         return UISnapshot(app: app.localizedName ?? "?", window: attr(root, kAXTitleAttribute) as? String ?? "", elements: elements)
     }
 
+    /// Every element in the window whose label, value or role says these words — the whole tree, not the numbered cap.
+    /// A web page has thousands of nodes; the product links Hands wants are deep. Matches are numbered on top of the current snapshot.
+    public func search(_ query: String, limit: Int = 12, maxNodes: Int = 6000, budget: TimeInterval = 2.5) -> [UISnapshot.Element] {
+        let q = query.lowercased().trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty, let app = NSWorkspace.shared.frontmostApplication else { return [] }
+        let axApp = AXUIElementCreateApplication(app.processIdentifier)
+        var winRef: CFTypeRef?
+        AXUIElementCopyAttributeValue(axApp, kAXFocusedWindowAttribute as CFString, &winRef)
+        let root: AXUIElement = (winRef as! AXUIElement?) ?? axApp
+        var out: [UISnapshot.Element] = []
+        var next = (refs.keys.max() ?? 0) + 1
+        var queue: [(AXUIElement, Int)] = [(root, 0)]
+        var head = 0, seen = 0
+        let started = Date()
+        while head < queue.count, seen < maxNodes, out.count < limit, Date().timeIntervalSince(started) < budget {
+            let (el, depth) = queue[head]; head += 1; seen += 1
+            let role = attr(el, kAXRoleAttribute) as? String ?? "?"
+            let title = (attr(el, kAXTitleAttribute) as? String) ?? (attr(el, kAXDescriptionAttribute) as? String) ?? (attr(el, kAXPlaceholderValueAttribute) as? String) ?? ""
+            var value = ""
+            if let v = attr(el, kAXValueAttribute) { value = (v as? String) ?? ((v as? NSNumber).map { $0.stringValue } ?? "") }
+            let shortRole = String(role.dropFirst(2))
+            if title.lowercased().contains(q) || value.lowercased().contains(q) || shortRole.lowercased() == q {
+                var actionsRef: CFArray?
+                AXUIElementCopyActionNames(el, &actionsRef)
+                let actions = ((actionsRef as? [String]) ?? []).map { $0.replacingOccurrences(of: "AX", with: "") }
+                let e = UISnapshot.Element(id: next, role: shortRole, title: title, value: value, frame: frame(el), actions: actions, depth: depth)
+                refs[next] = el; descs[next] = e; next += 1
+                out.append(e)
+            }
+            if depth < 30, let kids = attr(el, kAXChildrenAttribute) as? [AXUIElement] { for k in kids { queue.append((k, depth + 1)) } }
+        }
+        return out
+    }
+
     /// The live element for an id. A reference the app has since thrown away is re-found by role, title and place.
     func element(_ id: Int) -> AXUIElement? {
         guard let el = refs[id] else { return nil }
