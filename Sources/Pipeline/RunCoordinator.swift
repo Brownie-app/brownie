@@ -146,7 +146,12 @@ public actor RunCoordinator {
                 // What the user typed, then what their thumbs-downs taught.
                 let instructions = [typed, learned].filter { !$0.isEmpty }.joined(separator: "\n")
                 let max = Int(try await store.value(SettingKey.cardsPerMorning) ?? "5") ?? 5
-                let ledger = await LoopLedger.load(store), openLoops = ledger.filter { $0.status == .open }
+                // A loop that has waited its full term is let go now, before the judge sees the ledger: handed over as
+                // open, it would come back with an item, be let go in the merge, and still get a card in the morning.
+                var ledger = await LoopLedger.load(store)
+                let letGo = StatusRules.lapse(loops: ledger, now: deps.clock.now())
+                if letGo != ledger { log.info("\(zip(ledger, letGo).filter { $0.status != $1.status }.count) loop(s) let go for want of news"); ledger = letGo; await LoopLedger.save(ledger, store) }
+                let openLoops = ledger.filter { $0.status == .open }
                 let cal = await deps.calendarText()
                 deps.stage("Judge what matters", "\(recent.count) summaries from the last 7 days\(cal == nil ? "" : ", the calendar for 8 days"), \(openLoops.count) open loops")
                 let household = Self.loadHousehold(try await store.value(SettingKey.household))
@@ -336,12 +341,13 @@ public actor RunCoordinator {
         let now = deps.clock.now()
         let existing = loadAsks(try? await store.value(SettingKey.asks))
         var found: [Ask] = []
+        // Each chat is read back to its own oldest ask still waiting, so a late reply is found however late — and a
+        // reply already judged off-topic is passed over for the user's next message. Other chats stay at three days.
+        let scan = AskLedger.scan(existing: existing, now: now)
         for source in deps.sources {
             guard let scanner = source as? AskScanning, await source.availability() == .available else { continue }
             let enabled = try? await Self.enabledBucketsStatic(for: source, store: store)
-            // Back to this source's oldest ask still waiting (bucket ids start with the source id), so a late reply is found however late.
-            let since = AskLedger.scanSince(open: existing.filter { $0.bucket.rawValue.hasPrefix(source.id.rawValue + ":") }, now: now)
-            if let a = try? await scanner.recentAsks(enabled: enabled ?? nil, since: since) { found += a }
+            if let a = try? await scanner.recentAsks(enabled: enabled ?? nil, scan: scan) { found += a }
         }
         let merged = AskLedger.merge(existing: existing, found: found, now: now)
         let judged = await AskAnswering.judge(merged, reader: reader)

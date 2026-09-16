@@ -24,9 +24,14 @@ public enum QuietCheck {
             if let p = c.person, !c.isDue, !c.isComeBack, let sent = past.first(where: { $0.state == .fired && samePerson($0.person, p) && now.timeIntervalSince($0.resolvedAt ?? $0.createdAt) < recentReplyHours * 3600 }) {
                 r.dropped.append((c, "you wrote to \(p.split(separator: " ").first.map(String.init) ?? p) \(ago(now.timeIntervalSince(sent.resolvedAt ?? sent.createdAt)))")); continue
             }
-            // its loop closed since the card was made
-            if let l = c.loopID, let loop = loops.first(where: { $0.id == l }), loop.status == .closed {
-                r.dropped.append((c, "the loop it was about closed\(loop.closedHow.map { " — \($0)" } ?? "")")); continue
+            // its loop is no longer open — closed since the card was made, let go for want of news, or dismissed by the user
+            if let l = c.loopID, let loop = loops.first(where: { $0.id == l }), loop.status != .open {
+                switch loop.status {
+                case .lapsed: r.dropped.append((c, "the loop it was about was let go"))
+                case .dismissed: r.dropped.append((c, "the loop it was about was dismissed"))
+                case .closed, .open: r.dropped.append((c, "the loop it was about closed\(loop.closedHow.map { " — \($0)" } ?? "")"))
+                }
+                continue
             }
             // the same loop was fired within the card's lifetime, and this is not a deliberate nudge
             if let l = c.loopID, !c.isComeBack, past.contains(where: { $0.loopID == l && $0.state == .fired && now.timeIntervalSince($0.resolvedAt ?? $0.createdAt) < Card.lifetime }) {

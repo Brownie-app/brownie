@@ -24,6 +24,14 @@ import Domain
         #expect(r.dropped.map(\.why) == ["the loop it was about closed — she replied"])
     }
 
+    @Test func aLoopLetGoOrDismissedTakesItsCardWithItToo() {
+        var gone = loop("L1"); gone.status = .lapsed; gone.lapsedAt = now; gone.closedAt = now; gone.closedBy = "lapsed"
+        var dismissed = loop("L2"); dismissed.status = .dismissed
+        let r = run([card("a", loop: "L1"), card("b", loop: "L2"), card("c", loop: "L3")], loops: [gone, dismissed, loop("L3")])
+        #expect(r.kept.map(\.id) == ["c"], "only the card whose loop is still open reaches the morning")
+        #expect(r.dropped.map(\.why) == ["the loop it was about was let go", "the loop it was about was dismissed"])
+    }
+
     @Test func aLoopAlreadyFiredIsNotAskedTwiceUnlessItCameBack() {
         let fired = card("old", loop: "L1", state: .fired, resolvedAgo: 3600)
         #expect(run([card("a", loop: "L1")], loops: [loop("L1")], past: [fired]).dropped.map(\.why) == ["you already fired a card for this"])

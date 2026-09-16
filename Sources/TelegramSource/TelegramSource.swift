@@ -145,4 +145,4 @@ extension TelegramSource: ChatReader {
         return try await Self.history(c, chatID: chatID, me: me, limit: Self.lookupCap) { $0.date < from }.messages.filter { $0.date <= to }
     }
 }
-extension TelegramSource: AskScanning { public func recentAsks(enabled: Set<BucketID>?, since: Date) async throws -> [Ask] { try await scanAsks(enabled: enabled, since: since) } }
+extension TelegramSource: AskScanning { public func recentAsks(enabled: Set<BucketID>?, scan: AskScan) async throws -> [Ask] { try await scanAsks(enabled: enabled, scan: scan) } }

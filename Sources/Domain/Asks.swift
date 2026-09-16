@@ -29,7 +29,23 @@ public struct Ask: Codable, Sendable, Equatable, Identifiable {
     public var isLapsed: Bool { lapsedAt != nil && !isAnswered }
 }
 
+/// What one scan for asks is told: how far back to read each chat, and which replies are already judged.
+/// A chat with nothing waiting is read `since`; a chat with an ask still open is read back to that ask, on its own —
+/// one colleague's question from forty days ago does not send every other chat on the source forty days deep.
+public struct AskScan: Sendable, Equatable {
+    /// How far back a chat with no ask waiting is read.
+    public var since: Date
+    /// The chats with an ask waiting, each read back to its own oldest one.
+    public var sinceByBucket: [BucketID: Date]
+    /// Ask id → the reply already judged to be about something else, so the user's next message after it is the one to pair now.
+    public var judgedReplies: [String: Date]
+    public init(since: Date, sinceByBucket: [BucketID: Date] = [:], judgedReplies: [String: Date] = [:]) {
+        self.since = since; self.sinceByBucket = sinceByBucket; self.judgedReplies = judgedReplies
+    }
+    public func since(_ bucket: BucketID) -> Date { sinceByBucket[bucket] ?? since }
+}
+
 /// A chat source that can tell what was asked of the user lately.
 public protocol AskScanning: Sendable {
-    func recentAsks(enabled: Set<BucketID>?, since: Date) async throws -> [Ask]
+    func recentAsks(enabled: Set<BucketID>?, scan: AskScan) async throws -> [Ask]
 }

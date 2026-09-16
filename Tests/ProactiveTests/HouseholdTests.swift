@@ -82,6 +82,25 @@ let now = Date(timeIntervalSince1970: 1_758_000_000)
         #expect(HouseholdLedger.markHandled([card("e", loop: "L2", owner: "me")], ledger: mineClosed, household: h)[0].handledBy == nil, "what I closed myself isn't “handled by” anyone")
     }
 
+    @Test func aLoopLetGoIsWrittenInWordsEveryBuildReadsAndIsNobodysDoing() throws {
+        var gone = loop("g", what: "book the table for twelve"); gone.status = .lapsed; gone.lapsedAt = now; gone.closedAt = now; gone.closedBy = "lapsed"
+        let e = HouseholdLedger.entries(from: [gone], me: "m-v", now: now)
+        #expect(e.count == 1 && e[0].status == .closed && e[0].closedHow == "let go" && e[0].closedBy == nil && e[0].updatedAt == now)
+        // the previous build's status knows only open, closed and dismissed, and one unknown word empties its whole ledger
+        struct OldLine: Codable { enum Status: String, Codable { case open, closed, dismissed }; let status: Status }
+        let data = try JSONEncoder().encode(e)
+        #expect(!String(decoding: data, as: UTF8.self).contains("lapsed"))
+        #expect(try JSONDecoder().decode([OldLine].self, from: data).map(\.status) == [.closed])
+        // the other Mac: her copy is not closed as if someone did it, and no card of hers is marked handled
+        let hers = [loop("g", what: "book the table for twelve", owner: "either")]
+        let merged = HouseholdLedger.merge(HouseholdLedger.entries(from: hers, me: "m-p", now: now), e, now: now)
+        #expect(merged.count == 1 && merged[0].status == .closed && merged[0].closedBy == nil)
+        #expect(HouseholdLedger.closures(for: hers, ledger: merged, household: h, now: now)[0].status == .open)
+        var c = Card(id: "c", title: "Book the table for twelve", sourceLabel: "s", why: "", actionLabel: "", dueLine: "", urgency: .medium, draftLabel: "", draft: "", recipe: .browser(url: "u"), evidence: [], verification: .verified, verifiedLine: "", createdAt: now, loopID: "g")
+        c.owner = "either"
+        #expect(HouseholdLedger.markHandled([c], ledger: merged, household: h)[0].handledBy == nil)
+    }
+
     @Test func ledgerFileRoundTrip() throws {
         let u = FileManager.default.temporaryDirectory.appendingPathComponent("hh-\(UUID().uuidString)/ledger.json")
         let e = HouseholdLedger.entries(from: [loop("a", what: "x")], me: "m-v", now: now)
