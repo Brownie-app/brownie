@@ -66,3 +66,29 @@ import Domain
         #expect(c.withDueLine("Due tomorrow").staleLine == "old")
     }
 }
+
+@Suite struct RecentReplyTests {
+    let now = Date(timeIntervalSince1970: 1_758_000_000)
+    func card(_ id: String, to person: String, state: CardState = .ready, resolvedAgo: TimeInterval? = nil, due: Date? = nil, cameBack: Bool? = nil) -> Card {
+        var c = Card(id: id, title: "Update \(person)", sourceLabel: "WhatsApp", why: "", actionLabel: "", dueLine: "", urgency: .medium, draftLabel: "", draft: "hi", recipe: .whatsapp(chat: person, body: "hi"), evidence: [], verification: .verified, verifiedLine: "", state: state, createdAt: now.addingTimeInterval(-600), cameBack: cameBack)
+        if let r = resolvedAgo { c.resolvedAt = now.addingTimeInterval(-r) }; c.dueDate = due; return c
+    }
+    func run(_ cards: [Card], past: [Card]) -> QuietCheck.Result { QuietCheck.run(cards: cards, loops: [], past: past, noteUpdated: { _ in nil }, fileExists: { _ in true }, now: now, staleDays: 7) }
+
+    @Test func aCardToSomeoneYouJustWroteToIsLetGo() {
+        let sent = card("old", to: "Nitesh (+919540752593)", state: .fired, resolvedAgo: 120)
+        let r = run([card("new", to: "Nitesh")], past: [sent])
+        #expect(r.kept.isEmpty && r.dropped.first?.why == "you wrote to Nitesh 2 minutes ago")
+        #expect(run([card("new", to: "Nitesh")], past: [card("old", to: "Nitesh", state: .fired, resolvedAgo: 7 * 3600)]).kept.count == 1, "after six hours it's fair game")
+        #expect(run([card("new", to: "Kanika Pandey")], past: [sent]).kept.count == 1, "someone else")
+        #expect(run([card("new", to: "Nitesh")], past: [card("old", to: "Nitesh", state: .dismissed, resolvedAgo: 120)]).kept.count == 1, "only a card you fired counts as writing")
+    }
+    @Test func aDueOrCameBackCardStays() {
+        let sent = card("old", to: "Nitesh", state: .fired, resolvedAgo: 60)
+        #expect(run([card("due", to: "Nitesh", due: now.addingTimeInterval(86400))], past: [sent]).kept.count == 1)
+        #expect(run([card("back", to: "Nitesh", cameBack: true)], past: [sent]).kept.count == 1)
+    }
+    @Test func agoWording() {
+        #expect(QuietCheck.ago(30) == "just now" && QuietCheck.ago(150) == "2 minutes ago" && QuietCheck.ago(3700) == "1 hour ago" && QuietCheck.ago(9000) == "2 hours ago")
+    }
+}

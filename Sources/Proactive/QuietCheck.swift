@@ -12,9 +12,16 @@ public enum QuietCheck {
     /// The setting: notes older than this many days no longer count as evidence on their own.
     public static let defaultStaleDays = 7
 
+    /// You wrote to someone this recently → no card asking you to write to them again, unless a date or a came-back says so.
+    public static let recentReplyHours = 6.0
+
     public static func run(cards: [Card], loops: [Loop], past: [Card], noteUpdated: (String) -> Date?, fileExists: (String) -> Bool, now: Date, staleDays: Int) -> Result {
         var r = Result()
         for c in cards where c.state == .ready {
+            // you just wrote to them — the next move is theirs
+            if let p = c.person, !c.isDue, !c.isComeBack, let sent = past.first(where: { $0.state == .fired && samePerson($0.person, p) && now.timeIntervalSince($0.resolvedAt ?? $0.createdAt) < recentReplyHours * 3600 }) {
+                r.dropped.append((c, "you wrote to \(p.split(separator: " ").first.map(String.init) ?? p) \(ago(now.timeIntervalSince(sent.resolvedAt ?? sent.createdAt)))")); continue
+            }
             // its loop closed since the card was made
             if let l = c.loopID, let loop = loops.first(where: { $0.id == l }), loop.status == .closed {
                 r.dropped.append((c, "the loop it was about closed\(loop.closedHow.map { " — \($0)" } ?? "")")); continue
@@ -49,6 +56,17 @@ public enum QuietCheck {
         return r
     }
 
+    static func samePerson(_ a: String?, _ b: String) -> Bool {
+        guard let a else { return false }
+        func key(_ s: String) -> String { s.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }).prefix(2).joined(separator: " ") }
+        return key(a) == key(b)
+    }
+    static func ago(_ t: TimeInterval) -> String {
+        let m = Int(t / 60)
+        if m < 2 { return "just now" }
+        if m < 60 { return "\(m) minutes ago" }
+        return "\(m / 60) hour\(m / 60 == 1 ? "" : "s") ago"
+    }
     static func neededFiles(_ c: Card) -> [String] {
         switch c.recipe {
         case .imessage(_, _, let att), .mail(_, _, _, let att): return att.filter { $0.hasPrefix("/") || $0.hasPrefix("~") }.map { ($0 as NSString).expandingTildeInPath }
