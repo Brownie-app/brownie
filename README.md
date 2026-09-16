@@ -2,7 +2,7 @@
 
 A house spirit that lives in your Mac. Every night, while the Mac is plugged in and you're asleep, Brownie wakes it, reads what's new in your life — files, messages, notes, mail — with a small model that runs entirely on the machine, distils what matters into a private knowledge base, and leaves a handful of morning cards: things worth your attention, each ready to do in one tap. **Hands** is the part that acts in your apps, and it always stops one step short of anything irreversible.
 
-Inspired by the architecture of Sentient OS; written from scratch (see `docs/spec/provenance.md`).
+Website: [usebrownie.com](https://usebrownie.com). Inspired by the architecture of Sentient OS; written from scratch (see `docs/spec/provenance.md`).
 
 ## Run it
 

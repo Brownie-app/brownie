@@ -547,7 +547,9 @@ struct AboutPane: View {
             VStack(alignment: .leading) { Text("Brownie").font(.system(size: 22, weight: .bold)); Text("Version \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev") · Apple silicon · macOS 14 or later").font(.system(size: 11)).foregroundStyle(t.ink2) }
         }
         CardBox { VStack(alignment: .leading, spacing: 10) {
-            kv("Source code", "[your-repo-url]"); kv("Licence", "[LICENCE] · inspired by the architecture of Sentient OS"); kv("Acknowledgements", "Gemma 4 · LiteRT-LM")
+            HStack { Text("Website").frame(width: 130, alignment: .leading).foregroundStyle(t.ink2); Button("usebrownie.com") { NSWorkspace.shared.open(URL(string: "https://usebrownie.com")!) }.buttonStyle(.link) }
+            HStack { Text("Source code").frame(width: 130, alignment: .leading).foregroundStyle(t.ink2); Button("github.com/Brownie-app/brownie") { NSWorkspace.shared.open(URL(string: "https://github.com/Brownie-app/brownie")!) }.buttonStyle(.link) }
+            kv("Licence", "AGPL-3.0 · inspired by the architecture of Sentient OS"); kv("Acknowledgements", "Gemma 4 · LiteRT-LM")
         } }
         H2(text: "Appearance").padding(.top, 6)
         CardBox(padding: 0) { VStack(spacing: 0) {

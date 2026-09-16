@@ -12,7 +12,7 @@ import Support
 /// Nothing is stored on the site; the token is exchanged here and kept in the Keychain.
 public actor SlackAuth {
     public static let shared = SlackAuth()
-    public static let callback = "https://brownie-website-dusky.vercel.app/oauth/slack"
+    public static let callback = "https://www.usebrownie.com/oauth/slack"
     public static let scopes = ["channels:history", "channels:read", "groups:history", "groups:read", "im:history", "im:read", "mpim:history", "mpim:read", "users:read"]
     public static let tokenKey = "slack.token"
     public static var isConfigured: Bool { !(Secrets.value("SLACK_CLIENT_ID") ?? "").isEmpty }
