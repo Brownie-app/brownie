@@ -21,6 +21,8 @@ public final class Recorder {
     private var buffer = ""
     private var bufferField = ""
     private var bufferApp = ""
+    private var bufferPlace: (Double?, Double?) = (nil, nil)
+    private var bufferURL: String?
     private let log = Log("teach")
     private let stopWords = ["send", "pay", "submit", "delete", "purchase", "buy", "post", "confirm", "place order", "transfer"]
 
@@ -88,9 +90,13 @@ public final class Recorder {
             }
         }
         if title.isEmpty, let v = attr(el, kAXValueAttribute) as? String { title = v }
-        if title.isEmpty, role == "AXStaticText" || role == "AXCell" || role == "AXRow" { title = rowTitle(el) }
+        if title.isEmpty, role == "AXStaticText" || role == "AXCell" || role == "AXRow" || role == "AXGroup" { title = rowTitle(el) }
         title = Self.clean(String(title.prefix(80)))
-        if role == "AXTextField" || role == "AXTextArea" || role == "AXSearchField" || role == "AXComboBox" { flush(); bufferField = title; bufferApp = app.name; return }   // typing follows
+        // where it sat, and the words around it — the only way back to an unlabelled element on a web page
+        let (fx, fy) = fractions(el, pid: app.pid)
+        let context = Self.clean(String(rowTitle(el).prefix(80)))
+        let url = pageURL(app.pid)
+        if role == "AXTextField" || role == "AXTextArea" || role == "AXSearchField" || role == "AXComboBox" { flush(); bufferField = title; bufferApp = app.name; bufferPlace = (fx, fy); bufferURL = url; return }   // typing follows
         let typedIntoMessageBox = !buffer.isEmpty && ["message", "compose", "reply", "type a message", "write"].contains(where: { bufferField.lowercased().contains($0) })
         flush()
         let low = title.lowercased()
@@ -98,8 +104,36 @@ public final class Recorder {
             stoppedBecause = "You pressed “\(title)” after writing the message — that sends. Hands will always stop before that step and leave it to you."
             stop(); return
         }
-        steps.append(.init(kind: .click, app: app.name, target: title.isEmpty ? String(role.dropFirst(2)) : title, role: String(role.dropFirst(2))))
+        steps.append(.init(kind: .click, app: app.name, target: title.isEmpty ? String(role.dropFirst(2)) : title, role: String(role.dropFirst(2)), fx: fx, fy: fy, context: context == title ? nil : (context.isEmpty ? nil : context), url: url))
         onChange?()
+    }
+
+    /// The element's centre as fractions of its window.
+    private func fractions(_ el: AXUIElement, pid: pid_t) -> (Double?, Double?) {
+        var p = CGPoint.zero, sz = CGSize.zero
+        if let pv = attr(el, kAXPositionAttribute) { AXValueGetValue(pv as! AXValue, .cgPoint, &p) }
+        if let sv = attr(el, kAXSizeAttribute) { AXValueGetValue(sv as! AXValue, .cgSize, &sz) }
+        var w: CFTypeRef?; AXUIElementCopyAttributeValue(AXUIElementCreateApplication(pid), kAXFocusedWindowAttribute as CFString, &w)
+        guard let w else { return (nil, nil) }
+        var wp = CGPoint.zero, ws = CGSize.zero
+        if let pv = attr(w as! AXUIElement, kAXPositionAttribute) { AXValueGetValue(pv as! AXValue, .cgPoint, &wp) }
+        if let sv = attr(w as! AXUIElement, kAXSizeAttribute) { AXValueGetValue(sv as! AXValue, .cgSize, &ws) }
+        guard let (fx, fy) = StepMatch.fraction(CGRect(origin: p, size: sz), in: CGRect(origin: wp, size: ws)) else { return (nil, nil) }
+        return (fx, fy)
+    }
+    /// A browser's page address, from its web area, when the app is a browser.
+    private func pageURL(_ pid: pid_t) -> String? {
+        guard let name = NSRunningApplication(processIdentifier: pid)?.localizedName, BrowserSkill.isBrowser(name) else { return nil }
+        var w: CFTypeRef?; AXUIElementCopyAttributeValue(AXUIElementCreateApplication(pid), kAXFocusedWindowAttribute as CFString, &w)
+        guard let w else { return nil }
+        var found: String?
+        func walk(_ n: AXUIElement, depth: Int) {
+            guard found == nil, depth < 8 else { return }
+            if (attr(n, kAXRoleAttribute) as? String) == "AXWebArea", let u = attr(n, "AXURL") as? URL { found = u.absoluteString; return }
+            if let kids = attr(n, kAXChildrenAttribute) as? [AXUIElement] { for k in kids { walk(k, depth: depth + 1) } }
+        }
+        walk(w as! AXUIElement, depth: 0)
+        return found
     }
 
     /// A row's text is usually on a child; take the first few static texts.
@@ -168,8 +202,8 @@ public final class Recorder {
         // What the field holds is truer than what we counted: autocorrect, IME, dropped events.
         var text = buffer
         if let app = app(), let v = focusedFieldValue(app.pid), !v.isEmpty, v.count >= buffer.count / 2 { text = v }
-        steps.append(.init(kind: .type, app: bufferApp, target: bufferField.isEmpty ? "text field" : bufferField, role: "TextField", text: text))
-        buffer = ""; bufferField = ""
+        steps.append(.init(kind: .type, app: bufferApp, target: bufferField.isEmpty ? "text field" : bufferField, role: "TextField", text: text, fx: bufferPlace.0, fy: bufferPlace.1, url: bufferURL))
+        buffer = ""; bufferField = ""; bufferPlace = (nil, nil); bufferURL = nil
         onChange?()
     }
     private func focusedFieldValue(_ pid: pid_t) -> String? {
@@ -192,6 +226,13 @@ public final class Recorder {
         var out: [TaughtRecipe.Parameter] = []
         let isSearch = { (s: TaughtRecipe.Step) in s.kind == .type && (s.target.lowercased().contains("search") || s.target.lowercased().contains("find") || s.target.lowercased().contains("to:")) }
         let chrome: Set<String> = ["search", "compose", "new", "new chat", "back", "send", "attach", "menu"]
+        // In a browser the address bar is not a person, and a site's search box is a "search", not a message.
+        if let app = steps.first(where: { $0.kind == .launch })?.app, BrowserSkill.isBrowser(app) {
+            let addr = { (s: TaughtRecipe.Step) in s.target.lowercased().contains("address") }
+            if let site = steps.first(where: { $0.kind == .type && !addr($0) && isSearch($0) }) { out.append(.init(name: "search", original: site.text, fill: .fixed)) }
+            if let typed = steps.last(where: { $0.kind == .type && !addr($0) && !isSearch($0) && !$0.text.isEmpty }) { out.append(.init(name: "text", original: typed.text, fill: .fixed)) }
+            return out
+        }
         if let search = steps.first(where: isSearch) {
             out.append(.init(name: "person", original: search.text, fill: .fixed))
         } else if let person = steps.first(where: { $0.kind == .click && ($0.role == "Row" || $0.role == "Cell" || $0.role == "StaticText") && !$0.target.isEmpty && $0.target.count < 40 && !chrome.contains($0.target.lowercased()) }) {
@@ -204,6 +245,12 @@ public final class Recorder {
     }
     nonisolated public static func suggestName(_ steps: [TaughtRecipe.Step], parameters: [TaughtRecipe.Parameter]) -> String {
         let app = steps.first(where: { $0.kind == .launch })?.app ?? "an app"
+        if BrowserSkill.isBrowser(app) {
+            let host = steps.compactMap(\.url).compactMap { URL(string: $0)?.host?.replacingOccurrences(of: "www.", with: "") }.first
+            let search = parameters.first { $0.name == "search" }?.original
+            if let host, let search { return "Search \(host) for \(search)" }
+            if let host { return "Do the \(host) thing in \(app)" }
+        }
         if let p = parameters.first(where: { $0.name == "person" }) { return "Message \(p.original) in \(app)" }
         return "Do the \(app) thing"
     }
@@ -261,6 +308,7 @@ public struct RecipeRunner: Sendable {
         let person = recipe.parameters.first(where: { $0.name == "person" }).flatMap { values[$0.name] ?? $0.original }
         var chatVerified = false
         var lastClick: CGRect = .zero
+        var lastURL: String?
         let norm = { (x: String) in x.lowercased().filter { $0.isLetter || $0.isNumber || $0 == " " }.trimmingCharacters(in: .whitespaces) }
         for s in steps {
             if Task.isCancelled { log.info("stopped by the user"); return .couldNot("stopped") }
@@ -275,6 +323,12 @@ public struct RecipeRunner: Sendable {
             case .click:
                 let rowish: Set<String> = ["Row", "Cell", "StaticText", "Button", "Link"]
                 let isPersonPick = person != nil && rowish.contains(s.role) && norm(s.target).contains(norm(person!).split(separator: " ").first.map(String.init) ?? "\u{0}")
+                // A browser step recorded on a page: go there first, so the element exists to be found.
+                if let u = s.url, BrowserSkill.isBrowser(s.app), lastURL != u, let url = URL(string: u), let appURL = AppLauncher.locate(s.app) {
+                    _ = await withCheckedContinuation { (c: CheckedContinuation<Bool, Never>) in NSWorkspace.shared.open([url], withApplicationAt: appURL, configuration: .init()) { a, e in c.resume(returning: e == nil && a != nil) } }
+                    lastURL = u; onStep("Went to \(URL(string: u)?.host ?? u)")
+                    for _ in 0..<16 { try? await Task.sleep(nanoseconds: 500_000_000); if let w = await MainActor.run(body: { session.snapshot(maxElements: 10)?.window }), BrowserSkill.loaded(title: w, before: "") { break } }
+                }
                 var ok = false
                 var tried: Set<Int> = []
                 for attempt in 0..<4 {   // the element may still be loading; a wrong pick is retried on the next candidate
@@ -286,11 +340,15 @@ public struct RecipeRunner: Sendable {
                         // After a search the pick is in the list pane: left of centre, below the search box.
                         let inList = { (e: UISnapshot.Element) in isPersonPick ? (win == .zero || (e.frame.midX < win.midX && e.frame.minY > win.minY + 60)) : true }
                         let candidates = snap.elements.filter { !tried.contains($0.id) && inList($0) }
-                        let hit = candidates.first(where: { $0.role == s.role && norm($0.title) == want })
-                            ?? candidates.first(where: { norm($0.title) == want })
-                            ?? candidates.first(where: { rowish.contains($0.role) && (norm($0.title).contains(want) || norm($0.value).contains(want)) })
-                            ?? candidates.first(where: { norm($0.title).contains(want) || norm($0.value).contains(want) })
-                            ?? (isPersonPick && first.count > 2 ? candidates.first(where: { rowish.contains($0.role) && (norm($0.title).hasPrefix(first) || norm($0.title).contains(" " + first)) }) : nil)
+                        var hit = isPersonPick
+                            ? (candidates.first(where: { $0.role == s.role && norm($0.title) == want })
+                                ?? candidates.first(where: { norm($0.title) == want })
+                                ?? candidates.first(where: { rowish.contains($0.role) && (norm($0.title).contains(want) || norm($0.value).contains(want)) })
+                                ?? candidates.first(where: { norm($0.title).contains(want) || norm($0.value).contains(want) })
+                                ?? (first.count > 2 ? candidates.first(where: { rowish.contains($0.role) && (norm($0.title).hasPrefix(first) || norm($0.title).contains(" " + first)) }) : nil))
+                            : StepMatch.candidate(for: s, in: UISnapshot(app: snap.app, window: snap.window, elements: candidates))
+                        // deep in a web page: the shallow snapshot won't have it, the word search will
+                        if hit == nil, !s.isUnlabelled, let deep = session.search(s.target, limit: 6).first(where: { !tried.contains($0.id) }) { hit = deep }
                         guard let hit else { return nil }
                         tried.insert(hit.id)
                         // Rows and their texts rarely answer AXPress in web-view apps; a real click on the centre does.
@@ -352,6 +410,8 @@ public struct RecipeRunner: Sendable {
                     return textish.contains(e.role) && !(isSearch && messageWords.contains { t.contains($0) }) && !(isMessage && (t.contains("search") || t.contains("find")))
                 }
                 if let f = fields.first(where: { $0.title.lowercased() == want }) ?? fields.first(where: { !$0.title.isEmpty && ($0.title.lowercased().contains(want) || want.contains($0.title.lowercased())) }) { return f.id }
+                // a field with no name: the one at the recorded place
+                if s.fx != nil, let f = StepMatch.candidate(for: .init(kind: .click, app: s.app, target: "", role: "TextField", fx: s.fx, fy: s.fy), in: UISnapshot(app: snap.app, window: snap.window, elements: fields)) { return f.id }
                 // A field that appeared where we just clicked (WhatsApp's search box shows only once its label is clicked).
                 if near.width > 0, let f = fields.min(by: { abs($0.frame.midY - near.midY) < abs($1.frame.midY - near.midY) }), abs(f.frame.midY - near.midY) < 40 { return f.id }
                 if let f = session.focusedTextElement(), textish.contains(f.role), !(isSearch && messageWords.contains { w in f.title.lowercased().contains(w) }), !(isMessage && f.title.lowercased().contains("search")) { return f.id }

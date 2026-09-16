@@ -98,10 +98,33 @@ public struct LoopNudger: Sendable {
         p = p.replacingOccurrences(of: "{{loop}}", with: "\(loop.direction == .mine ? "The user promised \(loop.person)" : "\(loop.person) promised the user"): \(loop.what)\nOpened: \(loop.quote) (\(loop.sourceLabel))\(loop.due.map { "\nDue: \($0)" } ?? "")\(loop.firedCardIDs.isEmpty ? "" : "\nThe user already sent one message about this; it went unanswered.")" + dueNote)
         p = p.replacingOccurrences(of: "{{person}}", with: person.isEmpty ? "(no note about \(loop.person) yet)" : String(person))
         let r = try await brain.complete(BrainRequest(system: "You return only the JSON the user asks for.", input: p, effort: .medium, maxOutputTokens: 4000, timeout: 300))
-        guard let data = r.jsonData, let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any], var card = Preparer.card(from: obj, now: clock.now()) else { throw BrainError.badResponse("nudge returned no card") }
+        guard let data = r.jsonData, let raw = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw BrainError.badResponse("nudge returned no JSON (\(r.text.prefix(120)))") }
+        let obj = Self.repair(raw, loop: loop)
+        guard var card = Preparer.card(from: obj, now: clock.now()) else { throw BrainError.badResponse("nudge returned a card with no usable recipe (keys: \(raw.keys.sorted().joined(separator: ",")))") }
         card.loopID = loop.id; card.cameBack = loop.firedCardIDs.isEmpty ? nil : true
         if dueAware, let d = loop.dueDate { card.dueDate = d; card = card.withDueLine(DueNudger.dueLine(d, now: clock.now())) }
         return (card, r.usage)
+    }
+
+    /// The brain sometimes wraps the card ({"card": {…}}), leaves the recipe as words, or picks a channel that isn't a
+    /// recipe. The loop already knows the channel and the person, so the recipe can be built from the draft when needed.
+    static func repair(_ raw: [String: Any], loop: Loop) -> [String: Any] {
+        var obj = (raw["card"] as? [String: Any]) ?? raw
+        if let items = raw["cards"] as? [[String: Any]], let first = items.first { obj = first }
+        let draft = (obj["draft"] as? String) ?? (obj["message"] as? String) ?? ""
+        let recipe = obj["recipe"] as? [String: Any]
+        let kinds: Set<String> = ["imessage", "whatsapp", "mail", "calendar", "note", "browser", "computerUse"]
+        let usable = recipe.flatMap { $0["kind"] as? String }.map { kinds.contains($0) } ?? false
+        if !usable {
+            let label = loop.sourceLabel.lowercased()
+            if label.contains("imessage") || label.contains("messages") { obj["recipe"] = ["kind": "imessage", "to": loop.person, "body": draft, "attachments": []] }
+            else if label.contains("mail") { obj["recipe"] = ["kind": "mail", "to": loop.person, "subject": String(loop.what.prefix(60)), "body": draft, "attachments": []] }
+            else { obj["recipe"] = ["kind": "whatsapp", "chat": loop.person, "body": draft] }
+        }
+        if obj["title"] == nil { obj["title"] = "Nudge \(loop.person)" }
+        if obj["draft"] == nil, !draft.isEmpty { obj["draft"] = draft }
+        if obj["evidence"] == nil { obj["evidence"] = [["source": loop.sourceLabel, "when": "", "text": loop.quote]] }
+        return obj
     }
 }
 

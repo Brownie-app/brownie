@@ -76,7 +76,18 @@ public struct TaughtRecipe: Codable, Sendable, Identifiable, Equatable {
         public let role: String
         /// For type: the text typed. May be replaced by a parameter.
         public var text: String
-        public init(kind: Kind, app: String, target: String, role: String = "", text: String = "") { self.kind = kind; self.app = app; self.target = target; self.role = role; self.text = text }
+        /// Where the element sat in its window, as fractions (0–1) of the window's width and height — survives resizes.
+        public var fx: Double?
+        public var fy: Double?
+        /// Words near the element (its own text, or the text of the link/row around it) — how an unlabelled "Group" is told apart.
+        public var context: String?
+        /// For a browser: the page's address when the step was recorded, so replay can go straight there.
+        public var url: String?
+        public init(kind: Kind, app: String, target: String, role: String = "", text: String = "", fx: Double? = nil, fy: Double? = nil, context: String? = nil, url: String? = nil) {
+            self.kind = kind; self.app = app; self.target = target; self.role = role; self.text = text; self.fx = fx; self.fy = fy; self.context = context; self.url = url
+        }
+        /// A step whose label says nothing ("Group", "text field") — only its place and context can find it again.
+        public var isUnlabelled: Bool { let t = target.lowercased(); return t.isEmpty || t == role.lowercased() || ["group", "text field", "?", "webarea", "image"].contains(t) }
     }
     public struct Parameter: Codable, Sendable, Identifiable, Equatable {
         public enum Fill: String, Codable, Sendable { case fixed, ask, fromNotes }
