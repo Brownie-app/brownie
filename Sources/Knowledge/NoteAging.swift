@@ -6,8 +6,10 @@ import Domain
 /// clauses dropped first); Context keeps its twelve newest by date; Earlier keeps twelve months and nothing past a
 /// year; and the dated one-liners of asks and promises that left the status block (`StatusBlock.retiredLines`, handed
 /// in by the pipeline so Knowledge never imports Proactive) join the month they settled in, so a resolved ask leaves
-/// a trace: "they asked … — you replied 16 Sep". Every rule takes `now`, so each is testable against a fixed clock,
-/// and every rule is idempotent for the same `now`.
+/// a trace: "they asked … — you replied 16 Sep". A cap never drops: what is past it moves down (About to Context,
+/// Now to Context, Context to Earlier — a "since" standing fact back up to About with its date) and only Earlier lets
+/// go, saying so. Every rule takes `now`, so each is testable against a fixed clock, and every rule is idempotent for
+/// the same `now`.
 public enum NoteAging {
     public static let nowDays = 45, earlierDays = 365, earlierCap = 12, monthLineChars = 240
 
@@ -30,27 +32,48 @@ public enum NoteAging {
 
     // MARK: the rules, on the pieces
 
-    /// Every cap and clock rule at once, in the order that keeps them all true: About capped; Now sorted, its stale
-    /// bullets folded into Earlier (a "since" is a standing state, so it goes to Context instead), its overflow to
-    /// Context; Context sorted and capped; Earlier merged by month, the retired lines added, lines capped, old months let go.
+    /// Every cap and clock rule at once, in the order that keeps them all true: About folded and its overflow sent to
+    /// Context; Now sorted, its stale bullets folded into Earlier (a "since" is a standing state, so it goes to Context
+    /// instead), its overflow to Context; Context sorted, its dated overflow to Earlier or — a "since" — to About;
+    /// Earlier merged by month, the retired lines added, lines capped, old months let go. A comment, a table or the like
+    /// that sat in a section is not a bullet: it neither counts toward a cap nor moves.
     static func settle(_ parts: NoteSkeleton.Parts, now: Date, timeZone: TimeZone, retired: [String], report: inout NoteSkeleton.Report) -> NoteSkeleton.Parts {
         var p = parts
-        // About: standing facts, exact repeats folded, the first twenty kept.
-        var seen = Set<String>(); p.about = p.about.filter { seen.insert($0).inserted }
-        if p.about.count > NoteSkeleton.aboutCap { report.droppedAbout += p.about.count - NoteSkeleton.aboutCap; p.about = Array(p.about.prefix(NoteSkeleton.aboutCap)) }
-        // Now: newest first; older than 45 days leaves.
-        let staleBefore = NoteMeta.day(now.addingTimeInterval(-Double(nowDays) * 86400), timeZone)
-        var now_: [NoteSkeleton.Bullet] = [], toEarlier: [NoteSkeleton.Bullet] = [], toContext: [NoteSkeleton.Bullet] = []
-        for b in NoteSkeleton.tidy(p.now) {
-            if let d = b.day, d < staleBefore { if b.since { toContext.append(b) } else { toEarlier.append(b) } }
-            else { now_.append(b) }
+        let window = NoteSkeleton.dateWindow(now: now, timeZone: timeZone)
+        // About: standing facts in the order written, exact repeats folded; the facts past the cap go down to Context rather than away.
+        var seen = Set<String>(), about: [NoteSkeleton.Item] = [], pastCap: [NoteSkeleton.Item] = [], facts = 0
+        for it in p.about where seen.insert(it.rendered).inserted {
+            if it.kind == .verbatim { about.append(it); continue }
+            facts += 1
+            if facts > NoteSkeleton.aboutCap { pastCap.append(it) } else { about.append(it) }
         }
-        if now_.count > NoteSkeleton.nowCap { toContext += now_[NoteSkeleton.nowCap...]; now_ = Array(now_.prefix(NoteSkeleton.nowCap)) }
-        report.movedToEarlier += toEarlier.count; report.movedToContext += toContext.count
+        report.aboutToContext += pastCap.count
+        p.about = about
+        var toContext = pastCap.map { NoteSkeleton.dated($0, window: window, report: &report) }
+        // Now: newest first; older than 45 days leaves; past the cap the rest go to Context.
+        let staleBefore = NoteMeta.day(now.addingTimeInterval(-Double(nowDays) * 86400), timeZone)
+        var now_: [NoteSkeleton.Bullet] = [], toEarlier: [NoteSkeleton.Bullet] = [], live = 0
+        for b in NoteSkeleton.tidy(p.now) {
+            if b.verbatim { now_.append(b); continue }
+            if let d = b.day, d < staleBefore { if b.since { toContext.append(b) } else { toEarlier.append(b) }; continue }
+            live += 1
+            if live > NoteSkeleton.nowCap { toContext.append(b) } else { now_.append(b) }
+        }
+        report.movedToContext += toContext.count - pastCap.count
         p.now = now_
-        // Context: newest first, twelve kept.
-        p.context = NoteSkeleton.tidy(p.context + toContext)
-        if p.context.count > NoteSkeleton.contextCap { report.droppedContext += p.context.count - NoteSkeleton.contextCap; p.context = Array(p.context.prefix(NoteSkeleton.contextCap)) }
+        // Context: newest first, the twelve newest dated bullets kept; past the cap a "since" is a standing fact and goes
+        // to About with its date, any other dated bullet goes to Earlier as a clause on its month; an unclear bullet has
+        // no month to go to and stays.
+        var context: [NoteSkeleton.Bullet] = [], toAbout: [NoteSkeleton.Bullet] = [], dated = 0
+        for b in NoteSkeleton.tidy(p.context + toContext) {
+            guard b.day != nil else { context.append(b); continue }
+            dated += 1
+            if dated <= NoteSkeleton.contextCap { context.append(b) } else if b.since { toAbout.append(b) } else { toEarlier.append(b) }
+        }
+        p.context = context
+        report.movedToAbout += toAbout.count
+        p.about += toAbout.sorted { ($0.sortKey, $0.text) < ($1.sortKey, $1.text) }.map(\.asAbout)
+        report.movedToEarlier += toEarlier.count
         // Earlier: one line per month, the moved bullets oldest first so a line reads in order, then the retired lines.
         var months: [String: [String]] = [:], order: [String] = []
         // A clause is already on its line when it reads there whole — a clause that itself holds "; " was split on the way back in.
@@ -62,14 +85,18 @@ public enum NoteAging {
             if !holds(month, c) { months[month, default: []].append(c) }
         }
         for line in p.earlier { for c in line.clauses { add(line.month, c) } }
-        for b in toEarlier.sorted(by: { $0.sortKey < $1.sortKey }) { add(String(b.day!.prefix(7)), b.text) }
+        for b in toEarlier.sorted(by: { ($0.sortKey, $0.text) < ($1.sortKey, $1.text) }) { add(String(b.day!.prefix(7)), b.clause) }
         for line in retired {
             guard let (month, clause) = retiredClause(line, now: now, timeZone: timeZone) else { continue }
             if !holds(month, clause) { report.retired += 1 }
             add(month, clause)
         }
         let floorMonth = String(NoteMeta.day(now.addingTimeInterval(-Double(earlierDays) * 86400), timeZone).prefix(7))
-        var lines = order.map { NoteSkeleton.MonthLine(month: $0, clauses: capped(months[$0] ?? [], month: $0)) }.sorted { $0.month > $1.month }
+        var lines = order.map { month -> NoteSkeleton.MonthLine in
+            let (kept, dropped) = capped(months[month] ?? [], month: month)
+            report.droppedClauses += dropped
+            return NoteSkeleton.MonthLine(month: month, clauses: kept)
+        }.sorted { $0.month > $1.month }
         let before = lines.count
         lines = Array(lines.filter { $0.month >= floorMonth }.prefix(earlierCap))
         report.droppedEarlier += before - lines.count
@@ -77,16 +104,17 @@ public enum NoteAging {
         return p
     }
 
-    /// A month line stays under 240 characters: the oldest clauses go first; a lone clause too long is cut with an ellipsis.
-    static func capped(_ clauses: [String], month: String) -> [String] {
-        var cs = clauses
+    /// A month line stays under 240 characters: the oldest clauses go first; a lone clause too long is cut with an
+    /// ellipsis. With the clauses, how many were let go (a cut one counts).
+    static func capped(_ clauses: [String], month: String) -> (clauses: [String], dropped: Int) {
+        var cs = clauses, dropped = 0
         func length() -> Int { NoteSkeleton.MonthLine(month: month, clauses: cs).rendered.count }
-        while length() > monthLineChars, cs.count > 1 { cs.removeFirst() }
+        while length() > monthLineChars, cs.count > 1 { cs.removeFirst(); dropped += 1 }
         if length() > monthLineChars, let only = cs.first {
             let room = monthLineChars - (length() - only.count) - 1
-            cs = [String(only.prefix(max(0, room))) + "…"]
+            cs = [String(only.prefix(max(0, room))) + "…"]; dropped += 1
         }
-        return cs
+        return (cs, dropped)
     }
 
     /// A status-block line that left the note ("- ✅ 2 Sep — they asked: “…” — you replied 16 Sep 14:00") as the month it
