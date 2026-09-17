@@ -394,7 +394,7 @@ struct ProactivePane: View {
         H2(text: "Sign-off").padding(.top, 10)
         CardBox(padding: 0) {
             VStack(spacing: 0) {
-                SettingRow(title: "Sign what Brownie drafts", detail: "Messages and mails Brownie prepares end with “\(Signature.line)”. You still press Send; you can delete the line before you do.") {
+                SettingRow(title: "Sign what Brownie drafts", detail: "Messages and mails Brownie prepares end with a rule and “\(Signature.shown)”. You still press Send; you can delete the line before you do.") {
                     Toggle2(on: Binding(get: { m.signMessages }, set: { m.signMessages = $0; m.set(SettingKey.signature, $0 ? "true" : "false") }))
                 }.padding(.horizontal, 16)
                 if m.signMessages {
