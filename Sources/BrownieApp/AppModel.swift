@@ -94,7 +94,7 @@ final class AppModel: ObservableObject {
     @Published var feedbackNoteFor: String?
     /// What Hands is doing right now, as steps a person can follow (the floating panel and the card view read it).
     @Published var journey: HandsJourney?
-    /// Sign what Brownie drafts with "Sent via Brownie · https://usebrownie.com" under a rule.
+    /// Sign what Brownie drafts with "Sent via Brownie · usebrownie.com" under a rule.
     @Published var signMessages = false
     /// The evidence being shown in its own sheet: the chat window, or the clip.
     @Published var evidenceShown: EvidenceShown?

@@ -1,15 +1,13 @@
 import Foundation
 
-/// The optional sign-off under what Brownie drafts: a rule, then "Sent via Brownie · https://usebrownie.com".
-/// The address is written out because a chat or a mail composer only makes a link of a URL it can see;
-/// there is no way to hide one under a word in plain text. Off by default; the user turns it on in
-/// Settings. Never added twice, never to something that isn't a message.
+/// The optional sign-off under what Brownie drafts: a rule, then "Sent via Brownie · usebrownie.com".
+/// The address is written out because a chat or a mail composer only makes a link of one it can see.
+/// Off by default; the user turns it on in Settings. Never added twice, never to something that isn't a message.
 public enum Signature {
     public static let site = "usebrownie.com"
-    public static let link = "https://\(site)"
-    public static let line = "---\nSent via Brownie · \(link)"
+    public static let line = "---\nSent via Brownie · \(site)"
     /// The sign-off on one line, for Settings copy.
-    public static let shown = "Sent via Brownie · \(link)"
+    public static let shown = "Sent via Brownie · \(site)"
 
     public static func apply(_ text: String, enabled: Bool) -> String {
         guard enabled else { return text }

@@ -5,7 +5,7 @@ import Testing
     @Test func addsOnceOnlyWhenOn() {
         #expect(Signature.apply("Hi Kanika", enabled: false) == "Hi Kanika")
         let signed = Signature.apply("Hi Kanika  \n", enabled: true)
-        #expect(signed == "Hi Kanika\n\n---\nSent via Brownie · https://usebrownie.com")
+        #expect(signed == "Hi Kanika\n\n---\nSent via Brownie · usebrownie.com")
         #expect(Signature.apply(signed, enabled: true) == signed, "never twice")
         #expect(Signature.apply("", enabled: true) == "", "nothing to sign")
         #expect(Signature.apply("see usebrownie.com for the app", enabled: true) == "see usebrownie.com for the app", "the site already named counts as signed")
