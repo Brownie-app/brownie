@@ -25,6 +25,37 @@ import Foundation
         #expect(p.pruned(existing: ["a"]).paths == ["a"])
     }
 
+    /// The gardener moves People/Meera.md to People/Archive/Meera.md at 3 AM; Obsidian renames Nayan; a pin follows the
+    /// first and drops the second, and nothing that is still there is touched.
+    @Test func listsFollowAnArchiveMoveAndDropOnlyWhatIsNowhere() {
+        let existing: Set<String> = ["People/Archive/Meera.md", "People/Karan.md", "Work/Launch.md"]
+        func moved(_ p: String) -> String? {
+            let archived = p.replacingOccurrences(of: "People/", with: "People/Archive/"), active = p.replacingOccurrences(of: "/Archive/", with: "/")
+            return [archived, active].first { $0 != p && existing.contains($0) }
+        }
+        let pins = PinnedNotes(paths: ["People/Meera.md", "People/Nayan.md", "People/Karan.md"]).settled(existing: existing, moved: moved)
+        #expect(pins.paths == ["People/Archive/Meera.md", "People/Karan.md"], "the archived note is followed, the renamed one dropped, the order kept")
+        let recent = RecentNotes(paths: ["People/Nayan.md", "People/Meera.md", "Work/Launch.md", "People/Archive/Meera.md"]).settled(existing: existing, moved: moved)
+        #expect(recent.paths == ["People/Archive/Meera.md", "Work/Launch.md"], "the old and the new spelling of one note fold into one entry, where the first stood")
+        #expect(PinnedNotes(paths: ["People/Archive/Karan.md"]).settled(existing: existing, moved: moved).paths == ["People/Karan.md"], "a note brought back from the archive is followed the other way")
+        #expect(NoteLists.settle([], existing: existing, moved: moved).isEmpty)
+    }
+
+    @Test func placeWordsNameTheFolderNeverThePath() {
+        #expect(NoteLists.placeWords("People/Meera Iyer.md") == "in People")
+        #expect(NoteLists.placeWords("People/Archive/Meera Iyer.md") == "in the People archive")
+        #expect(NoteLists.placeWords("Work/2025/Launch.md") == "in Work › 2025")
+        #expect(NoteLists.placeWords("Loose note.md") == "at the top of the vault")
+    }
+
+    @Test func movedLineSaysWhereAndHowQuiet() {
+        #expect(NoteLists.movedLine(title: "Meera", intoArchive: true, quietDays: 190) == "Meera is in the archive now — quiet for 6 months.")
+        #expect(NoteLists.movedLine(title: "Meera", intoArchive: true, quietDays: 45) == "Meera is in the archive now — quiet for a month.")
+        #expect(NoteLists.movedLine(title: "Meera", intoArchive: true, quietDays: 12) == "Meera is in the archive now — quiet for 12 days.")
+        #expect(NoteLists.movedLine(title: "Meera", intoArchive: true, quietDays: nil) == "Meera is in the archive now.")
+        #expect(NoteLists.movedLine(title: "Meera", intoArchive: false, quietDays: 3) == "Meera is back from the archive.")
+    }
+
     @Test func quickOpenRanksRecentFirstThenFuzzy() {
         let e = [QuickOpen.Entry(path: "People/Meera Iyer.md", title: "Meera Iyer"), .init(path: "People/Nayan.md", title: "Nayan"), .init(path: "Work/Mumbai launch.md", title: "Mumbai launch"), .init(path: "People/Karan Mehta.md", title: "Karan Mehta")]
         #expect(QuickOpen.rank("", entries: e, recent: ["People/Nayan.md", "Work/Mumbai launch.md"]).map(\.title) == ["Nayan", "Mumbai launch", "Karan Mehta", "Meera Iyer"], "no query: recent first, then by title")

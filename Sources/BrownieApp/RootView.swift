@@ -109,7 +109,7 @@ struct Sidebar: View {
 
     func item(_ title: String, _ icon: String, _ s: AppModel.Screen, badge: String? = nil) -> some View {
         let on = m.screen == s && m.overlay == .none || (s == .forYou && m.overlay != .none)
-        return Button { m.overlay = .none; m.screen = s } label: {
+        return Button { if m.screen != s || m.overlay != .none { m.leaveNote { m.overlay = .none; m.screen = s } } } label: {   // an unsaved edit on Notes asks first
             HStack(spacing: 8) {
                 Image(systemName: icon).font(.system(size: 13)).foregroundStyle(on ? t.accentInk : t.ink2).frame(width: 16)
                 Text(title).fontWeight(on ? .medium : .regular)
