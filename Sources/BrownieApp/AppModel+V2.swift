@@ -440,11 +440,12 @@ extension AppModel {
         }
         return nil
     }
-    /// "Open in WhatsApp" from the evidence sheet: the app's own chat, as before.
+    /// "Open in WhatsApp" from the evidence sheet, and the fallback for a person's note whose handle has no address:
+    /// the chat by the number Contacts has for the name, else the app itself.
     func openChatApp(_ app: String, name: String) {
         switch app {
         case "whatsapp": if let phone = ContactLookup.phone(for: name), let u = URL(string: "whatsapp://send?phone=\(phone)") { NSWorkspace.shared.open(u) } else { NSWorkspace.shared.launchApplication("WhatsApp") }
-        case "imessage": NSWorkspace.shared.launchApplication("Messages")
+        case "imessage": if let phone = ContactLookup.phone(for: name), let u = URL(string: "imessage://\(phone)") { NSWorkspace.shared.open(u) } else { NSWorkspace.shared.launchApplication("Messages") }
         case "telegram": NSWorkspace.shared.launchApplication("Telegram")
         case "slack": NSWorkspace.shared.launchApplication("Slack")
         case "teams": NSWorkspace.shared.launchApplication("Microsoft Teams")

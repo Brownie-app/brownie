@@ -128,6 +128,8 @@ final class AppModel: ObservableObject {
     /// A question waiting in the Ask box ("about Meera: ") when the user arrives there from a note.
     @Published var askPrefill: String?
     @Published var quickOpenShown = false
+    /// The raw editor's sitting on the Notes screen, kept here so a screen change, ⌘K or a watcher reload never blanks it (AppModel+Notes).
+    @Published var noteEditor = NoteEditor()
     let vaultWatcher = VaultWatcher()
     @Published var sendLog: [SendRecord] = []
     @Published var weekly: String?

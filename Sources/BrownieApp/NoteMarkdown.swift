@@ -76,7 +76,8 @@ struct NoteBody: View {
         }
         .environment(\.openURL, OpenURLAction { url in
             guard let p = NoteMarkdown.path(from: url) else { return .systemAction }
-            if m.note(at: p) != nil { m.openNote(p) } else { m.announcement = "That note isn't there any more." }
+            // A link to a note the gardener has since archived still opens it; the screen says where it went.
+            if m.currentPath(p) != nil { m.openNote(p) } else { m.announcement = "That note isn't there any more." }
             return .handled
         })
     }
@@ -114,7 +115,7 @@ struct NoteBody: View {
         case .rule:
             Rectangle().fill(t.sep).frame(height: 1).padding(.vertical, 4)
         case .status(let lines):
-            StatusCard(lines: lines)
+            StatusCard(lines: lines, links: links)
         }
     }
 
@@ -125,10 +126,12 @@ struct NoteBody: View {
     }
 }
 
-/// The status block as the "Between you" card: what they asked, what was promised, what is still open.
+/// The status block as the "Between you" card: what they asked, what was promised, what is still open. Each line is
+/// drawn through the same inline renderer as the body, so "_(not checked)_" reads as italic, never as underscores.
 struct StatusCard: View {
     @Environment(\.theme) var t
     let lines: [String]
+    let links: LinkIndex
     var body: some View {
         CardBox(padding: 14) {
             VStack(alignment: .leading, spacing: 8) {
@@ -136,8 +139,8 @@ struct StatusCard: View {
                 ForEach(Array(lines.enumerated()), id: \.offset) { _, l in
                     let (icon, rest) = Self.split(l)
                     HStack(alignment: .top, spacing: 8) {
-                        Text(icon).font(.system(size: 13)).frame(width: 18)
-                        Text(rest).font(.system(size: 13)).foregroundStyle(icon == "⏳" ? t.ink : t.ink2).lineSpacing(3).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                        Text(icon).font(.system(size: 14)).frame(width: 18)
+                        Text(NoteMarkdown.attributed(NoteBlocks.inlines(rest), theme: t, links: links).text).font(.system(size: 14)).foregroundStyle(icon == "⏳" ? t.ink : t.ink2).lineSpacing(3).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }.frame(maxWidth: .infinity, alignment: .leading)
