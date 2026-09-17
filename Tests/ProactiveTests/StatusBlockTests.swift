@@ -49,7 +49,8 @@ import Domain
 
     @Test func settledItemsLeaveAfterFourteenDaysAndRetiredLinesNameThem() {
         let asks = [ask("shown", askedAgo: 20 * day, answeredAgo: 13 * day, q: "still shown?", addressed: true), ask("gone", askedAgo: 20 * day, answeredAgo: 14.5 * day, q: "left today?", addressed: true),
-                    ask("older", askedAgo: 30 * day, answeredAgo: 20 * day, q: "long gone?", addressed: true), ask("lapsed", askedAgo: 60 * day, q: "let go?", lapsedAgo: 14.1 * day)]
+                    ask("older", askedAgo: 40 * day, answeredAgo: 28 * day, q: "long gone?", addressed: true), ask("lapsed", askedAgo: 60 * day, q: "let go?", lapsedAgo: 14.1 * day),
+                    ask("week", askedAgo: 30 * day, answeredAgo: 21 * day, q: "a week gone?", addressed: true)]
         let loops = [loop("O", what: "still open", openedAgo: 200 * day), loop("C", what: "closed lately", openedAgo: 20 * day, status: .closed, closedAgo: 13 * day, how: "done"),
                      loop("G", what: "closed a fortnight back", openedAgo: 20 * day, status: .closed, closedAgo: 14.1 * day, how: "done"), loop("N", what: "not a promise", openedAgo: day, status: .dismissed, closedAgo: 0)]
         let b = StatusBlock.render(person: "Nitesh", asks: asks, loops: loops, now: now, timeZone: utc)
@@ -58,9 +59,13 @@ import Domain
         #expect(!b.contains("not a promise"), "what the user said was never a loop is not on the note")
         let retired = StatusBlock.retiredLines(person: "Nitesh", asks: asks, loops: loops, now: now, timeZone: utc)
         #expect(retired == ["- ✅ 27 Aug — they asked: “left today?” — you replied 1 Sep 17:20",
+                            "- ✅ 17 Aug — they asked: “a week gone?” — you replied 26 Aug 05:20",
                             "- ⌛ 18 Jul — they asked: “let go?” — no reply in 45 days; no longer tracked (lapsed 2 Sep)",
-                            "- ✅ you promised (27 Aug): closed a fortnight back — done 2 Sep (done)"], "what left since yesterday, in the block's own words; what left earlier was handed on already")
+                            "- ✅ you promised (27 Aug): closed a fortnight back — done 2 Sep (done)"], "what left within the last fortnight, in the block's own words; what left before that was handed on or is gone")
+        #expect(!b.contains("a week gone?"), "off the block a week ago, still offered to the gardener tonight")
         #expect(StatusBlock.retiredLines(person: "Kanika", asks: asks, loops: loops, now: now, timeZone: utc).isEmpty)
+        let routed = StatusBlock.retiredLines(asks: asks.filter { $0.id == "gone" }, loops: [], now: now, timeZone: utc)
+        #expect(routed == ["- ✅ 27 Aug — they asked: “left today?” — you replied 1 Sep 17:20"], "the routed form checks no name: whoever chose these lines for the note decided")
     }
 
     @Test func upsertInsertsAfterTheTitleReplacesInPlaceAndRemovesWhenEmpty() {

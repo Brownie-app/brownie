@@ -154,6 +154,31 @@ import Domain
         #expect(NoteMeta.parse(w.raw("People/Someone New.md")!, path: "People/Someone New.md").meta?.id == nil)
     }
 
+    /// A person archived since the roster was written can still be written about: whichever path the brain takes — the
+    /// archived one the roster names, or the active one — the note comes back first and the write updates it, and no
+    /// refusal along the way names a path the tools would refuse.
+    @Test func anArchivedPersonComesBackForTheWriteAndNoRefusalNamesArchive() async throws {
+        let w = try Self.world(people: [Self.person("p-1", "Priya", note: "People/Archive/Priya.md"), Self.person("p-2", "Kanika Pandey", aliases: ["KP Loadmill"], note: "People/Archive/Kanika Pandey.md")])
+        try w.put("People/Archive/Priya.md", Self.owned("# Priya\n\n" + Self.block + "\n\nSister-in-law.\n", path: "People/Archive/Priya.md"))
+        try w.put("People/Archive/Kanika Pandey.md", Self.owned("# Kanika Pandey\n\nWorks at Loadmill.\n", path: "People/Archive/Kanika Pandey.md"))
+        let created = NoteMeta.parse(w.raw("People/Archive/Priya.md")!, path: "People/Archive/Priya.md").meta!.created
+        // The brain writes the active path unread: the note comes back, and what is refused is the unread overwrite — of a path it can read.
+        let r = await w.refusal("write_file", ["path": "People/Priya.md", "content": "# Priya\n\nMoving to Berlin.\n"])
+        #expect(r == "read People/Priya.md before overwriting it")
+        #expect(w.raw("People/Priya.md") != nil && w.raw("People/Archive/Priya.md") == nil, "back where the brain writes")
+        #expect(try await w.read("People/Priya.md") == "# Priya\n\nSister-in-law.\n")
+        #expect(try await w.write("People/Priya.md", "# Priya\n\nSister-in-law.\n\nMoving to Berlin.\n") == "wrote People/Priya.md (43 bytes)")
+        let (meta, body) = NoteMeta.parse(w.raw("People/Priya.md")!, path: "People/Priya.md")
+        #expect(meta?.created == created && meta?.updated == Self.today && body == "# Priya\n\n" + Self.block + "\n\nSister-in-law.\n\nMoving to Berlin.\n", "an update: its block, its status lines, the new prose")
+        #expect(await w.refusal("write_file", ["path": "People/Priya.md", "content": "# Priya\n\nAnd again.\n"]) == nil, "the part's roster followed the move")
+        // The brain follows the roster to the archived path: read there, write there — it lands on the active path.
+        #expect(try await w.read("People/Archive/Kanika Pandey.md") == "# Kanika Pandey\n\nWorks at Loadmill.\n")
+        #expect(try await w.write("People/Archive/Kanika Pandey.md", "# Kanika Pandey\n\nWorks at Loadmill.\n\nLeft for Berlin too.\n") == "wrote People/Kanika Pandey.md (58 bytes)")
+        #expect(w.raw("People/Kanika Pandey.md")!.hasSuffix("Left for Berlin too.\n") && w.raw("People/Archive/Kanika Pandey.md") == nil)
+        #expect(await w.refusal("write_file", ["path": "People/KP Loadmill.md", "content": "# KP Loadmill\n"]) == "Kanika Pandey already has a note at People/Kanika Pandey.md; write about them there, not in People/KP Loadmill.md")
+        #expect(await w.refusal("write_file", ["path": "People/Archive/Nobody.md", "content": "# Nobody\n"])?.contains("one level deep") == true, "no note there to bring back: the depth rule stands")
+    }
+
     @Test func aNewPeopleNoteCarriesNamesOnlyAsAliases() async throws {
         // The registry learns chat labels verbatim — numbers, handles and all; the note's aliases are the names among them.
         let labels = ["Nitesh (+919540752593)", "nitesh", "Nitesh Kumar", "Nitesh Kumar (Loadmill)", "@nitesh", "919540752593@s.whatsapp.net", "+91 95407 52593", "nitesh@example.com", "whatsapp:+919540752593", "Nitesh K"]

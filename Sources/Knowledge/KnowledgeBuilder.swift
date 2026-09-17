@@ -314,14 +314,18 @@ enum FileTools {
 
     /// What one part's tools know: the root, who exists (so `People/` never gets a second file for one person), the
     /// day, and which notes the brain has read so far — an existing note may only be overwritten after it was read.
+    /// The roster follows a note the tools bring back from Archive/, so the rest of the part writes it where it now is.
     final class Part: @unchecked Sendable {
-        let root: URL, people: [Person], today: String
+        let root: URL, today: String
         private let lock = NSLock()
         private var read = Set<String>()
-        init(root: URL, people: [Person], today: String) { self.root = root; self.people = people; self.today = today }
+        private var roster: [Person]
+        init(root: URL, people: [Person], today: String) { self.root = root; self.roster = people; self.today = today }
+        var people: [Person] { lock.withLock { roster } }
         func markRead(_ p: String) { lock.withLock { _ = read.insert(p) } }
         func hasRead(_ p: String) -> Bool { lock.withLock { read.contains(p) } }
         func forget(_ p: String) { lock.withLock { _ = read.remove(p) } }
+        func retarget(from: String, to: String) { lock.withLock { for i in roster.indices where roster[i].notePath == from { roster[i].notePath = to } } }
     }
 
     static func make(root: URL, people: [Person] = [], today: String = NoteMeta.day(Date(), .current)) -> [Tool] {
@@ -411,14 +415,41 @@ enum FileTools {
 
     // MARK: write
 
+    /// The path a write lands on once the note it names is back from Archive/. The roster still sends the brain to
+    /// `People/Archive/X.md` for a person archived since, and a brain that knows better writes `People/X.md`: either
+    /// way the note comes back first — the file moved to its active path, the part's roster retargeted (the live
+    /// registry follows at the seed after the swap, when the archived path is gone and the active one is claimed by
+    /// its title), the brain's read of the archived spelling carried over — and the write goes on as an update of the
+    /// one note. So no refusal ever names a path the tools would refuse: what is refused, if anything, is a write of
+    /// the active path the brain has not read, and that path can be read.
+    static func broughtBack(_ part: Part, _ p: String) throws -> String {
+        let fm = FileManager.default
+        func back(_ archived: String) throws -> String {
+            let active = NoteArchive.activePath(archived)
+            guard NoteArchive.move(archived, to: active, under: part.root) != nil else {
+                throw Refusal("\(active) already exists beside the archived \(archived); write about them in \(active)")
+            }
+            part.retarget(from: archived, to: active)
+            if part.hasRead(archived) { part.markRead(active); part.forget(archived) }
+            return active
+        }
+        if NoteArchive.isArchived(p), fm.fileExists(atPath: try resolve(part.root, p).path) { return try back(p) }
+        let parts = p.split(separator: "/").map(String.init)
+        guard parts.count == 2, same(parts[0], "People") else { return p }
+        let title = String(parts[1].dropLast(3)), people = part.people
+        if let id = PersonRegistry.resolve(label: title, handle: nil, among: people), let np = people.first(where: { $0.id == id })?.notePath,
+           NoteArchive.isArchived(np), fm.fileExists(atPath: part.root.appendingPathComponent(np).path) { _ = try back(np) }
+        return p
+    }
+
     /// The guarded write. `requireRead` is off only for brains without file tools, which have no way to read first.
     @discardableResult
     static func write(_ part: Part, path: String, content: String, sources: [String]? = nil, requireRead: Bool = true) throws -> String {
-        let p = clean(path)
+        let fm = FileManager.default, named = clean(path)
+        guard !isToday(named) else { throw Refusal("Today.md is Brownie's own checklist for the phone and is never written by the brain") }
+        guard Vault.isNote(named) else { throw Refusal("notes are Markdown files (.md) in visible folders; \(named) is not one") }
+        let p = try broughtBack(part, named)
         let url = try resolve(part.root, p)
-        let fm = FileManager.default
-        guard !isToday(p) else { throw Refusal("Today.md is Brownie's own checklist for the phone and is never written by the brain") }
-        guard Vault.isNote(p) else { throw Refusal("notes are Markdown files (.md) in visible folders; \(p) is not one") }
         let parts = p.split(separator: "/").map(String.init)
         guard parts.count <= 2 else { throw Refusal("notes live one level deep (Folder/Note.md); \(p) is nested deeper") }
         try checkSpelling(p, parts: parts, root: part.root)

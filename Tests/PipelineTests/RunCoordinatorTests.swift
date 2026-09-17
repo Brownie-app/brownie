@@ -158,4 +158,68 @@ import Support
         #expect(await Self.night(w, brain) == .ran(cards: 0))
         #expect(brain.judged.count == 1)
     }
+
+    /// A People note with Brownie's front-matter, in shape, last written on `updated`.
+    static func putNote(_ rel: String, body: String, updated: String, in w: World) throws {
+        var m = NoteMeta.fresh(path: rel, body: body, today: updated); m.updated = updated
+        let u = w.kb.rootURL.appendingPathComponent(rel)
+        try FileManager.default.createDirectory(at: u.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try (m.render() + body).write(to: u, atomically: true, encoding: .utf8)
+    }
+    static func body(_ rel: String, in w: World) throws -> String { NoteMeta.parse(try String(contentsOf: w.kb.rootURL.appendingPathComponent(rel), encoding: .utf8), path: rel).body }
+
+    /// The lines that retire from a status block are kept in the note the registry routed the block to — never re-derived
+    /// from a title: a promise under a bare first name two people share lands in neither note, and an ask under a chat
+    /// name the registry ties by handle to another spelling keeps its trace in that person's note.
+    @Test func retiredLinesFollowTheRegistrysRoutingNotTheTitle() async throws {
+        let w = try Self.world()
+        try await w.seed(1, tag: "a")
+        for t in ["Arjun Mehta", "Arjun Rao", "Kanika Pandey"] { try Self.putNote("People/\(t).md", body: "# \(t)\n\n## About\n- x\n", updated: "2026-09-01", in: w) }
+        let registry = PersonRegistry(vault: w.kb.rootURL, now: { Self.today })
+        for t in ["Arjun Mehta", "Arjun Rao"] { let id = await registry.register(label: t, handle: nil); await registry.setNotePath("People/\(t).md", for: id) }
+        let kp = await registry.register(label: "Kanika Pandey", handle: "whatsapp:+3"); await registry.register(label: "KP Loadmill", handle: "whatsapp:+3")
+        await registry.setNotePath("People/Kanika Pandey.md", for: kp)
+        try await registry.save()
+        let day = 86400.0
+        let promise = Loop(id: "BOOK0001-x", direction: .mine, person: "Arjun", what: "send the book", quote: "q", sourceLabel: "WhatsApp · Fri", due: nil, status: .closed,
+                           openedAt: Self.today.addingTimeInterval(-30 * day), closedAt: Self.today.addingTimeInterval(-14.5 * day), closedHow: "you replied", closedBy: "reply")
+        try await w.store.setValue(SettingKey.loops, String(data: try JSONEncoder().encode([promise]), encoding: .utf8))
+        let lunch = Ask(id: "lunch", person: "KP Loadmill", bucket: BucketID("w:3"), askedAt: Self.today.addingTimeInterval(-20 * day), question: "lunch?",
+                        answeredAt: Self.today.addingTimeInterval(-14.5 * day), reply: "yes", addressed: true, handle: "whatsapp:+3")
+        try await w.store.setValue(SettingKey.asks, String(data: try JSONEncoder().encode([lunch]), encoding: .utf8))
+        #expect(await Self.night(w, Fake()) == .ran(cards: 0))
+        let mehta = try Self.body("People/Arjun Mehta.md", in: w), rao = try Self.body("People/Arjun Rao.md", in: w), kanika = try Self.body("People/Kanika Pandey.md", in: w)
+        #expect(!mehta.contains("send the book") && !rao.contains("send the book"), "two Arjuns: the registry pins the promise on neither, so neither note keeps a promise one of them never received")
+        #expect(kanika.contains("- 2026-09 — they asked: “lunch?” — you replied 2 Sep 00:00"), "routed by handle under another chat name: the trace lands where the block was")
+    }
+
+    /// Tonight's mentions carry the chat's handle: a summary has none of its own, but the ask ledger knows the chat's.
+    @Test func mentionsCarryTheChatsHandleFromTheAskLedger() {
+        let bucket = BucketID("w:9")
+        let summary = SummaryRecord(id: 1, runID: 1, source: SourceID("whatsapp"), bucket: bucket, bucketName: "+91 98765 43210", kind: .directMessage, title: "t", text: "x", itemDate: nil, createdAt: Self.today)
+        let old = Ask(id: "old", person: "+91 98765 43210", bucket: bucket, askedAt: Self.today.addingTimeInterval(-40 * 86400), question: "q", answeredAt: Self.today.addingTimeInterval(-39 * 86400), addressed: true, handle: "whatsapp:+919876543210")
+        let open = Ask(id: "open", person: "Meera", bucket: BucketID("w:2"), askedAt: Self.today, question: "q", handle: "whatsapp:+2")
+        let loop = Loop(id: "L", direction: .mine, person: "Karan", what: "x", quote: "q", sourceLabel: "s", due: nil, openedAt: Self.today)
+        let m = RunCoordinator.mentions(summaries: [summary], asks: [old, open], loops: [loop])
+        #expect(m == [NoteArchive.Mention("+91 98765 43210", handle: "whatsapp:+919876543210"), NoteArchive.Mention("Meera", handle: "whatsapp:+2"), NoteArchive.Mention("Karan")],
+                "the summary's chat by the handle a settled ask left behind; the open ask by its own; the loop by name")
+    }
+
+    /// A shared group chat's note is the household's: however quiet, the night never archives it — the sync would take an
+    /// archived note off the shared folder for everyone, and the other Mac would bring it back beside the archived copy.
+    @Test func aHouseholdSharedGroupNoteIsNeverArchived() async throws {
+        let w = try Self.world()
+        try await w.seed(1, tag: "a")
+        try Self.putNote("Groups/Building Chat.md", body: "# Building Chat\n\n## About\n- the building\n", updated: "2026-01-01", in: w)
+        try Self.putNote("Groups/Old Club.md", body: "# Old Club\n\n## About\n- the club\n", updated: "2026-01-01", in: w)
+        let shared = w.dir.appendingPathComponent("Shared", isDirectory: true)
+        let h = Household(members: [HouseholdMember(name: "Vivek", isMe: true), HouseholdMember(name: "Priya", isMe: false)], folderPath: shared.path, sharedBuckets: ["whatsapp:building"], since: Self.today)
+        try await w.store.setValue(SettingKey.household, String(data: try JSONEncoder().encode(h), encoding: .utf8))
+        try await w.store.setValue(SettingKey.householdBucketNames, #"{"whatsapp:building":"Building Chat"}"#)
+        #expect(await Self.night(w, Fake()) == .ran(cards: 0))
+        let fm = FileManager.default
+        #expect(fm.fileExists(atPath: w.kb.rootURL.appendingPathComponent("Groups/Building Chat.md").path) && !fm.fileExists(atPath: w.kb.rootURL.appendingPathComponent("Groups/Archive/Building Chat.md").path), "shared: stays")
+        #expect(fm.fileExists(atPath: w.kb.rootURL.appendingPathComponent("Groups/Archive/Old Club.md").path), "the other quiet group goes")
+        #expect(fm.fileExists(atPath: shared.appendingPathComponent("Groups/Building Chat.md").path), "and it went out to the household")
+    }
 }
