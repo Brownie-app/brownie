@@ -54,6 +54,24 @@ import Domain
         #expect(meta?.bodyDiffers(body) == true, "the old hash stays, so the edit still reads as the user's")
     }
 
+    @Test func aUsersCommentsTablesAndNestedBulletsSurviveTheNight() async throws {
+        let root = try fresh()
+        // in shape already, with the things a user writes in Obsidian that the shape has no opinion about: untouched, byte for byte
+        let tidy = "# Priya\n\n## About\n- Sister-in-law\n  - lives in Pune\n<!-- ask about the loan next time -->\n\n### Family\n- Two kids\n\n| Name | Role |\n|---|---|\n| Dev | husband |\n\n## Now\n- Flight dates (2026-09-12)\n  - Goa, not Kochi\n"
+        try put("People/Priya.md", stamped("People/Priya.md", tidy), in: root)
+        // not in shape, with the same things: put in shape with every one of them still there
+        let messy = "# Arjun\n\n## Background\n- Old friend\n<!-- met at IIT -->\n\n## Pending\n- Asked about the flat (2026-09-10)\n  - the one in Pune\n```\n# a heading in a fence is code\n```\n"
+        try put("People/Arjun.md", stamped("People/Arjun.md", messy), in: root)
+        let before = raw("People/Priya.md", in: root)
+        let s = await VaultGardener.run(root: root, registry: nil, now: Self.now, timeZone: Self.utc, archive: false)
+        #expect(s.tidied == 1 && s.changed == ["People/Arjun.md"])
+        #expect(raw("People/Priya.md", in: root) == before)
+        let (_, body) = NoteMeta.parse(raw("People/Arjun.md", in: root)!, path: "People/Arjun.md")
+        #expect(body == "# Arjun\n\n## About\n- Old friend\n<!-- met at IIT -->\n\n## Now\n- Asked about the flat (2026-09-10)\n  - the one in Pune\n\n```\n# a heading in a fence is code\n```\n")
+        let again = await VaultGardener.run(root: root, registry: nil, now: Self.now, timeZone: Self.utc, archive: false)
+        #expect(again.tidied == 0)
+    }
+
     @Test func quietNotesAreArchivedInTheSamePass() async throws {
         let root = try fresh()
         try put("People/Quiet.md", stamped("People/Quiet.md", "# Quiet\n\n## About\n- x\n", updated: "2026-01-01"), in: root)

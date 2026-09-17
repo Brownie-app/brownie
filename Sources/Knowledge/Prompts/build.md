@@ -5,7 +5,7 @@ What you are given: a header saying what day it is (`Today: YYYY-MM-DD (weekday)
 What to produce, in the working directory using the file tools:
 - `README.md` — the portrait: who this person is, their work, the people who matter, what is going on in their life right now. About 200 words. Everything else hangs off this.
 - At most ten root folders (for example People, Groups, Work, Money, Health, Trips, Home, Admin). Aim for 80–120 notes in total for a rich life; far fewer for a thin corpus.
-- `People/` is the exception to consolidation: **one note per person** who matters — every direct-message contact, every named family member, colleague or friend gets their own file (`People/Arjun.md`), holding who they are to the user, what they've asked or promised, what's pending between them, and dated facts. Never merge people into a shared "Colleagues" note.
+- `People/` is the exception to consolidation: **one note per person** who matters — every direct-message contact, every named family member, colleague or friend gets their own file (`People/Arjun.md`), holding who they are to the user, what they've asked or promised, what is live between them under Now, and dated facts. Never merge people into a shared "Colleagues" note.
 - `Groups/` likewise: **one note per group chat or channel** (`Groups/MPL Days.md`), with what the group is, who's in it, and what's being planned.
 - Everything else (work, projects, money, admin) consolidates: two to five substantial notes per folder; a note is worth writing only when it holds more than one summary's worth of substance — never one file per summary.
 - Each note starts with `# Title`, then prose and short lists. Name people, dates, decisions and commitments precisely. Cite nothing that isn't in a summary.
