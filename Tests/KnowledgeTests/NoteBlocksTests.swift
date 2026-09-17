@@ -36,7 +36,7 @@ import Domain
         """
         let blocks = NoteBlocks.parse(body)
         #expect(blocks[0] == .heading(level: 1, inlines: [.text("Nayan")]))
-        #expect(blocks[1] == .paragraph([.text("Friend from Pune; "), .bold("owes"), .text(" you a "), .italic("book"), .text(". Second line of the same paragraph.")]))
+        #expect(blocks[1] == .paragraph([.text("Friend from Pune; "), .bold([.text("owes")]), .text(" you a "), .italic([.text("book")]), .text(". Second line of the same paragraph.")]))
         #expect(blocks[2] == .heading(level: 2, inlines: [.text("Recently")]))
         #expect(blocks[3] == .list([.init(indent: 0, ordinal: nil, inlines: [.text("met at "), .code("Koregaon")]), .init(indent: 0, ordinal: nil, inlines: [.wikilink(target: "Meera", heading: nil, label: "Meera"), .text(" came too")]),
                                      .init(indent: 1, ordinal: nil, inlines: [.text("nested")]), .init(indent: 0, ordinal: 1, inlines: [.text("first")]), .init(indent: 0, ordinal: 2, inlines: [.text("second")])]))
@@ -54,10 +54,25 @@ import Domain
     }
 
     @Test func inlineStyles() {
-        #expect(NoteBlocks.inlines("**bold** and __also__ and *it* and _it too_ and `code`") == [.bold("bold"), .text(" and "), .bold("also"), .text(" and "), .italic("it"), .text(" and "), .italic("it too"), .text(" and "), .code("code")])
+        #expect(NoteBlocks.inlines("**bold** and __also__ and *it* and _it too_ and `code`") == [.bold([.text("bold")]), .text(" and "), .bold([.text("also")]), .text(" and "), .italic([.text("it")]), .text(" and "), .italic([.text("it too")]), .text(" and "), .code("code")])
         #expect(NoteBlocks.inlines("snake_case_name stays") == [.text("snake_case_name stays")], "an underscore inside a word is not italics")
         #expect(NoteBlocks.inlines("2 * 3 * 4") == [.text("2 * 3 * 4")], "a star with space around it is a star")
         #expect(NoteBlocks.inlines("see [the site](https://x.y)") == [.text("see "), .url(label: "the site", url: "https://x.y")])
+    }
+
+    @Test func emphasisWrapsWhatIsInsideIt() {
+        // the brain bolds a linked name; Obsidian draws it as a bold link, so must the note view
+        #expect(NoteBlocks.inlines("**[[Meera Iyer]]** promised") == [.bold([.wikilink(target: "Meera Iyer", heading: nil, label: "Meera Iyer")]), .text(" promised")])
+        #expect(NoteBlocks.inlines("**bold, then `code` inside**") == [.bold([.text("bold, then "), .code("code"), .text(" inside")])])
+        #expect(NoteBlocks.inlines("_see [the site](https://x.y) and **both**_") == [.italic([.text("see "), .url(label: "the site", url: "https://x.y"), .text(" and "), .bold([.text("both")])])])
+        #expect(NoteBlocks.plain(NoteBlocks.inlines("**[[Meera Iyer|Meera]]** and _`x`_")) == "Meera and x", "the words alone, however deep")
+    }
+
+    @Test func theNoteAsDrawnIsPlainText() {
+        let body = "# Arif\n\n<!-- brownie:status -->\n## Between you\n_Kept by Brownie from the chats and the loops ledger._\n- ⏳ 3 Sep — they asked: “lunch?” — no reply yet\n<!-- /brownie:status -->\n\n## Recently\n- **Promised** the [[Meera|deck]] <!-- secret -->\n- [ ] call `mum` <!-- card:c1 -->\n\n> not before Diwali\n\n---\n```\nraw\n```\n"
+        let plain = NoteBlocks.plainText(body)
+        #expect(plain == "Arif\n⏳ 3 Sep — they asked: “lunch?” — no reply yet\nRecently\nPromised the deck\ncall mum\nnot before Diwali\nraw", Comment(rawValue: plain))
+        #expect(!plain.contains("<!--") && !plain.contains("# ") && !plain.contains("Brownie") && !plain.contains("secret") && !plain.contains("c1"), "nothing the screen hides")
     }
 
     @Test func theThreeWikilinkForms() {
@@ -71,7 +86,7 @@ import Domain
     @Test func htmlCommentsNeverShow() {
         let body = "# T\nhello <!-- secret --> world\n<!-- a comment\nover lines -->\n- [ ] **Pay** — rent <!-- card:c1 -->\n"
         let blocks = NoteBlocks.parse(body)
-        #expect(blocks == [.heading(level: 1, inlines: [.text("T")]), .paragraph([.text("hello  world")]), .checklist([.init(checked: false, inlines: [.bold("Pay"), .text(" — rent")], cardID: "c1")])])
+        #expect(blocks == [.heading(level: 1, inlines: [.text("T")]), .paragraph([.text("hello  world")]), .checklist([.init(checked: false, inlines: [.bold([.text("Pay")]), .text(" — rent")], cardID: "c1")])])
         #expect(!NoteBlocks.plain(blocks.flatMap { b -> [I] in if case .paragraph(let i) = b { return i }; return [] }).contains("secret"))
     }
 
@@ -95,9 +110,9 @@ import Domain
         #expect(NoteBlocks.setCheckbox(in: ticked, cardID: "b", checked: false) == md)
         #expect(NoteBlocks.setCheckbox(in: md, cardID: "zzz", checked: true) == md)
         let blocks = NoteBlocks.parse(md)
-        #expect(blocks[1] == .checklist([.init(checked: false, inlines: [.bold("Pay"), .text(" — rent")], cardID: "a")]))
+        #expect(blocks[1] == .checklist([.init(checked: false, inlines: [.bold([.text("Pay")]), .text(" — rent")], cardID: "a")]))
         #expect(blocks[2] == .quote([.text("draft")]))
-        #expect(blocks[3] == .checklist([.init(checked: false, inlines: [.bold("Call"), .text(" — mum")], cardID: "b")]))
+        #expect(blocks[3] == .checklist([.init(checked: false, inlines: [.bold([.text("Call")]), .text(" — mum")], cardID: "b")]))
     }
 
     @Test func linksResolveByTitleFileNameOrAlias() {

@@ -18,15 +18,20 @@ enum NoteMarkdown {
         return items.first { $0.name == "path" }?.value
     }
 
-    /// The runs of one line. `missing` names the wikilinks no note answers to, for the tooltip.
+    /// The runs of one line. `missing` names the wikilinks no note answers to, for the tooltip. Bold and italic
+    /// wrap whatever sits inside them — a link stays a link, a code span keeps its face — so the weight or slant
+    /// is laid over each nested run's own font rather than replacing it.
     static func attributed(_ inlines: [NoteBlocks.Inline], theme t: Theme, links: LinkIndex) -> (text: AttributedString, missing: [String]) {
         var a = AttributedString(), missing: [String] = []
         for i in inlines {
             var run: AttributedString
             switch i {
             case .text(let s): run = AttributedString(s)
-            case .bold(let s): run = AttributedString(s); run.font = .system(size: 14, weight: .semibold)
-            case .italic(let s): run = AttributedString(s); run.font = .system(size: 14).italic()
+            case .bold(let inner), .italic(let inner):
+                let (s, m) = attributed(inner, theme: t, links: links)
+                missing += m; run = s
+                if case .bold = i { for r in s.runs { run[r.range].font = (r.font ?? .system(size: 14)).weight(.semibold) } }
+                else { for r in s.runs { run[r.range].font = (r.font ?? .system(size: 14)).italic() } }
             case .code(let s): run = AttributedString(s); run.font = .system(size: 12.5, design: .monospaced); run.backgroundColor = t.code
             case .url(let label, let u):
                 run = AttributedString(label); run.foregroundColor = t.accentInk; run.underlineStyle = .single
