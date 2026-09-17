@@ -14,11 +14,21 @@ public actor FileKnowledgeStore: KnowledgeStore {
     private let now: @Sendable () -> Date
     private let timeZone: TimeZone
 
+    /// The index's shape; an index file built to an older one is dropped and `reindex()` fills it again from the
+    /// files. 2: the text column is the note as drawn (`NoteBlocks.plainText`) and the tokenizer is plain unicode61,
+    /// so a typed prefix is a prefix of what is stored.
+    static let schemaVersion: Int64 = 2
+
     public init(root: URL, indexPath: String, now: @escaping @Sendable () -> Date = { Date() }, timeZone: TimeZone = .current) throws {
         rootURL = root
         self.now = now; self.timeZone = timeZone
         index = try SQLite(path: indexPath)
-        try index.exec("CREATE VIRTUAL TABLE IF NOT EXISTS note_fts USING fts5(path UNINDEXED, title, body, tokenize='porter unicode61')")
+        if (try index.query("PRAGMA user_version").first?["user_version"].int ?? 0) != Self.schemaVersion {
+            try index.exec("DROP TABLE IF EXISTS note_fts; DROP TABLE IF EXISTS note_meta; PRAGMA user_version=\(Self.schemaVersion)")
+        }
+        // No stemmer: the rail searches as you type, and "wedd" must keep finding "wedding" on the way to it, which a
+        // stored stem ("wed") cannot; the last term is a prefix anyway, so "meet" still finds "meeting".
+        try index.exec("CREATE VIRTUAL TABLE IF NOT EXISTS note_fts USING fts5(path UNINDEXED, title, plain, tokenize='unicode61')")
         try index.exec("CREATE TABLE IF NOT EXISTS note_meta(path TEXT PRIMARY KEY, mtime REAL NOT NULL)")
     }
 
@@ -75,7 +85,8 @@ public actor FileKnowledgeStore: KnowledgeStore {
     }
 
     /// Notes for a question: every term must match (the last as a prefix); when nothing does — a question
-    /// carries words no note has — the terms are OR-ed, so "who is nayan?" still finds Nayan.
+    /// carries words no note has — its content words are OR-ed, so "who is nayan?" still finds Nayan and
+    /// "who is Ravi?" finds nothing rather than every note with a "whoever" in it.
     public func search(_ query: String, limit: Int) throws -> [Note] {
         try reindex()
         for q in [KnowledgeQuery.fts(query), KnowledgeQuery.loose(query)] where q != "\"\"" {
@@ -103,7 +114,8 @@ public actor FileKnowledgeStore: KnowledgeStore {
         public init(query: String, hits: [SearchHit], total: Int) { self.query = query; self.hits = hits; self.total = total }
     }
     /// Search as the Notes screen shows it: strict (every term), with a snippet and the full count. An empty
-    /// query is an empty result, not everything.
+    /// query is an empty result, not everything. The snippet is cut from the note as drawn — no comment markers,
+    /// no heading or bullet syntax — because that is the text the index holds.
     public func find(_ query: String, limit: Int = 50) throws -> SearchResults {
         try reindex()
         let q = KnowledgeQuery.fts(query)
@@ -119,29 +131,27 @@ public actor FileKnowledgeStore: KnowledgeStore {
 
     // MARK: backlinks
 
-    /// Every note whose body links to `title` — `[[Title]]`, `[[Title|shown]]`, `[[Title#heading]]`, any case — except
-    /// the note that carries that title itself. The link map is built once and kept until a file changes.
-    public func backlinks(to title: String) throws -> [Note] {
+    /// Every note whose body links to the note at `relativePath` — `[[Title]]`, `[[Title|shown]]`, `[[Title#heading]]`,
+    /// any case, and by its file name, its path or a front-matter alias just as a click resolves them — except the
+    /// note itself. The link map is built once and kept until a file changes.
+    public func backlinks(to relativePath: String) throws -> [Note] {
         try reindex()
         if linkMap == nil { linkMap = try buildLinkMap() }
-        let key = title.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !key.isEmpty else { return [] }
-        return try (linkMap?[key] ?? []).sorted().compactMap { p -> Note? in
-            guard let n = try note(at: p), n.title.lowercased() != key else { return nil }
-            return n
-        }
+        return try (linkMap?[relativePath] ?? []).sorted().compactMap { try note(at: $0) }
     }
-    /// link name (lowercased) → the notes that link to it.
+    /// resolved note path → the notes that link to it.
     private var linkMap: [String: Set<String>]?
     static let linkPattern = try! NSRegularExpression(pattern: #"\[\[([^\]\[|#]+)(?:[#|][^\]]*)?\]\]"#)
     private func buildLinkMap() throws -> [String: Set<String>] {
+        let notes = try allFiles().map(read)
+        // the index the screen resolves a click with, so "Mentioned in" lists exactly the links that open this note
+        let links = LinkIndex(folders: [KnowledgeFolder(name: "", notes: notes)])
         var map: [String: Set<String>] = [:]
-        for url in try allFiles() {
-            let n = try read(url)
+        for n in notes {
             let s = n.body as NSString
             for m in Self.linkPattern.matches(in: n.body, range: NSRange(location: 0, length: s.length)) {
-                let name = s.substring(with: m.range(at: 1)).trimmingCharacters(in: .whitespaces).lowercased()
-                if !name.isEmpty { map[name, default: []].insert(n.relativePath) }
+                guard let target = links.path(for: s.substring(with: m.range(at: 1))), target != n.relativePath else { continue }
+                map[target, default: []].insert(n.relativePath)
             }
         }
         return map
@@ -196,7 +206,7 @@ public actor FileKnowledgeStore: KnowledgeStore {
             if known[rel] == mtime { continue }
             let note = try read(url); linkMap = nil
             try index.run("DELETE FROM note_fts WHERE path=?", [.text(rel)])
-            try index.run("INSERT INTO note_fts(path, title, body) VALUES(?,?,?)", [.text(rel), .text(note.title), .text(note.body)])
+            try index.run("INSERT INTO note_fts(path, title, plain) VALUES(?,?,?)", [.text(rel), .text(note.title), .text(NoteBlocks.plainText(note.body))])
             try index.run("INSERT INTO note_meta(path, mtime) VALUES(?,?) ON CONFLICT(path) DO UPDATE SET mtime=excluded.mtime", [.text(rel), .real(mtime)])
         }
         for gone in Set(known.keys).subtracting(seen) {
@@ -213,9 +223,12 @@ enum Fingerprint {
 /// Turns what was typed into an FTS5 query. `fts` is strict: every term must match, the last one as a prefix
 /// (so the word still being typed finds "Nayan's"), a "quoted phrase" passes through whole, and only pure function
 /// words are dropped — "open", "promise", "ask" and "last" are words a note can be found by. `loose` is the
-/// fallback for questions: the same terms OR-ed, each a prefix.
+/// fallback for questions: the content words alone, OR-ed, so "who is Ravi?" is a search for Ravi and not for
+/// every note that says "whoever" — and nothing at all when the question has no content word.
 public enum KnowledgeQuery {
     static let stop: Set<String> = ["the", "a", "an", "of", "to", "and", "or", "in", "on", "at", "is", "are", "was", "were", "i", "me", "my", "you", "your", "we", "our", "it", "this", "that"]
+    /// The words a question is made of that name nothing: findable by `fts` (a note can say "ask"), dropped by `loose`.
+    static let questionWords: Set<String> = ["who", "what", "when", "where", "why", "how", "which", "did", "does", "do", "done", "still", "anything", "about", "with", "for", "from", "have", "has", "had", "be", "been", "can", "could", "should", "would", "will", "not", "no", "yes", "get", "got", "last", "next", "ask", "asked", "tell", "told", "say", "said", "know", "think"]
 
     /// The quoted phrases and the bare words of a query, in order; phrases keep their words as typed.
     static func terms(_ query: String) -> (phrases: [String], words: [String]) {
@@ -228,7 +241,9 @@ public enum KnowledgeQuery {
             if inQuote { cur.append(ch) } else { rest.append(ch) }
         }
         if inQuote { rest += " " + cur }   // an unclosed quote is just words
-        let words = rest.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber && $0 != "'" }).map { String($0).replacingOccurrences(of: "'s", with: "").replacingOccurrences(of: "'", with: "") }.filter { !$0.isEmpty }
+        // Split where the unicode61 tokenizer splits — on anything that is not a letter or a digit, the apostrophe
+        // included — so "D'Souza" asks for the stored "souza" and "Nitesh's" for "nitesh"; the one-letter leftovers go.
+        let words = rest.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init)
         var kept = words.filter { !stop.contains($0) && $0.count > 1 }
         if kept.isEmpty, phrases.isEmpty { kept = words.filter { $0.count > 1 } }
         var seen = Set<String>(); kept = kept.filter { seen.insert($0).inserted }
@@ -243,9 +258,11 @@ public enum KnowledgeQuery {
         guard !parts.isEmpty else { return "\"\"" }
         return parts.joined(separator: " AND ")
     }
+    /// The content words OR-ed; a short one is asked for whole, since "who"* would take in "whoever" and "WhatsApp".
     public static func loose(_ query: String) -> String {
         let (phrases, words) = terms(query)
-        let parts = phrases.map { quoted($0.lowercased()) } + words.map { quoted($0) + "*" }
+        let content = words.filter { !stop.contains($0) && !questionWords.contains($0) }
+        let parts = phrases.map { quoted($0.lowercased()) } + content.map { quoted($0) + ($0.count < 4 ? "" : "*") }
         guard !parts.isEmpty else { return "\"\"" }
         return parts.joined(separator: " OR ")
     }

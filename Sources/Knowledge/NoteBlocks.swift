@@ -7,7 +7,9 @@ import Domain
 /// comment is never a block and never text — a card id on a checkbox line is kept as data, the rest is dropped.
 public enum NoteBlocks {
     public enum Inline: Equatable, Sendable {
-        case text(String), bold(String), italic(String), code(String)
+        case text(String), code(String)
+        /// Emphasis wraps whatever sits inside it: `**[[Meera]]**` is a bold link, and a code span inside `_…_` keeps its face.
+        case bold([Inline]), italic([Inline])
         /// `[[target]]`, `[[target|label]]`, `[[target#heading]]`: the note named, the heading within it, the words shown.
         case wikilink(target: String, heading: String?, label: String)
         case url(label: String, url: String)
@@ -151,11 +153,11 @@ public enum NoteBlocks {
                 flushText(); out.append(.code(String(s[(i + 1)..<end]))); i = end + 1; continue
             }
             if (c == "*" || c == "_"), i + 1 < s.count, s[i + 1] == c, i + 2 < s.count, !s[i + 2].isWhitespace, let end = find([c, c], from: i + 2), end > i + 2, !s[end - 1].isWhitespace {
-                flushText(); out.append(.bold(String(s[(i + 2)..<end]))); i = end + 2; continue
+                flushText(); out.append(.bold(inlines(String(s[(i + 2)..<end])))); i = end + 2; continue
             }
             if (c == "*" || c == "_"), i + 1 < s.count, !s[i + 1].isWhitespace, s[i + 1] != c, c == "*" || i == 0 || !(s[i - 1].isLetter || s[i - 1].isNumber),
                let end = find([c], from: i + 1), end > i + 1, !s[end - 1].isWhitespace, c == "*" || end + 1 == s.count || !(s[end + 1].isLetter || s[end + 1].isNumber) {
-                flushText(); out.append(.italic(String(s[(i + 1)..<end]))); i = end + 1; continue
+                flushText(); out.append(.italic(inlines(String(s[(i + 1)..<end])))); i = end + 1; continue
             }
             text.append(c); i += 1
         }
@@ -176,8 +178,27 @@ public enum NoteBlocks {
     /// The words alone, links by their label.
     public static func plain(_ inlines: [Inline]) -> String {
         inlines.map { i -> String in
-            switch i { case .text(let s), .bold(let s), .italic(let s), .code(let s): return s; case .wikilink(_, _, let l), .url(let l, _): return l }
+            switch i { case .text(let s), .code(let s): return s; case .bold(let i), .italic(let i): return plain(i); case .wikilink(_, _, let l), .url(let l, _): return l }
         }.joined()
+    }
+
+    /// The whole note as the screen draws it, a line per block item: no comment markers, no heading, bullet or
+    /// emphasis syntax, and of the status block only the items the card shows — not its markers, its heading or
+    /// its note. This is what the search index holds and cuts snippets from, so a hit never shows what the note
+    /// view hides and "brownie" or "ledger" match no note that merely carries the block.
+    public static func plainText(_ body: String) -> String {
+        var out: [String] = []
+        for b in parse(body) {
+            switch b {
+            case .heading(_, let i), .paragraph(let i), .quote(let i): out.append(plain(i))
+            case .list(let items): out += items.map { plain($0.inlines) }
+            case .checklist(let items): out += items.map { plain($0.inlines) }
+            case .code(let s): out.append(s)
+            case .status(let lines): out += lines
+            case .rule: break
+            }
+        }
+        return out.joined(separator: "\n")
     }
 
     /// The count of ⏳ items in the status block — what is still open between the user and this person.

@@ -76,7 +76,7 @@ struct KnowledgeView: View {
         guard let n = note else { backlinks = []; exchange = (nil, nil); return }
         let person = m.people.first { $0.notePath == n.relativePath }
         Task {
-            backlinks = (try? await m.knowledge.backlinks(to: n.title)) ?? []
+            backlinks = (try? await m.knowledge.backlinks(to: n.relativePath)) ?? []
             exchange = isPerson(n) ? await m.lastExchange(with: n.title, person: person) : (nil, nil)
         }
     }
