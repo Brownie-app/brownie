@@ -2,7 +2,7 @@
 
 A house spirit that lives in your Mac. Every night, while the Mac is plugged in and you're asleep, Brownie wakes it, reads what's new in your life — files, messages, notes, mail — with a small model that runs entirely on the machine, distils what matters into a private knowledge base, and leaves a handful of morning cards: things worth your attention, each ready to do in one tap. **Hands** is the part that acts in your apps, and it always stops one step short of anything irreversible.
 
-Website: [usebrownie.com](https://usebrownie.com). Inspired by the architecture of Sentient OS; written from scratch (see `docs/spec/provenance.md`).
+Website: [usebrownie.com](https://usebrownie.com). Inspired by all personal assistant apps and the architecture of Sentient OS; written from scratch (see `docs/spec/provenance.md`). Made with ❤️ in India.
 
 ## Run it
 
@@ -79,3 +79,7 @@ The sealed cloud mirror (v1.1); notarised DMG and live auto-updates (need an App
 Brownie is open source under the [GNU AGPL-3.0](LICENSE). Contributions are welcome — read [CONTRIBUTING.md](CONTRIBUTING.md) first; contributors sign a short [CLA](CLA.md) so the project can also be offered under a commercial licence. Security issues: [SECURITY.md](SECURITY.md).
 
 Third-party: LiteRT-LM (Apache-2.0), TDLib (BSL-1.0), OpenSSL (Apache-2.0), Sparkle (MIT), Gemma 4 weights under Google's Gemma terms (downloaded by the user, never redistributed here).
+
+---
+
+Inspired by all personal assistant apps and the architecture of Sentient OS · Made with ❤️ in India

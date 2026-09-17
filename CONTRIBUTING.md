@@ -37,7 +37,7 @@ Match the style of the file you are in. No new dependencies without a reason in 
 
 ## Clean-room rule
 
-Brownie's architecture was inspired by Sentient OS (AGPL). The implementation, prompts and docs were written from scratch — see `docs/spec/provenance.md`. Do not copy code, prompts or documentation from that project or any other incompatible source into a PR.
+Brownie's architecture was inspired by all personal assistant apps and by Sentient OS (AGPL). The implementation, prompts and docs were written from scratch — see `docs/spec/provenance.md`. Do not copy code, prompts or documentation from that project or any other incompatible source into a PR.
 
 ## Tests — what "covered" means here
 
