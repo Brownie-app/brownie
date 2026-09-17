@@ -131,10 +131,14 @@ public enum StatusRules {
     }
     /// On the note: still open, or settled less than `shownFor` ago.
     public static func isShown(settledAt: Date?, now: Date) -> Bool { settledAt.map { now.timeIntervalSince($0) < shownFor } ?? true }
-    /// Left the note within the last day: settled between 14 and 15 days ago.
-    public static func leftToday(settledAt: Date?, now: Date) -> Bool {
+    /// How long a line that has left the block is still handed to the gardener: a fortnight, not one night. The gardener
+    /// runs only on a night with something to sync, and a Mac closed on the one night a line fell due would lose its trace
+    /// for good; a line offered on every night of a fortnight lands once, because the gardener keeps each clause once.
+    public static let retiredFor: TimeInterval = 14 * 86400
+    /// Left the note lately: settled between 14 and 28 days ago.
+    public static func leftLately(settledAt: Date?, now: Date) -> Bool {
         guard let s = settledAt else { return false }
-        let age = now.timeIntervalSince(s); return age >= shownFor && age < shownFor + 86400
+        let age = now.timeIntervalSince(s); return age >= shownFor && age < shownFor + retiredFor
     }
 }
 
@@ -158,9 +162,16 @@ public enum StatusBlock {
         return open + "\n" + heading + "\n" + note + "\n" + lines.joined(separator: "\n") + "\n" + close + "\n"
     }
 
-    /// The dated line of every item that left the block in the last day — for a gardener to keep under the note's Earlier section.
+    /// The dated line of every item that left the block in the last fortnight — for a gardener to keep under the note's
+    /// Earlier section, which holds each clause once however many nights it is offered.
     public static func retiredLines(person: String, asks: [Ask], loops: [Loop], now: Date, timeZone: TimeZone = .current, routed: Bool = false) -> [String] {
-        entries(person: person, asks: asks, loops: loops, timeZone: timeZone, routed: routed).filter { StatusRules.leftToday(settledAt: $0.settledAt, now: now) }.map(\.line)
+        entries(person: person, asks: asks, loops: loops, timeZone: timeZone, routed: routed).filter { StatusRules.leftLately(settledAt: $0.settledAt, now: now) }.map(\.line)
+    }
+    /// The same for asks and loops already routed to one note (the registry chose them, by handle first, then by the
+    /// full label): no name is re-checked here, so a handle match under another chat name keeps its trace and a bare
+    /// first name the registry could pin on nobody is nobody's.
+    public static func retiredLines(asks: [Ask], loops: [Loop], now: Date, timeZone: TimeZone = .current) -> [String] {
+        retiredLines(person: "", asks: asks, loops: loops, now: now, timeZone: timeZone, routed: true)
     }
 
     /// This person's asks (newest first, at most eight) then loops (open first, oldest first). Order is total, so two

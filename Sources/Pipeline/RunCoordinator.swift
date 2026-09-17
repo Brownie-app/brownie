@@ -114,9 +114,11 @@ public actor RunCoordinator {
                 // Who exists, from the People notes and every earlier run: the brain is told, so it writes each person in one file.
                 let registry = PersonRegistry(vault: deps.knowledge.rootURL, now: { [clock = deps.clock] in clock.now() })
                 await registry.load()
-                // Anyone tonight's summaries, open asks or open loops name comes back from Archive/ before the brain writes, so it finds their one file where it expects it.
-                let mentioned = summaries.map(\.bucketName) + Self.loadAsks(try await store.value(SettingKey.asks)).filter(\.isOpen).map(\.person) + (await LoopLedger.load(store)).filter { $0.status == .open }.map(\.person)
-                await NoteArchive.unarchive(root: deps.knowledge.rootURL, registry: registry, mentioned: mentioned)
+                // Anyone tonight's summaries, open asks or open loops name comes back from Archive/ before the brain writes, so it finds
+                // their one file where it expects it — by the chat's handle where one is known, so a contact saved under a bare number,
+                // or a chat renamed since, is found through the registry and not only by a name.
+                let mentioned = Self.mentions(summaries: summaries, asks: Self.loadAsks(try await store.value(SettingKey.asks)), loops: await LoopLedger.load(store))
+                let broughtBack = await NoteArchive.unarchive(root: deps.knowledge.rootURL, registry: registry, mentioned: mentioned, now: deps.clock.now(), timeZone: deps.clock.timeZone)
                 await registry.seed(from: (try? await deps.knowledge.folders()) ?? [])
                 var usage = Usage.zero
                 if !summaries.isEmpty {
@@ -185,10 +187,15 @@ public actor RunCoordinator {
                 do { try await registry.save() } catch { log.warn("people registry not saved: \(error)") }
                 let suspects = await registry.suspects().map { [$0.0.id, $0.1.id] }
                 try? await store.setValue(SettingKey.duplicatePeople, String(data: JSONEncoder().encode(suspects), encoding: .utf8))
-                await Self.writeStatusBlock(asks: asks, loops: allLoops, knowledge: deps.knowledge, registry: registry, now: deps.clock.now(), timeZone: deps.clock.timeZone)
-                // The gardener: every People and Groups note back in shape and aged, the lines that retired from the status block kept under Earlier, quiet notes archived.
+                let routed = await Self.writeStatusBlock(asks: asks, loops: allLoops, knowledge: deps.knowledge, registry: registry, now: deps.clock.now(), timeZone: deps.clock.timeZone)
+                // The gardener: every People and Groups note back in shape and aged, the lines that retired from the status block kept
+                // under Earlier — in the note the registry routed the block to, by path, never re-derived from a title — and the quiet
+                // notes archived, except the household's shared group notes and what came back from Archive/ tonight.
+                var shared: [String] = []
+                if let household { shared = (try? await Self.sharedGroupNotePaths(household, store: store)) ?? [] }
                 await VaultGardener.run(root: deps.knowledge.rootURL, registry: registry, now: deps.clock.now(), timeZone: deps.clock.timeZone,
-                                        retiredLines: { [now = deps.clock.now(), tz = deps.clock.timeZone] in StatusBlock.retiredLines(person: $0, asks: asks, loops: allLoops, now: now, timeZone: tz) }, archive: true)
+                                        retiredLines: { [now = deps.clock.now(), tz = deps.clock.timeZone] path in StatusBlock.retiredLines(asks: routed.asks[path] ?? [], loops: routed.loops[path] ?? [], now: now, timeZone: tz) },
+                                        archive: true, keep: Set(shared + broughtBack))
                 try await store.setValue(SettingKey.candidates, String(data: JSONEncoder().encode(candidates), encoding: .utf8))
 
                 onEvent(.progress(RunProgress(stage: .preparing, stats: stats)))
@@ -373,20 +380,37 @@ public actor RunCoordinator {
         guard let j = json, let d = j.data(using: .utf8) else { return [] }
         return (try? JSONDecoder().decode([Ask].self, from: d)) ?? []
     }
+    /// Who tonight names, for `NoteArchive.unarchive`: every summary's chat, every open ask's person and every open loop's
+    /// person — each with the chat's stable handle when one is known. A summary carries none itself, but an ask from the
+    /// same chat does (the ledger keeps every ask's handle, settled ones too), so a direct chat that produced a summary
+    /// is named the way the registry knows it and not only by the name the source shows.
+    static func mentions(summaries: [SummaryRecord], asks: [Ask], loops: [Loop]) -> [NoteArchive.Mention] {
+        var handleByBucket: [BucketID: String] = [:]
+        for a in asks { if let h = a.handle, !h.isEmpty, handleByBucket[a.bucket] == nil { handleByBucket[a.bucket] = h } }
+        return summaries.map { NoteArchive.Mention($0.bucketName, handle: handleByBucket[$0.bucket]) }
+            + asks.filter(\.isOpen).map { NoteArchive.Mention($0.person, handle: $0.handle) }
+            + loops.filter { $0.status == .open }.map { NoteArchive.Mention($0.person) }
+    }
+
+    /// Where the status block's asks and loops went, by the note's vault path — what the gardener reads the retired lines from.
+    public struct StatusRouting: Sendable { public var asks: [String: [Ask]] = [:], loops: [String: [Loop]] = [:] }
+
     /// The status block ("Between you") on every People note that has asks or loops: written straight to the file, so it never counts as the user's edit.
     /// Each ask and loop goes to exactly one note — the registry's, or failing that a title with the very same key.
     /// A first name alone never claims a note by its title; that is how "Arjun" once leaked into "Arjun Mehta".
-    public static func writeStatusBlock(asks: [Ask], loops: [Loop], knowledge: any KnowledgeStore, registry: PersonRegistry?, now: Date, timeZone: TimeZone = .current) async {
-        guard let people = (try? await knowledge.folders())?.first(where: { $0.name == "People" }) else { return }
+    /// Returns the routing, so the lines that retire from a block are kept under the same note and no other.
+    @discardableResult
+    public static func writeStatusBlock(asks: [Ask], loops: [Loop], knowledge: any KnowledgeStore, registry: PersonRegistry?, now: Date, timeZone: TimeZone = .current) async -> StatusRouting {
+        var routed = StatusRouting()
+        guard let people = (try? await knowledge.folders())?.first(where: { $0.name == "People" }) else { return routed }
         func pick(_ label: String, _ handle: String?) async -> String? {
             if let registry { return await registry.notePath(forLabel: label, handle: handle, amongNotes: people.notes) }
             return people.notes.first { PersonKey.sameKey($0.title, label) }?.relativePath
         }
-        var asksFor: [String: [Ask]] = [:], loopsFor: [String: [Loop]] = [:]
-        for a in asks { if let p = await pick(a.person, a.handle) { asksFor[p, default: []].append(a) } }
-        for l in loops { if let p = await pick(l.person, nil) { loopsFor[p, default: []].append(l) } }
+        for a in asks { if let p = await pick(a.person, a.handle) { routed.asks[p, default: []].append(a) } }
+        for l in loops { if let p = await pick(l.person, nil) { routed.loops[p, default: []].append(l) } }
         for n in people.notes {
-            let block = StatusBlock.render(person: n.title, asks: asksFor[n.relativePath] ?? [], loops: loopsFor[n.relativePath] ?? [], now: now, timeZone: timeZone, routed: true)
+            let block = StatusBlock.render(person: n.title, asks: routed.asks[n.relativePath] ?? [], loops: routed.loops[n.relativePath] ?? [], now: now, timeZone: timeZone, routed: true)
             let url = knowledge.rootURL.appendingPathComponent(n.relativePath)
             guard let raw = try? String(contentsOf: url, encoding: .utf8) else { continue }
             // keep the front-matter, work on the body
@@ -394,6 +418,7 @@ public actor RunCoordinator {
             let updated = StatusBlock.upsert(into: body, block: block)
             if updated != body { try? (head + updated).write(to: url, atomically: true, encoding: .utf8) }
         }
+        return routed
     }
     public static func loadHousehold(_ json: String?) -> Household? {
         guard let j = json, let d = j.data(using: .utf8) else { return nil }
