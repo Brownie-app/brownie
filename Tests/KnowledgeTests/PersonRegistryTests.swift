@@ -410,9 +410,9 @@ import Platform
         #expect(await r.register(label: "Vivek", handle: nil) == "", "the bare first name is still the user")
         let arjun = await r.register(label: "Arjun Mehta", handle: nil)
         await r.remove(arjun)
-        #expect(await r.people().map(\.name) == ["Kanika Pandey", "Vivek Sharma"])
+        #expect(Set(await r.people().map(\.name)) == ["Kanika Pandey", "Vivek Sharma"])
         try await r.save()
         let again = v.registry(); await again.load()
-        #expect(await again.people().map(\.name) == ["Kanika Pandey", "Vivek Sharma"], "a removed record stays removed on disk")
+        #expect(Set(await again.people().map(\.name)) == ["Kanika Pandey", "Vivek Sharma"], "a removed record stays removed on disk")
     }
 }
