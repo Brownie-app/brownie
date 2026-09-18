@@ -143,8 +143,12 @@ public struct BucketInfo: Sendable, Hashable, Identifiable {
     /// For a direct chat: the other person as the source knows them, spelled by `PersonHandle`
     /// ("whatsapp:+91…", "slack:U0…"), so a renamed chat is still the same person. Nil for groups.
     public let handle: String?
-    public init(id: BucketID, name: String, detail: String, isGroup: Bool, count: Int, handle: String? = nil) {
+    /// For a direct chat: what the source knows that proves who this is beyond the name — `PersonProof` strings from the
+    /// other person's profile (Slack and Teams carry an email, often a phone) or from the handle itself. Empty when nothing.
+    public let proofs: [String]
+    public init(id: BucketID, name: String, detail: String, isGroup: Bool, count: Int, handle: String? = nil, proofs: [String] = []) {
         self.id = id; self.name = name; self.detail = detail; self.isGroup = isGroup; self.count = count; self.handle = handle
+        self.proofs = proofs.isEmpty ? (handle.flatMap(PersonProof.fromHandle).map { [$0] } ?? []) : proofs
     }
 }
 

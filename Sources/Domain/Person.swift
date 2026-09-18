@@ -92,6 +92,52 @@ public enum SelfNames {
 
 /// A stable handle for a person as a source knows them — a phone, a user id, a chat id — spelled one way
 /// so the registry can recognise someone whose chat name changed.
+/// What proves two chats are one person, as opposed to a name that merely looks alike: a phone number or an email
+/// address, spelled one way — "phone:919540752593" (digits only, no leading zeros or plus), "email:nitesh@loopsy.in"
+/// (lower case, trimmed). A source reads them off a profile (Slack, Teams), the handle itself (WhatsApp is a phone,
+/// iMessage a phone or an address), or a Contacts card that holds both.
+public enum PersonProof {
+    public static func phone(_ raw: String) -> String? {
+        var digits = raw.filter(\.isNumber)
+        while digits.hasPrefix("0") { digits.removeFirst() }
+        guard digits.count >= 7 else { return nil }
+        return "phone:" + digits
+    }
+    public static func email(_ raw: String) -> String? {
+        let e = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard e.contains("@"), e.contains("."), !e.hasPrefix("@"), !e.hasSuffix("@") else { return nil }
+        return "email:" + e
+    }
+    /// The proof a handle carries in itself: a WhatsApp or iMessage number, an iMessage address. Nil for an opaque id.
+    public static func fromHandle(_ handle: String) -> String? {
+        guard let colon = handle.firstIndex(of: ":") else { return nil }
+        let scheme = handle[..<colon], rest = String(handle[handle.index(after: colon)...])
+        switch scheme {
+        case "whatsapp": return phone(rest)
+        case "imessage": return rest.contains("@") ? email(rest) : phone(rest)
+        default: return nil
+        }
+    }
+    /// The proofs a list of raw phones and emails yield, spelled and deduped.
+    public static func all(phones: [String], emails: [String]) -> [String] {
+        var out: [String] = []
+        for p in phones.compactMap(phone) where !out.contains(p) { out.append(p) }
+        for e in emails.compactMap(email) where !out.contains(e) { out.append(e) }
+        return out
+    }
+}
+
+/// One card from the Mac's Contacts, as the registry reads it: a name and every phone and email on it. Two handles
+/// that fall on one card are one person.
+public struct ContactCard: Sendable, Equatable {
+    public let name: String
+    public let nickname: String?
+    public let proofs: [String]
+    public init(name: String, nickname: String? = nil, phones: [String], emails: [String]) {
+        self.name = name; self.nickname = nickname; self.proofs = PersonProof.all(phones: phones, emails: emails)
+    }
+}
+
 public enum PersonHandle {
     /// "whatsapp:+919540752593" — digits only, any spacing or punctuation dropped.
     public static func whatsapp(phoneDigits: String) -> String {
