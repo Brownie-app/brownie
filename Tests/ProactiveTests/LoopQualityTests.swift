@@ -99,6 +99,6 @@ import Domain
         for good in ["Implement the feature Nitesh sent", "Try to send Nayan the outstanding payment via UPI", "Will try to call Mr. Taragi", "Document the API for Arif", "Present the deck to SBI", "Agreed to send the invoice"] {
             #expect(LoopQuality.isCommitment(good), "\(good): \(LoopQuality.reason(good) ?? "")")
         }
-        for bad in ["Try harder", "Try", "Implementation of the feature", "Try to be better"] { #expect(!LoopQuality.isCommitment(bad), "\(bad)") }
+        for bad in ["Try harder", "Try", "Implementation of the feature", "Try to be better", "Figure out the product confusion", "Work out the pricing"] { #expect(!LoopQuality.isCommitment(bad), "\(bad)") }
     }
 }

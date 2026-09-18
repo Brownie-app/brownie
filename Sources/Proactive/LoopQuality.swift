@@ -11,7 +11,8 @@ public enum LoopQuality {
     static let aspirations = ["focus", "discuss", "build a company", "build a business", "build something", "be", "become", "not back out", "not", "never",
                               "do not", "don't", "go full time", "go full-time", "go fulltime", "keep", "improve", "work on", "think about", "consider",
                               "explore", "try", "aim", "plan to discuss", "plan to talk", "plan to meet", "plan to chat", "continue", "stop", "stay", "remain",
-                              "support", "help out", "look after", "take care", "make sure", "commit to", "chase more", "grow"]
+                              "support", "help out", "look after", "take care", "make sure", "commit to", "chase more", "grow", "figure out", "work out",
+                              "get better", "do better", "be more", "spend more", "put more"]
     /// Verbs that open a deliverable. Not exhaustive — any other verb-shaped first word with an object passes too —
     /// but these are known verbs, so they are never mistaken for a gerund ("bring", "ping") or a noun ("copy").
     static let deliverables: Set<String> = ["send", "share", "provide", "call", "pay", "book", "review", "reply", "confirm", "upload", "sign",
