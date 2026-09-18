@@ -637,13 +637,15 @@ extension AppModel {
 
 extension AppModel {
     /// The night's suspect pairs, read back against the registry as it is now: a pair the user merged or split
-    /// since is gone. Without a saved list (no run yet), the registry's own view is shown.
+    /// since is gone. A pending pair — a question Brownie itself raised — is shown whenever the registry holds one,
+    /// saved list or not. Without a saved list (no run yet), the registry's own view is shown.
     func reloadPeople() async {
         let registry = PersonRegistry(vault: knowledge.rootURL); await registry.load()
         people = await registry.people()
         let live = await registry.suspects()
         guard let j = try? await store.value(SettingKey.duplicatePeople), let d = j.data(using: .utf8), let stored = try? JSONDecoder().decode([[String]].self, from: d) else { duplicatePeople = live; return }
-        duplicatePeople = stored.compactMap { ids in live.first { Set(ids) == Set([$0.0.id, $0.1.id]) } }
+        let asked = live.filter(PeopleQuestion.isPending)
+        duplicatePeople = asked + stored.compactMap { ids in live.first { Set(ids) == Set([$0.0.id, $0.1.id]) } }.filter { p in !asked.contains { $0.0.id == p.0.id && $0.1.id == p.1.id } }
     }
 
     /// Merge two registry people: the kept one takes every alias and handle; the dropped note's body goes under a

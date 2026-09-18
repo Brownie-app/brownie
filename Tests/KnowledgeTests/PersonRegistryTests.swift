@@ -415,4 +415,286 @@ import Platform
         let again = v.registry(); await again.load()
         #expect(Set(await again.people().map(\.name)) == ["Kanika Pandey", "Vivek Sharma"], "a removed record stays removed on disk")
     }
+
+    // MARK: proof joins, a name alone asks
+
+    /// A clock the tests move by hand, so the second record is seen later than the first.
+    final class Ticker: @unchecked Sendable {
+        var t = PersonRegistryTests.t0
+        func registry(_ v: Vault) -> PersonRegistry { PersonRegistry(vault: v.root, now: { self.t }) }
+        func tick(_ s: Double = 60) { t = t.addingTimeInterval(s) }
+    }
+
+    @Test func aNameOnASecondChatOpensAPendingRecordAndAProofJoins() async throws {
+        let v = try Self.vault(); let c = Ticker(); let r = c.registry(v)
+        let wa = await r.register(label: "Nitesh Kumar", handle: "whatsapp:+919540752593")
+        await r.setNotePath("People/Nitesh Kumar.md", for: wa)
+        c.tick()
+        // the same name on Slack: not joined — a new record, and the two are pending toward each other
+        let sl = await r.register(label: "Nitesh Kumar", handle: "slack:U1")
+        #expect(sl != wa && sl != "")
+        let (w, s) = (try #require(await r.person(wa)), try #require(await r.person(sl)))
+        #expect(w.pending == [sl] && s.pending == [wa], "each may be the other, awaiting the user's word")
+        #expect(w.handles == ["whatsapp:+919540752593"] && s.handles == ["slack:U1"], "the Slack handle did not join the WhatsApp record")
+        #expect(w.sources == ["WhatsApp"] && s.sources == ["Slack"])
+        #expect(w.allProofs == ["phone:919540752593"] && w.proofs == ["phone:919540752593"], "a WhatsApp handle proves a phone, and the record keeps it")
+        #expect(await r.register(label: "Nitesh K", handle: "slack:U1") == sl, "the handle, once on file, is that record")
+        #expect(await r.people().count == 2)
+        // proof joins: an iMessage chat with the same number is the WhatsApp Nitesh; a Teams profile with the Slack email is the Slack one
+        #expect(await r.register(label: "Nitesh", handle: "imessage:+919540752593") == wa)
+        _ = await r.register(label: "Nitesh Kumar", handle: "slack:U1", proofs: ["email:nitesh@loopsy.in"])
+        #expect(await r.register(label: "N. Kumar", handle: "teams:T9", proofs: ["email:nitesh@loopsy.in"]) == sl)
+        let s2 = try #require(await r.person(sl))
+        #expect(s2.handles == ["slack:U1", "teams:T9"] && s2.proofs == ["email:nitesh@loopsy.in"] && s2.aliases.contains("N. Kumar"))
+        #expect(await r.people().count == 2, "no third record for a proven chat")
+        // a name alone, without a handle, resolves as before: the pending pair are both candidates and the one with the note answers
+        #expect(await r.register(label: "Nitesh Kumar", handle: nil) == wa)
+        #expect(await r.resolve(label: "nitesh kumar", handle: nil) == wa)
+        #expect(await r.resolve(label: "Nitesh Kumar", handle: "slack:U1") == sl, "the handle always says")
+        // a lone first name on a second chat asks too
+        let am = await r.register(label: "Arjun Mehta", handle: "whatsapp:+1"); c.tick()
+        let ar = await r.register(label: "Arjun", handle: "telegram:7")
+        let (arjun, mehta) = (try #require(await r.person(ar)), try #require(await r.person(am)))
+        #expect(ar != am && arjun.pending == [am] && mehta.pending == [ar])
+        // someone never seen on a chat — from a note, or from loops by name — takes the first handle that names them: there is no second chat to confuse
+        let zed = await r.register(label: "Zed Zulu", handle: nil)
+        #expect(await r.register(label: "Zed Zulu", handle: "whatsapp:+2") == zed)
+        let z = try #require(await r.person(zed))
+        #expect(z.pending == [] && z.handles == ["whatsapp:+2"])
+        // the user's own name still opens nothing
+        let me = PersonRegistry(vault: v.root, now: { Self.t0 }, selfNames: ["Vivek Upreti"])
+        #expect(await me.register(label: "Vivek Upreti", handle: "slack:U2", proofs: ["email:v@x.in"]) == "")
+    }
+
+    @Test func aPendingPairResolvesByTheNoteAndNeverGuessesWithoutOne() async throws {
+        let v = try Self.vault(); let c = Ticker(); let r = c.registry(v)
+        let wa = await r.register(label: "Nitesh Kumar", handle: "whatsapp:+1"); c.tick()
+        let sl = await r.register(label: "Nitesh Kumar", handle: "slack:U1")
+        #expect(await r.resolve(label: "Nitesh Kumar", handle: nil) == nil, "spelled the same by both, neither with a note: nobody")
+        #expect(await r.register(label: "Nitesh Kumar", handle: nil) == wa, "a loop under the bare name is not a third person; the likelier is returned and nothing is attached")
+        #expect(await r.people().count == 2)
+        await r.setNotePath("People/Nitesh Kumar.md", for: wa)
+        #expect(await r.resolve(label: "Nitesh Kumar", handle: nil) == wa, "the one with the note")
+        await r.setNotePath("People/Nitesh Kumar (Slack).md", for: sl)
+        #expect(await r.resolve(label: "Nitesh Kumar", handle: nil) == nil, "both have a note: nobody, never the first on file")
+        #expect(await r.resolve(label: "Nitesh Kumar (Slack)", handle: nil) == sl, "the title spelled exactly is his")
+        // a same-key pair that is not pending is told apart by spelling only: a note is no tie-break there
+        await r.seed(from: Self.folders([("People/Kanika Pandey.md", "Kanika Pandey"), ("People/Kanika Pandey Loadmill.md", "Kanika Pandey Loadmill")]))
+        let plain = try #require(await r.people().first { $0.notePath == "People/Kanika Pandey.md" }?.id)
+        await r.setNotePath(nil, for: plain)
+        #expect(await r.resolve(label: "Kanika Pandey (work)", handle: nil) == nil, "spells neither: nobody, whoever has a note")
+        #expect(await r.resolve(label: "Kanika Pandey", handle: nil) == plain)
+    }
+
+    @Test func aPendingPairNeverRoutesAnAskAcross() async throws {
+        let v = try Self.vault(); let c = Ticker(); let r = c.registry(v)
+        let wa = await r.register(label: "Nitesh Kumar", handle: "whatsapp:+1"); c.tick()
+        let sl = await r.register(label: "Nitesh Kumar", handle: "slack:U1")
+        let notes = [Self.note("People/Nitesh Kumar.md", "Nitesh Kumar")]
+        await r.seed(from: [KnowledgeFolder(name: "People", notes: notes)])
+        let (waPath, slPath) = (await r.notePath(for: wa), await r.notePath(for: sl))
+        #expect(waPath == "People/Nitesh Kumar.md" && slPath == nil, "the note goes to the one on file first")
+        #expect(await r.notePath(forLabel: "Nitesh Kumar", handle: "whatsapp:+1", amongNotes: notes) == "People/Nitesh Kumar.md")
+        #expect(await r.notePath(forLabel: "Nitesh Kumar", handle: "slack:U1", amongNotes: notes) == nil, "the Slack ask goes to no note rather than into the WhatsApp Nitesh's")
+        #expect(await r.notePath(forLabel: "Nitesh Kumar", handle: nil, amongNotes: notes) == "People/Nitesh Kumar.md", "a loop under the bare name goes to the one with the note")
+        let both = notes + [Self.note("People/Nitesh Kumar (Slack).md", "Nitesh Kumar (Slack)")]
+        await r.seed(from: [KnowledgeFolder(name: "People", notes: both)])
+        #expect(await r.notePath(for: sl) == "People/Nitesh Kumar (Slack).md", "the file he was told to be written in is his")
+        #expect(await r.notePath(forLabel: "Nitesh Kumar", handle: "slack:U1", amongNotes: both) == "People/Nitesh Kumar (Slack).md")
+        #expect(await r.notePath(forLabel: "Nitesh Kumar", handle: nil, amongNotes: both) == nil, "both have a note now: the bare name goes to neither")
+        #expect(await r.people().count == 2, "no third record for either note")
+    }
+
+    @Test func suggestedFilesTellAPendingPairApartAndTheSeedFollowsThem() async throws {
+        let v = try Self.vault(); let c = Ticker(); let r = c.registry(v)
+        let wa = await r.register(label: "Nitesh Kumar", handle: "whatsapp:+1"); c.tick()
+        let sl = await r.register(label: "Nitesh Kumar", handle: "slack:U1")
+        let people = await r.people()
+        let (w, s) = (try #require(people.first { $0.id == wa }), try #require(people.first { $0.id == sl }))
+        #expect(PersonRegistry.suggestedNotePath(for: w, among: people) == "People/Nitesh Kumar.md", "the one on file first keeps the plain name")
+        #expect(PersonRegistry.suggestedNotePath(for: s, among: people) == "People/Nitesh Kumar (Slack).md", "the newcomer is told apart by the chat")
+        #expect(PersonRegistry.resolveTitle("Nitesh Kumar (Slack)", among: people) == sl && PersonRegistry.resolveTitle("Nitesh Kumar", among: people) == wa)
+        // the header lists both, the newcomer with his file and the line that keeps the brain from folding them
+        let lines = PersonRegistry.headerLines(people)
+        #expect(lines.count == 2)
+        #expect(lines.contains { $0.hasPrefix("Nitesh Kumar — no note yet; write them in People/Nitesh Kumar (Slack).md") && $0.contains("(seen on Slack)") && $0.contains("may be the Nitesh Kumar of People/Nitesh Kumar.md") && $0.hasSuffix(PersonRegistry.unsureLine) }, "\(lines)")
+        #expect(lines.contains { $0.hasPrefix("Nitesh Kumar — no note yet; write them in People/Nitesh Kumar.md") && $0.contains("(seen on WhatsApp)") && $0.hasSuffix(PersonRegistry.unsureLine) }, "\(lines)")
+        #expect(PersonRegistry.unsureLine == "Brownie is not sure these are one person; write each in their own file until the user says")
+        // the seed claims each file for its record: the plain title for the first, the suffixed one for the newcomer
+        await r.seed(from: Self.folders([("People/Nitesh Kumar (Slack).md", "Nitesh Kumar (Slack)"), ("People/Nitesh Kumar.md", "Nitesh Kumar")]))
+        let (waPath, slPath, count) = (await r.notePath(for: wa), await r.notePath(for: sl), await r.people().count)
+        #expect(waPath == "People/Nitesh Kumar.md" && slPath == "People/Nitesh Kumar (Slack).md" && count == 2)
+        // a front-matter id says whose a note is above any title
+        let v2 = try Self.vault(); let r2 = c.registry(v2)
+        let a = await r2.register(label: "Nitesh Kumar", handle: "whatsapp:+1"); c.tick(); let b = await r2.register(label: "Nitesh Kumar", handle: "slack:U1")
+        let plain = Self.note("People/Nitesh Kumar.md", "Nitesh Kumar")
+        let stamped = Note(relativePath: plain.relativePath, title: plain.title, body: plain.body, meta: NoteMeta.fresh(path: plain.relativePath, body: plain.body, today: "2026-09-16", id: b), updatedAt: Self.t0)
+        await r2.seed(from: [KnowledgeFolder(name: "People", notes: [stamped])])
+        let (aPath, bPath) = (await r2.notePath(for: a), await r2.notePath(for: b))
+        #expect(bPath == "People/Nitesh Kumar.md" && aPath == nil, "the id in the front-matter says whose the note is")
+        let people2 = await r2.people()
+        #expect(PersonRegistry.suggestedNotePath(for: people2.first { $0.id == a }!, among: people2) == "People/Nitesh Kumar (WhatsApp).md", "the plain title is taken, so the first is told apart by his chat")
+        // once the user says they are two, the newcomer still has a file of his own, and the header says nothing unsure
+        let v3 = try Self.vault(); let r3 = c.registry(v3)
+        let x = await r3.register(label: "Nitesh Kumar", handle: "whatsapp:+1"); c.tick(); let y = await r3.register(label: "Nitesh Kumar", handle: "slack:U1")
+        await r3.keepSeparate(x, y)
+        let apart = await r3.people()
+        #expect(PersonRegistry.suggestedNotePath(for: apart.first { $0.id == y }!, among: apart) == "People/Nitesh Kumar (Slack).md")
+        #expect(PersonRegistry.resolveTitle("Nitesh Kumar (Slack)", among: apart) == y && PersonRegistry.resolveTitle("Nitesh Kumar", among: apart) == x)
+        let apartLines = PersonRegistry.headerLines(apart)
+        #expect(apartLines == ["Nitesh Kumar — no note yet", "Nitesh Kumar — no note yet; write them in People/Nitesh Kumar (Slack).md"], "\(apartLines)")
+    }
+
+    @Test func suspectsAskPendingPairsFirstAndAnAnswerClearsThem() async throws {
+        let v = try Self.vault(); let c = Ticker(); let r = c.registry(v)
+        _ = await r.register(label: "Arjun", handle: nil)
+        _ = await r.register(label: "Arjun Mehta", handle: "whatsapp:+1")   // a look-alike pair
+        let wa = await r.register(label: "Nitesh Kumar", handle: "whatsapp:+2"); c.tick()
+        let sl = await r.register(label: "Nitesh Kumar", handle: "slack:U1")
+        let pairs = await r.suspects()
+        #expect(pairs.count == 2 && Set([pairs[0].0.id, pairs[0].1.id]) == [wa, sl] && pairs[1].1.name == "Arjun", "the question Brownie raised comes first, the look-alike after")
+        #expect(PeopleQuestion.isPending(pairs[0]) && !PeopleQuestion.isPending(pairs[1]))
+        #expect(PeopleQuestion.title(pairs[0]) == "Is Nitesh Kumar on Slack the same Nitesh Kumar as on WhatsApp?", "\(PeopleQuestion.title(pairs[0]))")
+        #expect(PeopleQuestion.yes(pairs[0]) == "Same person" && PeopleQuestion.no(pairs[0]) == "Different people")
+        #expect(PeopleQuestion.title(pairs[1]) == "These two look like one person: Arjun Mehta · Arjun" && PeopleQuestion.yes(pairs[1]) == "Merge" && PeopleQuestion.no(pairs[1]) == "Keep separate")
+        #expect(PeopleQuestion.consequence(pairs[0]) == "Same person keeps Nitesh Kumar")
+        // Different people: pending gone both ways, notSame set both ways, and the pair is never asked again
+        await r.keepSeparate(wa, sl)
+        let (w, s) = (try #require(await r.person(wa)), try #require(await r.person(sl)))
+        #expect(w.pending.isEmpty && s.pending.isEmpty && w.notSame == [sl] && s.notSame == [wa])
+        #expect(await r.suspects().count == 1)
+        // Same person: the merge keeps the one with the note and clears the question
+        let v2 = try Self.vault(); let r2 = c.registry(v2)
+        let a = await r2.register(label: "Nitesh Kumar", handle: "whatsapp:+2"); c.tick()
+        let b = await r2.register(label: "Nitesh Kumar", handle: "slack:U1", proofs: ["email:n@x.in"])
+        await r2.setNotePath("People/Nitesh Kumar.md", for: a)
+        let pair = try #require(await r2.suspects().first)
+        #expect(pair.0.id == a && pair.1.id == b, "the one with the note is kept")
+        #expect(PeopleQuestion.consequence(pair) == "Same person keeps Nitesh Kumar and their note People/Nitesh Kumar.md")
+        let merged = try #require(await r2.merge(keep: a, drop: b))
+        #expect(merged.pending.isEmpty && merged.handles == ["whatsapp:+2", "slack:U1"] && merged.proofs == ["email:n@x.in"], "the kept one takes the handle and the proofs")
+        let (left, count) = (await r2.suspects().count, await r2.people().count)
+        #expect(left == 0 && count == 1)
+        // two chats on the same app under one name: the question says so
+        let v3 = try Self.vault(); let r3 = c.registry(v3)
+        _ = await r3.register(label: "Nitesh Kumar", handle: "whatsapp:+5"); c.tick(); _ = await r3.register(label: "Nitesh Kumar", handle: "whatsapp:+6")
+        #expect(PeopleQuestion.title(try #require(await r3.suspects().first)) == "Are the two Nitesh Kumars on WhatsApp the same person?")
+    }
+
+    @Test func aThirdChatUnderTheNameIsPendingTowardBothAndTheQuestionFollowsAMerge() async throws {
+        let v = try Self.vault(); let c = Ticker(); let r = c.registry(v)
+        let rr = await r.register(label: "Nitesh Kumar", handle: "whatsapp:+1"); c.tick()
+        let n = await r.register(label: "Nitesh Kumar", handle: "slack:U1"); c.tick()
+        await r.setNotePath("People/Nitesh Kumar.md", for: rr)
+        // a third chat under the very name: its own record, pending toward both — a handle left unattached would route its asks nowhere and ask nobody
+        let t = await r.register(label: "Nitesh Kumar", handle: "teams:T1")
+        let (count, pt, prr, pn) = (await r.people().count, await r.person(t), await r.person(rr), await r.person(n))
+        #expect(count == 3 && pt?.pending == [rr, n] && prr?.pending == [n, t] && pn?.pending == [rr, t])
+        #expect(await r.register(label: "Nitesh Kumar", handle: "teams:T1") == t)
+        let three = await r.suspects()
+        #expect(three.count == 3 && three.allSatisfy(PeopleQuestion.isPending), "three questions, none guessed")
+        // N merges into R: T's question about N is now about R, and about nobody twice
+        _ = await r.merge(keep: rr, drop: n)
+        let (pt2, prr2, left) = (await r.person(t), await r.person(rr), await r.suspects().count)
+        #expect(pt2?.pending == [rr] && prr2?.pending == [t] && left == 1, "the question follows the person")
+        // kept apart, T and R are never asked again — and T, the namesake without a note, gets a file of his own
+        await r.keepSeparate(rr, t)
+        let (people, none) = (await r.people(), await r.suspects().isEmpty)
+        #expect(none && PersonRegistry.suggestedNotePath(for: people.first { $0.id == t }!, among: people) == "People/Nitesh Kumar (Teams).md")
+    }
+
+    @Test func anAnswerTheAppGaveWhileTheRunHeldItsCopyStands() async throws {
+        // the run holds a pending pair; the app says Different people meanwhile; the run's save keeps the answer and what the run learned
+        let v = try Self.vault(); let c = Ticker(); let first = c.registry(v)
+        let a = await first.register(label: "Nitesh Kumar", handle: "whatsapp:+1"); c.tick(); let b = await first.register(label: "Nitesh Kumar", handle: "slack:U1")
+        try await first.save()
+        let run = c.registry(v); await run.load()
+        let app = c.registry(v); await app.load(); await app.keepSeparate(a, b); try await app.save()
+        _ = await run.register(label: "Nitesh Kumar", handle: "slack:U1", proofs: ["email:n@x.in"])
+        try await run.save()
+        let again = c.registry(v); await again.load()
+        let (pa, pb) = (try #require(await again.person(a)), try #require(await again.person(b)))
+        #expect(pa.pending.isEmpty && pb.pending.isEmpty && pa.notSame == [b] && pb.notSame == [a] && pb.proofs == ["email:n@x.in"], "kept separate stands; the proof the run learned is kept")
+        // the other way round: the app said Same person
+        let v2 = try Self.vault(); let seed = c.registry(v2)
+        let x = await seed.register(label: "Nitesh Kumar", handle: "whatsapp:+1"); c.tick(); let y = await seed.register(label: "Nitesh Kumar", handle: "slack:U1"); try await seed.save()
+        let run2 = c.registry(v2); await run2.load()
+        let app2 = c.registry(v2); await app2.load(); await app2.merge(keep: x, drop: y); try await app2.save()
+        _ = await run2.register(label: "Nitesh Kumar", handle: "slack:U1"); try await run2.save()
+        let final = c.registry(v2); await final.load()
+        let (count, px) = (await final.people().count, try #require(await final.person(x)))
+        #expect(count == 1 && px.pending == [] && px.handles == ["whatsapp:+1", "slack:U1"])
+    }
+
+    @Test func proofsAndPendingSurviveTheFileAndAnOldFileLoadsWithBothEmpty() async throws {
+        let v = try Self.vault(); let c = Ticker(); let r = c.registry(v)
+        let a = await r.register(label: "Nitesh Kumar", handle: "whatsapp:+919540752593", proofs: ["email:nitesh@loopsy.in"]); c.tick()
+        let b = await r.register(label: "Nitesh Kumar", handle: "slack:U1")
+        try await r.save()
+        let again = c.registry(v); await again.load()
+        let (pa, pb) = (try #require(await again.person(a)), try #require(await again.person(b)))
+        #expect(pa.proofs == ["email:nitesh@loopsy.in", "phone:919540752593"] && pa.pending == [b] && pb.pending == [a])
+        // a people.json from before: no proofs, no pending — and the records it joined by name stay joined
+        let old = """
+        {"version":1,"people":[{"id":"p-old","name":"Nitesh Kumar","aliases":["Nitesh Kumar"],"handles":["whatsapp:+919540752593","slack:U1"],"notePath":"People/Nitesh Kumar.md","notSame":[],"firstSeen":"2026-09-01T00:00:00Z","lastSeen":"2026-09-01T00:00:00Z"}]}
+        """
+        let v2 = try Self.vault()
+        try FileManager.default.createDirectory(at: v2.root.appendingPathComponent(".brownie"), withIntermediateDirectories: true)
+        try old.write(to: v2.root.appendingPathComponent(".brownie/people.json"), atomically: true, encoding: .utf8)
+        let legacy = c.registry(v2); await legacy.load()
+        let p = try #require(await legacy.person("p-old"))
+        #expect(p.proofs.isEmpty && p.pending.isEmpty && p.handles.count == 2 && p.allProofs == ["phone:919540752593"], "nothing is split; the handle still proves its phone")
+        #expect(await legacy.register(label: "Nitesh Kumar", handle: "slack:U1") == "p-old")
+        #expect(await legacy.suspects().isEmpty)
+    }
+
+    @Test func contactsLinkWhatOneCardProvesAndAnswerAPendingPairEitherWay() async throws {
+        let v = try Self.vault(); let c = Ticker(); let r = c.registry(v)
+        let wa = await r.register(label: "Nitesh (+919540752593)", handle: "whatsapp:+919540752593"); c.tick()
+        await r.setNotePath("People/Nitesh.md", for: wa)
+        let sl = await r.register(label: "Nitesh Kumar", handle: "slack:U1", proofs: ["email:nitesh@loopsy.in"])
+        let before = await r.suspects()
+        #expect(before.count == 1 && !PeopleQuestion.isPending(before[0]), "\"Nitesh Kumar\" beside \"Nitesh\" is a look-alike, not a question Brownie raised")
+        // one card holds the phone and the email: the two are one person, merged onto the one with the note, who learns the card's name
+        let card = ContactCard(name: "Nitesh Kumar", nickname: "Nitu", phones: ["+91 95407 52593"], emails: ["Nitesh@Loopsy.in"])
+        #expect(await r.link(contacts: [card]) == 1)
+        let (kept, gone) = (try #require(await r.person(wa)), await r.person(sl))
+        #expect(gone == nil && kept.handles == ["whatsapp:+919540752593", "slack:U1"] && kept.notePath == "People/Nitesh.md")
+        #expect(kept.name == "Nitesh Kumar" && kept.aliases.contains("Nitu") && Set(kept.proofs) == ["phone:919540752593", "email:nitesh@loopsy.in"])
+        #expect(await r.link(contacts: [card]) == 0, "linking again changes nothing")
+        #expect(await r.suspects().isEmpty)
+        // a pending pair proven one by a card is merged; one on two cards under two names is kept separate; two cards under one name leave the question
+        let v2 = try Self.vault(); let r2 = c.registry(v2)
+        let a = await r2.register(label: "Nitesh Kumar", handle: "whatsapp:+919000000001"); c.tick()
+        let b = await r2.register(label: "Nitesh Kumar", handle: "slack:U1", proofs: ["email:n@x.in"])
+        #expect(await r2.person(a)?.pending == [b])
+        await r2.link(contacts: [ContactCard(name: "Nitesh Kumar", phones: ["+91 90000 00001"], emails: ["n@x.in"])])
+        let (count2, pa) = (await r2.people().count, await r2.person(a))
+        #expect(count2 == 1 && pa?.pending == [], "one card: same person")
+        let v3 = try Self.vault(); let r3 = c.registry(v3)
+        let x = await r3.register(label: "Nitesh Kumar", handle: "whatsapp:+919000000001"); c.tick()
+        let y = await r3.register(label: "Nitesh Kumar", handle: "slack:U1", proofs: ["email:n@x.in"])
+        await r3.link(contacts: [ContactCard(name: "Nitesh Kumar", phones: ["+919000000001"], emails: []), ContactCard(name: "Nitesh Kumar", phones: [], emails: ["n@x.in"])])
+        let (px0, still) = (await r3.person(x), await r3.suspects().count)
+        #expect(px0?.pending == [y] && still == 1, "two cards under one name prove nothing: still a question")
+        await r3.link(contacts: [ContactCard(name: "Nitesh Kumar", phones: ["+919000000001"], emails: []), ContactCard(name: "Nitesh K. (Loopsy)", phones: [], emails: ["n@x.in"])])
+        let (px, py, none) = (try #require(await r3.person(x)), try #require(await r3.person(y)), await r3.suspects().isEmpty)
+        #expect(px.pending.isEmpty && py.pending.isEmpty && px.notSame == [y] && py.notSame == [x], "two cards, two names: different people")
+        #expect(py.aliases.contains("Nitesh K. (Loopsy)") && none)
+        try await r3.save()
+        // two with a note each are not merged here, where the notes cannot be folded: the pair is left for the banner, whose one click folds them
+        let v4 = try Self.vault(); let r4 = c.registry(v4)
+        let m = await r4.register(label: "Nitesh", handle: "whatsapp:+919000000001"); c.tick()
+        let n = await r4.register(label: "Nitesh Kumar", handle: "slack:U1", proofs: ["email:n@x.in"])
+        await r4.setNotePath("People/Nitesh.md", for: m); await r4.setNotePath("People/Nitesh Kumar.md", for: n)
+        #expect(await r4.link(contacts: [ContactCard(name: "Nitesh Kumar", phones: ["+919000000001"], emails: ["n@x.in"])]) == 0)
+        let (pm, pn, ask) = (try #require(await r4.person(m)), try #require(await r4.person(n)), await r4.suspects())
+        #expect(pm.pending == [n] && pn.pending == [m] && pm.proofs.contains("email:n@x.in") && pn.proofs.contains("phone:919000000001"), "both learn the card; neither note is orphaned")
+        #expect(ask.count == 1 && PeopleQuestion.isPending(ask[0]) && Set([ask[0].0.id, ask[0].1.id]) == [m, n])
+        // the user's own card links nothing, even on a number a record carries; nor does a card with no phone or email
+        let me = PersonRegistry(vault: v3.root, now: { Self.t0 }, selfNames: ["Vivek Upreti"])
+        await me.load()
+        #expect(await me.link(contacts: [ContactCard(name: "Vivek Upreti", phones: ["+919000000001"], emails: []), ContactCard(name: "Nobody", phones: [], emails: [])]) == 0)
+        #expect(await me.person(x)?.aliases.contains("Vivek Upreti") == false)
+    }
 }

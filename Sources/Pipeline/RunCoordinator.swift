@@ -26,11 +26,14 @@ public actor RunCoordinator {
         /// stage ever takes the user for a person: the judge is told, a loop whose other party is the user is dropped,
         /// the file tools refuse `People/<user>.md`, and the registry opens no record for them.
         public var selfNames: [String] = []
+        /// The Mac's Contacts, as cards of phones and emails: what proves two chats are one person before the night
+        /// registers anyone. Empty when Contacts is not allowed, or not asked.
+        public var contacts: @Sendable () async -> [ContactCard] = { [] }
         public init(store: any RunStore, knowledge: any KnowledgeStore, sources: [any Source], reader: (any LocalModel)?, brain: (any Brain)?,
                     policy: any SensitivityPolicy, clock: Clock = SystemClock(), calendarText: @escaping @Sendable () async -> String? = { nil },
-                    stage: @escaping @Sendable (String, String) -> Void = { _, _ in }, selfNames: [String] = []) {
+                    stage: @escaping @Sendable (String, String) -> Void = { _, _ in }, selfNames: [String] = [], contacts: @escaping @Sendable () async -> [ContactCard] = { [] }) {
             self.store = store; self.knowledge = knowledge; self.sources = sources; self.reader = reader; self.brain = brain
-            self.policy = policy; self.clock = clock; self.calendarText = calendarText; self.stage = stage; self.selfNames = SelfNames.clean(selfNames)
+            self.policy = policy; self.clock = clock; self.calendarText = calendarText; self.stage = stage; self.selfNames = SelfNames.clean(selfNames); self.contacts = contacts
         }
     }
 
@@ -118,6 +121,8 @@ public actor RunCoordinator {
                 // Who exists, from the People notes and every earlier run: the brain is told, so it writes each person in one file.
                 let registry = PersonRegistry(vault: deps.knowledge.rootURL, now: { [clock = deps.clock] in clock.now() }, selfNames: deps.selfNames)
                 await registry.load()
+                // What the address book proves comes first: two chats on one card are one person before anyone is written about tonight.
+                await registry.link(contacts: await deps.contacts())
                 // Anyone tonight's summaries, open asks or open loops name comes back from Archive/ before the brain writes, so it finds
                 // their one file where it expects it — by the chat's handle where one is known, so a contact saved under a bare number,
                 // or a chat renamed since, is found through the registry and not only by a name.

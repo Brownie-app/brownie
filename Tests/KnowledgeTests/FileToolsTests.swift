@@ -179,6 +179,37 @@ import Domain
         #expect(NoteMeta.parse(w.raw("People/Someone New.md")!, path: "People/Someone New.md").meta?.id == nil)
     }
 
+    /// Two people Brownie is not sure about — the same name on WhatsApp and on Slack, pending toward each other — are two
+    /// to the file tools: the second gets the file the header told the brain to write, stamped with his own id, and neither
+    /// is refused as "a second People path" for the other. The same once the user has said they are two.
+    @Test func aPendingNamesakeGetsTheFileHeWasToldAndIsNoSecondPathForTheOther() async throws {
+        var wa = Self.person("p-1", "Nitesh Kumar", aliases: ["Nitesh Kumar"], note: "People/Nitesh Kumar.md"); wa.handles = ["whatsapp:+919540752593"]; wa.pending = ["p-2"]
+        var sl = Self.person("p-2", "Nitesh Kumar", aliases: ["Nitesh Kumar"], note: nil); sl.handles = ["slack:U1"]; sl.pending = ["p-1"]
+        let w = try Self.world(people: [wa, sl])
+        try w.put("People/Nitesh Kumar.md", Self.owned("# Nitesh Kumar\n\nOn WhatsApp.\n", path: "People/Nitesh Kumar.md"))
+        #expect(PersonRegistry.headerLines([wa, sl]).contains { $0.contains("write them in People/Nitesh Kumar (Slack).md") })
+        #expect(await w.refusal("write_file", ["path": "People/Nitesh Kumar (Slack).md", "content": "# Nitesh Kumar (Slack)\n\nOn Slack.\n"]) == nil, "his own file, as the header said")
+        let m = try #require(NoteMeta.parse(w.raw("People/Nitesh Kumar (Slack).md")!, path: "People/Nitesh Kumar (Slack).md").meta)
+        #expect(m.id == "p-2" && m.aliases == ["Nitesh Kumar"], "stamped as the Slack record's, so the seed gives it to him and not to the WhatsApp Nitesh; his name is the alias")
+        #expect(await w.refusal("write_file", ["path": "People/Nitesh Kumar.md", "content": "# Nitesh Kumar\n\nMore.\n"]) == "read People/Nitesh Kumar.md before overwriting it", "the WhatsApp file is still the WhatsApp file")
+        #expect(await w.refusal("write_file", ["path": "People/Nitesh Kumar (Teams).md", "content": "# Nitesh Kumar (Teams)\n"]) == nil)
+        #expect(NoteMeta.parse(w.raw("People/Nitesh Kumar (Teams).md")!, path: "People/Nitesh Kumar (Teams).md").meta?.id == nil, "a title neither was told, between two who share the key, is nobody's: unstamped, as before")
+        // the user said they are two: the same files, and no refusal between them
+        wa.pending = []; wa.notSame = ["p-2"]; sl.pending = []; sl.notSame = ["p-1"]
+        let w2 = try Self.world(people: [wa, sl])
+        try w2.put("People/Nitesh Kumar.md", Self.owned("# Nitesh Kumar\n", path: "People/Nitesh Kumar.md"))
+        #expect(await w2.refusal("write_file", ["path": "People/Nitesh Kumar (Slack).md", "content": "# Nitesh Kumar (Slack)\n"]) == nil)
+        #expect(NoteMeta.parse(w2.raw("People/Nitesh Kumar (Slack).md")!, path: "People/Nitesh Kumar (Slack).md").meta?.id == "p-2")
+        // neither has a note yet: the first keeps the plain title, the newcomer his suffixed one
+        var a = Self.person("p-1", "Nitesh Kumar", aliases: ["Nitesh Kumar"], note: nil); a.handles = ["whatsapp:+1"]; a.pending = ["p-2"]
+        var b = Self.person("p-2", "Nitesh Kumar", aliases: ["Nitesh Kumar"], note: nil); b.handles = ["slack:U1"]; b.pending = ["p-1"]; b.lastSeen = Self.t0.addingTimeInterval(60)
+        let w3 = try Self.world(people: [a, b])
+        #expect(await w3.refusal("write_file", ["path": "People/Nitesh Kumar.md", "content": "# Nitesh Kumar\n"]) == nil)
+        #expect(await w3.refusal("write_file", ["path": "People/Nitesh Kumar (Slack).md", "content": "# Nitesh Kumar (Slack)\n"]) == nil)
+        #expect(NoteMeta.parse(w3.raw("People/Nitesh Kumar.md")!, path: "People/Nitesh Kumar.md").meta?.id == "p-1")
+        #expect(NoteMeta.parse(w3.raw("People/Nitesh Kumar (Slack).md")!, path: "People/Nitesh Kumar (Slack).md").meta?.id == "p-2")
+    }
+
     /// A person archived since the roster was written can still be written about: whichever path the brain takes — the
     /// archived one the roster names, or the active one — the note comes back first and the write updates it, and no
     /// refusal along the way names a path the tools would refuse.

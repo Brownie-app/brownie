@@ -266,6 +266,64 @@ import Support
         #expect(RunCoordinator.loadAsks(try await w.store.value(SettingKey.asks)).first { $0.id == ask.id } == closed)
     }
 
+    /// The same name on two chats, not yet answered: an ask from the Slack handle lands in the Slack record's note and never in
+    /// the WhatsApp namesake's; a promise under the bare name, with both notes on file, lands in neither. The night saves the
+    /// pending pair as the first question for the banner.
+    @Test func anAskFromTheSecondChatLandsInItsOwnNoteNotTheNamesakes() async throws {
+        let w = try Self.world()
+        try await w.seed(1, tag: "a")
+        try Self.putNote("People/Nitesh Kumar.md", body: "# Nitesh Kumar\n\n## About\n- on WhatsApp\n", updated: "2026-09-01", in: w)
+        try Self.putNote("People/Nitesh Kumar (Slack).md", body: "# Nitesh Kumar (Slack)\n\n## About\n- on Slack\n", updated: "2026-09-01", in: w)
+        let registry = PersonRegistry(vault: w.kb.rootURL, now: { Self.today })
+        let wa = await registry.register(label: "Nitesh Kumar", handle: "whatsapp:+919540752593")
+        await registry.setNotePath("People/Nitesh Kumar.md", for: wa)
+        let sl = await registry.register(label: "Nitesh Kumar", handle: "slack:U1")
+        let pending = await registry.person(sl)?.pending
+        #expect(sl != wa && pending == [wa], "the name alone did not join them")
+        try await registry.save()
+        let day = 86400.0
+        let deck = Ask(id: "deck", person: "Nitesh Kumar", bucket: BucketID("slack:U1"), askedAt: Self.today.addingTimeInterval(-2 * day), question: "deck?", handle: "slack:U1")
+        let lunch = Ask(id: "lunch", person: "Nitesh Kumar", bucket: BucketID("w:1"), askedAt: Self.today.addingTimeInterval(-3 * day), question: "lunch?", handle: "whatsapp:+919540752593")
+        try await w.store.setValue(SettingKey.asks, String(data: try JSONEncoder().encode([deck, lunch]), encoding: .utf8))
+        let promise = Loop(id: "BOOK0001-x", direction: .mine, person: "Nitesh Kumar", what: "send the book", quote: "q", sourceLabel: "Slack · Fri", due: nil, openedAt: Self.today.addingTimeInterval(-1 * day))
+        try await w.store.setValue(SettingKey.loops, String(data: try JSONEncoder().encode([promise]), encoding: .utf8))
+        #expect(await Self.night(w, Fake()) == .ran(cards: 0))
+        let whatsapp = try Self.body("People/Nitesh Kumar.md", in: w), slack = try Self.body("People/Nitesh Kumar (Slack).md", in: w)
+        #expect(slack.contains("deck?") && !slack.contains("lunch?"), "the Slack ask is in the Slack note: \(slack)")
+        #expect(whatsapp.contains("lunch?") && !whatsapp.contains("deck?"), "the WhatsApp ask is in the WhatsApp note, and the Slack one never crossed: \(whatsapp)")
+        #expect(!whatsapp.contains("send the book") && !slack.contains("send the book"), "a promise under the bare name, two notes on file: pinned on neither")
+        let after = PersonRegistry(vault: w.kb.rootURL, now: { Self.today }); await after.load()
+        let (people, slackPath, pairs) = (await after.people().count, await after.notePath(for: sl), await after.suspects())
+        #expect(people == 2 && slackPath == "People/Nitesh Kumar (Slack).md", "the Slack note is his; no third record was opened")
+        #expect(pairs.count == 1 && Set([pairs[0].0.id, pairs[0].1.id]) == [wa, sl] && PeopleQuestion.isPending(pairs[0]))
+        let stored = try JSONDecoder().decode([[String]].self, from: Data((try await w.store.value(SettingKey.duplicatePeople) ?? "").utf8))
+        #expect(stored.count == 1 && Set(stored[0]) == [wa, sl], "the question is saved for the banner")
+    }
+
+    /// The address book comes first in the night's registry work: a pending pair whose two fall on one card is one person
+    /// before the status blocks are written, so both asks land in the one note.
+    @Test func contactsAreLinkedBeforeTheNightWritesAnyone() async throws {
+        let w = try Self.world()
+        try await w.seed(1, tag: "a")
+        try Self.putNote("People/Nitesh Kumar.md", body: "# Nitesh Kumar\n\n## About\n- x\n", updated: "2026-09-01", in: w)
+        let registry = PersonRegistry(vault: w.kb.rootURL, now: { Self.today })
+        let wa = await registry.register(label: "Nitesh Kumar", handle: "whatsapp:+919540752593")
+        await registry.setNotePath("People/Nitesh Kumar.md", for: wa)
+        let sl = await registry.register(label: "Nitesh Kumar", handle: "slack:U1", proofs: ["email:nitesh@loopsy.in"])
+        try await registry.save()
+        let day = 86400.0
+        let deck = Ask(id: "deck", person: "Nitesh Kumar", bucket: BucketID("slack:U1"), askedAt: Self.today.addingTimeInterval(-2 * day), question: "deck?", handle: "slack:U1")
+        try await w.store.setValue(SettingKey.asks, String(data: try JSONEncoder().encode([deck]), encoding: .utf8))
+        var deps = RunCoordinator.Dependencies(store: w.store, knowledge: w.kb, sources: [], reader: Reader(), brain: Fake(), policy: DefaultSensitivityPolicy(), clock: Self.clock,
+                                                contacts: { [ContactCard(name: "Nitesh Kumar", phones: ["+91 95407 52593"], emails: ["nitesh@loopsy.in"])] })
+        deps.diskHousekeeping = false
+        #expect(await RunCoordinator(deps).run(trigger: .test, onEvent: { _ in }) == .ran(cards: 0))
+        #expect(try Self.body("People/Nitesh Kumar.md", in: w).contains("deck?"), "one card, one person: the Slack ask is in his note")
+        let after = PersonRegistry(vault: w.kb.rootURL, now: { Self.today }); await after.load()
+        let (people, kept, gone, pairs) = (await after.people().count, await after.person(wa), await after.person(sl), await after.suspects())
+        #expect(people == 1 && gone == nil && kept?.handles == ["whatsapp:+919540752593", "slack:U1"] && kept?.pending == [] && pairs.isEmpty)
+    }
+
     /// Tonight's mentions carry the chat's handle: a summary has none of its own, but the ask ledger knows the chat's.
     @Test func mentionsCarryTheChatsHandleFromTheAskLedger() {
         let bucket = BucketID("w:9")

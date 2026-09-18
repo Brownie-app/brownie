@@ -444,7 +444,7 @@ enum FileTools {
         let parts = p.split(separator: "/").map(String.init)
         guard parts.count == 2, same(parts[0], "People") else { return p }
         let title = String(parts[1].dropLast(3)), people = part.people
-        if let id = PersonRegistry.resolve(label: title, handle: nil, among: people), let np = people.first(where: { $0.id == id })?.notePath,
+        if let id = PersonRegistry.resolveTitle(title, among: people), let np = people.first(where: { $0.id == id })?.notePath,
            NoteArchive.isArchived(np), fm.fileExists(atPath: part.root.appendingPathComponent(np).path) { _ = try back(np) }
         return p
     }
@@ -477,8 +477,10 @@ enum FileTools {
         if !exists, let dup = siblings.first(where: { $0 != title && sameTitle($0, title) }) {
             throw Refusal("\(p) differs from \(notePath(folder, dup)) only by case, punctuation or a date suffix; write into \(notePath(folder, dup)) instead")
         }
-        // One file per person, whatever the spelling: the registry says where they are written.
-        let person = same(folder, "People") ? PersonRegistry.resolve(label: title, handle: nil, among: part.people).flatMap { id in part.people.first { $0.id == id } } : nil
+        // One file per person, whatever the spelling: the registry says where they are written. Two people Brownie is not
+        // sure about, or the user keeps apart, are two: the title the brain was told for the second ("Nitesh Kumar (Slack)")
+        // is that record's own file, never a second file for the first.
+        let person = same(folder, "People") ? PersonRegistry.resolveTitle(title, among: part.people).flatMap { id in part.people.first { $0.id == id } } : nil
         if !exists, let person, let np = person.notePath, np != p, fm.fileExists(atPath: part.root.appendingPathComponent(np).path) {
             throw Refusal("\(person.name) already has a note at \(np); write about them there, not in \(p)")
         }

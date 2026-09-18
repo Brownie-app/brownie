@@ -4,7 +4,9 @@ import Support
 
 /// One person as the app knows them: every spelling a source has used, every stable handle, and the one
 /// People note that is theirs. `notSame` lists people the user said are somebody else, so the merge
-/// banner never asks twice.
+/// banner never asks twice. `proofs` is what shows two chats are one person beyond a name — a phone, an
+/// email (`PersonProof`) — and `pending` lists the people this one may be, a question Brownie raised when a
+/// chat arrived under a name already on file and nothing but the name said they were the same.
 public struct Person: Codable, Sendable, Identifiable, Equatable {
     public let id: String
     public var name: String
@@ -12,11 +14,26 @@ public struct Person: Codable, Sendable, Identifiable, Equatable {
     public var handles: [String]
     public var notePath: String?
     public var notSame: [String]
+    public var proofs: [String]
+    public var pending: [String]
     public let firstSeen: Date
     public var lastSeen: Date
 
-    public init(id: String, name: String, aliases: [String] = [], handles: [String] = [], notePath: String? = nil, notSame: [String] = [], firstSeen: Date, lastSeen: Date) {
-        self.id = id; self.name = name; self.aliases = aliases; self.handles = handles; self.notePath = notePath; self.notSame = notSame; self.firstSeen = firstSeen; self.lastSeen = lastSeen
+    public init(id: String, name: String, aliases: [String] = [], handles: [String] = [], notePath: String? = nil, notSame: [String] = [], proofs: [String] = [], pending: [String] = [], firstSeen: Date, lastSeen: Date) {
+        self.id = id; self.name = name; self.aliases = aliases; self.handles = handles; self.notePath = notePath; self.notSame = notSame
+        self.proofs = proofs; self.pending = pending; self.firstSeen = firstSeen; self.lastSeen = lastSeen
+    }
+
+    enum CodingKeys: String, CodingKey { case id, name, aliases, handles, notePath, notSame, proofs, pending, firstSeen, lastSeen }
+    /// A people.json written before proofs and pending existed decodes with both empty: the records it joined by name
+    /// stay joined — there is no evidence either way — and only what arrives from now on is held to the new rule.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(id: try c.decode(String.self, forKey: .id), name: try c.decode(String.self, forKey: .name),
+                  aliases: try c.decodeIfPresent([String].self, forKey: .aliases) ?? [], handles: try c.decodeIfPresent([String].self, forKey: .handles) ?? [],
+                  notePath: try c.decodeIfPresent(String.self, forKey: .notePath), notSame: try c.decodeIfPresent([String].self, forKey: .notSame) ?? [],
+                  proofs: try c.decodeIfPresent([String].self, forKey: .proofs) ?? [], pending: try c.decodeIfPresent([String].self, forKey: .pending) ?? [],
+                  firstSeen: try c.decode(Date.self, forKey: .firstSeen), lastSeen: try c.decode(Date.self, forKey: .lastSeen))
     }
 
     /// Every spelling's key, the name's first, without repeats or empties.
@@ -27,6 +44,33 @@ public struct Person: Codable, Sendable, Identifiable, Equatable {
     }
     /// The first words of every key: what a first-name-only label is matched against.
     var firstWords: Set<String> { Set(keys.compactMap { $0.split(separator: " ").first.map(String.init) }) }
+    /// What proves who this is: the proofs on file and what each handle proves by itself (a WhatsApp handle is a phone),
+    /// so a record written before proofs existed still meets a Contacts card or an iMessage chat by its number.
+    public var allProofs: [String] {
+        var out = proofs
+        for p in handles.compactMap(PersonProof.fromHandle) where !out.contains(p) { out.append(p) }
+        return out
+    }
+    /// Where this person has been seen, from the handles: "WhatsApp", "Slack", "Teams", "iMessage", "Telegram" — what the
+    /// banner says when it asks whether the Nitesh Kumar on Slack is the one on WhatsApp.
+    public var sources: [String] {
+        var out: [String] = []
+        for h in handles {
+            let scheme = h.split(separator: ":", maxSplits: 1).first.map(String.init) ?? ""
+            let name: String
+            switch scheme {
+            case "whatsapp": name = "WhatsApp"
+            case "slack": name = "Slack"
+            case "teams": name = "Teams"
+            case "imessage": name = "iMessage"
+            case "telegram": name = "Telegram"
+            case "": continue
+            default: name = scheme.prefix(1).uppercased() + scheme.dropFirst()
+            }
+            if !out.contains(name) { out.append(name) }
+        }
+        return out
+    }
 }
 
 /// The people registry: `<vault>/.brownie/people.json`, a hidden folder the note store and the brain's file
@@ -95,7 +139,7 @@ public actor PersonRegistry {
     public func remove(_ id: String) {
         guard let i = index(id) else { return }
         records.remove(at: i); removedSinceLoad.append(id)
-        for j in records.indices { records[j].notSame.removeAll { $0 == id } }
+        for j in records.indices { records[j].notSame.removeAll { $0 == id }; records[j].pending.removeAll { $0 == id } }
     }
 
     private static func decode(_ d: Data) -> [Person]? {
@@ -125,10 +169,17 @@ public actor PersonRegistry {
             if out[t].notePath == nil, let p = m.notePath, !out.contains(where: { $0.notePath == p }) { out[t].notePath = p }
             if m.notePath == nil, let was = loaded.first(where: { $0.id == m.id })?.notePath, out[t].notePath == was { out[t].notePath = nil }
             for n in m.notSame where !out[t].notSame.contains(n) { out[t].notSame.append(n) }
+            for p in m.proofs where !out[t].proofs.contains(p) { out[t].proofs.append(p) }
+            for p in m.pending where !out[t].pending.contains(p) { out[t].pending.append(p) }
             out[t].lastSeen = max(out[t].lastSeen, m.lastSeen)
         }
+        // Lists name only people who still exist; a pair the user answered meanwhile (merged away, or kept separate) is no longer pending.
         let ids = Set(out.map(\.id))
-        for i in out.indices { let me = out[i].id; out[i].notSame.removeAll { !ids.contains($0) || $0 == me } }
+        for i in out.indices {
+            let me = out[i].id, notSame = out[i].notSame
+            out[i].notSame.removeAll { !ids.contains($0) || $0 == me }
+            out[i].pending.removeAll { !ids.contains($0) || $0 == me || notSame.contains($0) }
+        }
         return out
     }
 
@@ -140,7 +191,10 @@ public actor PersonRegistry {
     /// One person per existing People note, once: a note already owned by someone is left alone; a note whose
     /// title is a spelling of a person without a note becomes theirs, exact spellings before same-key ones (so
     /// "Kanika Pandey.md" goes to the Kanika Pandey on file even when "Kanika Pandey Loadmill.md" sorts first);
-    /// any other note starts a new person. Notes that vanished (renamed or deleted by the brain or the user)
+    /// any other note starts a new person. A note whose front-matter carries a record's id is that record's first of
+    /// all — that is how "People/Nitesh Kumar (Slack).md", written for the Nitesh Kumar Brownie is not sure about,
+    /// reaches him and not the Nitesh Kumar of "People/Nitesh Kumar.md"; a note titled the way such a record was told to be
+    /// written reaches him too. Notes that vanished (renamed or deleted by the brain or the user)
     /// release their person's path so a new title can claim it. A listing with no People folder is one of two
     /// things: the folder holds no note (every path into it is dead, and is released), or the listing failed on one
     /// unreadable file and arrived empty — the directory itself tells which, and a failed listing strips nothing.
@@ -152,12 +206,15 @@ public actor PersonRegistry {
         guard let peopleFolder else { return }
         // A note titled after the user is nobody's: the migration moves it out of People/; until then it claims no record.
         let notes = peopleFolder.notes.filter { !isSelf($0.title) }.sorted(by: { $0.relativePath < $1.relativePath })
-        for note in notes where !records.contains(where: { $0.notePath == note.relativePath }) {
+        func owned(_ note: Note) -> Bool { records.contains { $0.notePath == note.relativePath } }
+        for note in notes where !owned(note) {
+            if let id = note.meta.id, let i = index(id), records[i].notePath == nil { records[i].notePath = note.relativePath }
+        }
+        for note in notes where !owned(note) {
             if let i = exactIndex(label: note.title), records[i].notePath == nil { records[i].notePath = note.relativePath }
         }
-        for note in notes {
-            if records.contains(where: { $0.notePath == note.relativePath }) { continue }
-            if let id = resolve(label: note.title, handle: nil), let i = index(id), records[i].notePath == nil {
+        for note in notes where !owned(note) {
+            if let id = Self.resolveTitle(note.title, among: records), let i = index(id), records[i].notePath == nil {
                 records[i].notePath = note.relativePath
                 Self.learn(label: note.title, into: &records[i])
                 continue
@@ -178,7 +235,9 @@ public actor PersonRegistry {
     /// Who a label names: the handle decides when known; then the one person with a spelling of the same key;
     /// when two people share the key ("Kanika Pandey" and "Kanika Pandey Loadmill", kept apart by the user or
     /// not yet merged) the one spelled exactly like the label, and nobody when neither is — never the first on
-    /// file; then a first name alone, but only when exactly one person carries it — two Arjuns and the answer is nobody.
+    /// file; when the two spelled alike are a pending pair (the same name on two chats, not yet answered) the one
+    /// with a note, and nobody when both or neither have one; then a first name alone, but only when exactly one
+    /// person carries it — two Arjuns and the answer is nobody.
     public func resolve(label: String, handle: String?) -> String? { Self.resolve(label: label, handle: handle, among: records) }
     /// The same rule over a roster handed out by `people()`, for callers that hold the list rather than the registry (the brain's file tools).
     public nonisolated static func resolve(label: String, handle: String?, among records: [Person]) -> String? {
@@ -187,34 +246,109 @@ public actor PersonRegistry {
         guard !key.isEmpty else { return nil }
         let byKey = records.filter { $0.keys.contains(key) }
         if byKey.count == 1 { return byKey[0].id }
-        if byKey.count > 1 { return Self.exactIndex(label: label, among: byKey).map { byKey[$0].id } }
+        if byKey.count > 1 {
+            let (hit, tied) = Self.exactMatch(label: label, among: byKey)
+            if let hit { return byKey[hit].id }
+            // Spelled the same by several: only a pending pair can be told apart, by which of them has the note.
+            let pair = tied.map { byKey[$0] }
+            guard pair.count > 1, pair.allSatisfy({ a in pair.allSatisfy { b in a.id == b.id || a.pending.contains(b.id) } }) else { return nil }
+            let noted = pair.filter { $0.notePath != nil }
+            return noted.count == 1 ? noted[0].id : nil
+        }
         guard !key.contains(" ") else { return nil }
         let byFirstName = records.filter { $0.firstWords.contains(key) }
         return byFirstName.count == 1 ? byFirstName[0].id : nil
     }
 
-    /// The person for a label, created when unknown. The label is learned as an alias and the handle as theirs.
-    /// A label that could be either of two people sharing its key, and spells neither exactly, is nobody's to
-    /// learn: nothing is attached (a handle attached by a guess would route every later ask to the wrong note,
-    /// and no "keep separate" could undo it) and no third record is opened; the likelier of the two is returned.
+    /// Who a People note's title names, for the file tools and the seed: first a record without a note that was told to be
+    /// written under exactly this title ("Nitesh Kumar (Slack)" for the Nitesh Kumar Brownie is not sure about, "Nitesh
+    /// Kumar" for the one it already knew), then whoever the title resolves to as a label.
+    public nonisolated static func resolveTitle(_ title: String, among records: [Person]) -> String? {
+        let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let p = records.first(where: { $0.notePath == nil && !$0.pending.isEmpty && Self.spellsAlike(Self.suggestedTitle(for: $0, among: records), t) }) { return p.id }
+        if let p = records.first(where: { $0.notePath == nil && !$0.notSame.isEmpty && Self.spellsAlike(Self.suggestedTitle(for: $0, among: records), t) }) { return p.id }
+        return resolve(label: t, handle: nil, among: records)
+    }
+
+    /// The file a person is written in: theirs when they have one; otherwise their name — unless someone they may be, or
+    /// were kept apart from, is spelled the same and comes first (has the note, or was on file earlier), in which case the
+    /// name with the chat this one was seen on, "People/Nitesh Kumar (Slack).md", so the two are told apart on disk until
+    /// the user says. A path another record already holds is stepped past with a count.
+    public nonisolated static func suggestedNotePath(for p: Person, among records: [Person]) -> String {
+        p.notePath ?? "People/" + suggestedTitle(for: p, among: records) + ".md"
+    }
+    nonisolated static func suggestedTitle(for p: Person, among records: [Person]) -> String {
+        if let path = p.notePath { return Self.fileTitle(path) }
+        // The plain name is taken when someone else's note is titled so, or when a namesake this one may be (or was kept
+        // apart from) has no note either and was on file first — a namesake already written under another title takes nothing.
+        let plainTaken = records.contains { o in o.id != p.id && o.notePath.map { spellsAlike(Self.fileTitle($0), p.name) } ?? false }
+        let olderNamesake = records.contains { o in o.id != p.id && o.notePath == nil && (p.pending.contains(o.id) || p.notSame.contains(o.id)) && spellsAlike(o.name, p.name) && precedes(o, p) }
+        let base = plainTaken || olderNamesake ? p.name + " (" + (p.sources.first ?? "another chat") + ")" : p.name
+        let taken = Set(records.filter { $0.id != p.id }.compactMap { $0.notePath.map { Self.fileTitle($0).lowercased() } })
+        var title = base, n = 2
+        while taken.contains(title.lowercased()) { title = base + " \(n)"; n += 1 }
+        return title
+    }
+    /// Which of two records was on file first: the older, then the smaller id — the order the file is read back in, so
+    /// the answer is the same before and after a save.
+    nonisolated static func precedes(_ a: Person, _ b: Person) -> Bool { (a.firstSeen, a.id) < (b.firstSeen, b.id) }
+
+    /// The person for a label, created when unknown, with only what the handle itself proves (a WhatsApp handle is a phone).
+    @discardableResult
+    public func register(label: String, handle: String?) -> String { register(label: label, handle: handle, proofs: []) }
+
+    /// The person for a label, created when unknown. The label is learned as an alias, the handle and proofs as theirs.
+    /// Proof joins, a name alone asks. In order: a handle on file is that person; a proof on file (the same phone or
+    /// email, on a record or in what its handles prove) is that person, and the new handle joins them; a name that
+    /// resolves to someone never seen on a chat — known from a note, or from loops by name — is them, since there is
+    /// no second chat to confuse; a name that resolves to someone already on another chat is NOT taken to be them:
+    /// a new record opens for this handle and the two are marked pending toward each other, for the banner to ask.
+    /// Anything else is a new record. Without a handle, the label resolves as a name and joins what it resolves to;
+    /// one that could be either of two people sharing its key, and spells neither exactly, is nobody's to learn: nothing
+    /// is attached and no third record is opened, and the likelier of the two is returned.
     /// The user's own name opens no record and learns nothing: it comes back as the empty id, which names nobody.
     @discardableResult
-    public func register(label: String, handle: String?) -> String {
+    public func register(label: String, handle: String?, proofs: [String]) -> String {
         guard !isSelf(label) else { return "" }
-        if let id = resolve(label: label, handle: handle) {
-            let i = index(id)!
+        let handle = handle.flatMap { $0.isEmpty ? nil : $0 }
+        var proofs = proofs
+        if let h = handle, let own = PersonProof.fromHandle(h), !proofs.contains(own) { proofs.append(own) }
+        func join(_ i: Int) -> String {
             Self.learn(label: label, into: &records[i])
-            if let h = handle, !h.isEmpty, !records[i].handles.contains(h) { records[i].handles.append(h) }
+            if let h = handle, !records[i].handles.contains(h) { records[i].handles.append(h) }
+            for p in proofs where !records[i].proofs.contains(p) { records[i].proofs.append(p) }
             records[i].lastSeen = now()
-            return id
+            return records[i].id
+        }
+        if let h = handle, let i = records.firstIndex(where: { $0.handles.contains(h) }) { return join(i) }
+        let proven = records.filter { r in r.allProofs.contains { proofs.contains($0) } }
+        if let first = proven.first, let i = index(proven.dropFirst().reduce(first) { Self.keepFirst($0, $1).0 }.id) {
+            if let h = handle { log.info("\(label) (\(h)) joined \(records[i].name) by proof") }
+            return join(i)
+        }
+        func open(pendingToward ids: [String]) -> String {
+            var p = Person(id: Self.newID(), name: PersonKey.displayName(label), aliases: [], handles: handle.map { [$0] } ?? [], proofs: proofs, pending: ids, firstSeen: now(), lastSeen: now())
+            Self.learn(label: label, into: &p)
+            for id in ids { if let i = index(id) { records[i].pending.append(p.id) } }
+            records.append(p)
+            if let first = ids.first, let i = index(first) { log.info("\(label) on \(p.sources.first ?? "a chat") may be \(records[i].name) of \(records[i].sources.joined(separator: ", ")) — the banner asks") }
+            return p.id
         }
         let key = PersonKey.normalise(label), shared = records.filter { $0.keys.contains(key) }
+        // A chat under a name that two records already spell exactly (a pending pair, or namesakes the user keeps apart)
+        // may be either: its own record, pending toward each — a handle left unattached would route its asks nowhere and ask nobody.
+        if handle != nil, shared.count > 1, case let tied = Self.exactMatch(label: label, among: shared).tied, tied.count > 1 { return open(pendingToward: tied.map { shared[$0].id }) }
+        if let id = resolve(label: label, handle: nil), let i = index(id) {
+            guard handle != nil, !records[i].handles.isEmpty else { return join(i) }
+            return open(pendingToward: [id])
+        }
         if shared.count > 1 { return shared.dropFirst().reduce(shared[0]) { Self.keepFirst($0, $1).0 }.id }
-        var p = Person(id: Self.newID(), name: PersonKey.displayName(label), aliases: [], firstSeen: now(), lastSeen: now())
-        Self.learn(label: label, into: &p)
-        if let h = handle, !h.isEmpty { p.handles.append(h) }
-        records.append(p)
-        return p.id
+        return open(pendingToward: [])
+    }
+    /// "People/Nitesh Kumar (Slack).md" → "Nitesh Kumar (Slack)".
+    nonisolated static func fileTitle(_ path: String) -> String {
+        let name = path.split(separator: "/").last.map(String.init) ?? path
+        return name.hasSuffix(".md") ? String(name.dropLast(3)) : name
     }
 
     /// A new spelling joins the aliases — every spelling a source used, the name's own included, so an exact
@@ -229,16 +363,16 @@ public actor PersonRegistry {
     }
 
     /// The one record that was seen spelled as the label (case and surrounding space aside), or failing that the
-    /// one whose shown name is the label; nil when none or several are — "Kanika Pandey" spelled by two records
-    /// decides nothing.
-    private func exactIndex(label: String) -> Int? { Self.exactIndex(label: label, among: records) }
-    private static func exactIndex(label: String, among pool: [Person]) -> Int? {
-        for spellings in [{ (p: Person) in p.aliases }, { (p: Person) in [p.name] }] {
+    /// one whose shown name or own note's title is the label; nil when none or several are — "Kanika Pandey" spelled by
+    /// two records decides nothing, and the several are handed back as `tied` for the one rule that can tell a pending pair apart.
+    private func exactIndex(label: String) -> Int? { Self.exactMatch(label: label, among: records).hit }
+    private static func exactMatch(label: String, among pool: [Person]) -> (hit: Int?, tied: [Int]) {
+        for spellings in [{ (p: Person) in p.aliases }, { (p: Person) in [p.name] + (p.notePath.map { [fileTitle($0)] } ?? []) }] {
             let hits = pool.indices.filter { i in spellings(pool[i]).contains { spellsAlike($0, label) } }
-            if hits.count == 1 { return hits[0] }
-            if hits.count > 1 { return nil }
+            if hits.count == 1 { return (hits[0], []) }
+            if hits.count > 1 { return (nil, hits) }
         }
-        return nil
+        return (nil, [])
     }
     static func spellsAlike(_ a: String, _ b: String) -> Bool {
         a.trimmingCharacters(in: .whitespacesAndNewlines).caseInsensitiveCompare(b.trimmingCharacters(in: .whitespacesAndNewlines)) == .orderedSame
@@ -275,38 +409,103 @@ public actor PersonRegistry {
         return person(keep)
     }
 
+    /// The kept person takes the dropped one's proofs too, and the question between the two is answered: neither is
+    /// pending toward the other any more. A third person who was pending toward the dropped one is now pending toward
+    /// the kept one — the question was about the person, and the person is still here.
     static func merge(keep: String, drop: String, in records: inout [Person]) {
         guard keep != drop, let k = records.firstIndex(where: { $0.id == keep }), let d = records.firstIndex(where: { $0.id == drop }) else { return }
         let dropped = records[d]
         for a in [dropped.name] + dropped.aliases where a != records[k].name && !records[k].aliases.contains(a) { records[k].aliases.append(a) }
         for h in dropped.handles where !records[k].handles.contains(h) { records[k].handles.append(h) }
+        for p in dropped.proofs where !records[k].proofs.contains(p) { records[k].proofs.append(p) }
         if records[k].notePath == nil { records[k].notePath = dropped.notePath }
-        records[k].notSame = (records[k].notSame + dropped.notSame).filter { $0 != keep && $0 != drop }.reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
+        func united(_ a: [String], _ b: [String]) -> [String] { (a + b).filter { $0 != keep && $0 != drop }.reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } } }
+        records[k].notSame = united(records[k].notSame, dropped.notSame)
+        records[k].pending = united(records[k].pending, dropped.pending).filter { !records[k].notSame.contains($0) }
         records[k].lastSeen = max(records[k].lastSeen, dropped.lastSeen)
         records.remove(at: d)
-        for i in records.indices { records[i].notSame.removeAll { $0 == drop } }
+        for i in records.indices {
+            records[i].notSame.removeAll { $0 == drop }
+            if records[i].pending.contains(drop) {
+                records[i].pending.removeAll { $0 == drop || $0 == keep }
+                if i != k, !records[i].notSame.contains(keep), !records[k].notSame.contains(records[i].id) { records[i].pending.append(keep) }
+            }
+        }
     }
 
+    /// The user's word that two are two: remembered both ways, and no longer a question.
     public func keepSeparate(_ a: String, _ b: String) {
         guard let i = index(a), let j = index(b), a != b else { return }
         if !records[i].notSame.contains(b) { records[i].notSame.append(b) }
         if !records[j].notSame.contains(a) { records[j].notSame.append(a) }
+        records[i].pending.removeAll { $0 == b }
+        records[j].pending.removeAll { $0 == a }
     }
 
-    /// Pairs that look like one person: the same two-word key, or the same first word with one of them known by
-    /// a first name alone — unless the user has said they are two. The first of each pair is the better one to keep:
-    /// the one with a note, then the fuller name, then the older record.
+    /// Pairs the banner asks about. First the questions Brownie itself raised — a pending pair, the same name arriving on a
+    /// second chat with nothing but the name to join them — then the pairs that merely look like one person: the same
+    /// two-word key, or the same first word with one of them known by a first name alone — unless the user has said they
+    /// are two. The first of each pair is the better one to keep: the one with a note, then the fuller name, then the older record.
     public func suspects() -> [(Person, Person)] {
-        var out: [(Person, Person)] = []
+        var pending: [(Person, Person)] = [], alike: [(Person, Person)] = []
         for i in records.indices {
             for j in records.indices where j > i {
                 let a = records[i], b = records[j]
                 if a.notSame.contains(b.id) || b.notSame.contains(a.id) { continue }
+                if a.pending.contains(b.id) || b.pending.contains(a.id) { pending.append(Self.keepFirst(a, b)); continue }
                 guard a.keys.contains(where: { ka in b.keys.contains { kb in PersonKey.same(ka, kb) } }) else { continue }
-                out.append(Self.keepFirst(a, b))
+                alike.append(Self.keepFirst(a, b))
             }
         }
-        return out
+        return pending + alike
+    }
+
+    // MARK: the Mac's Contacts
+
+    /// What the address book proves. For every card, each person who carries one of its phones or emails (on the record,
+    /// or in what a handle proves by itself) learns the card's other proofs and its name and nickname as spellings; two
+    /// people who fall on one card are one person and are merged, the one with a note kept — a pending pair among them
+    /// is thereby answered. Two who both have a note are not merged here, where the notes cannot be folded: they are
+    /// left pending, and the banner's one click folds them. A pending pair whose two fall on two different cards, under
+    /// two different names, is answered the other way: kept separate. Two cards under one name (a work card and a home
+    /// card) prove nothing about a pair and leave the question to the user. Returns how many people were merged away.
+    @discardableResult
+    public func link(contacts cards: [ContactCard]) -> Int {
+        var merged = 0, cardsOf: [String: Set<Int>] = [:]
+        for (n, card) in cards.enumerated() where !card.proofs.isEmpty && !isSelf(card.name) {
+            let hits = records.filter { r in r.allProofs.contains { card.proofs.contains($0) } }
+            guard let first = hits.first else { continue }
+            let kept = hits.dropFirst().reduce(first) { Self.keepFirst($0, $1).0 }
+            for other in hits where other.id != kept.id {
+                if other.notePath != nil, kept.notePath != nil {
+                    guard let k = index(kept.id), let o = index(other.id), !records[k].notSame.contains(other.id) else { continue }
+                    if !records[k].pending.contains(other.id) { records[k].pending.append(other.id) }
+                    if !records[o].pending.contains(kept.id) { records[o].pending.append(kept.id) }
+                    log.info("\(other.name) and \(kept.name) are one card in Contacts (\(card.name)) with a note each: the banner asks, and folds them")
+                    continue
+                }
+                log.info("\(other.name) and \(kept.name) are one card in Contacts (\(card.name)): merged")
+                merge(keep: kept.id, drop: other.id); merged += 1
+                cardsOf[kept.id, default: []].formUnion(cardsOf.removeValue(forKey: other.id) ?? [])
+            }
+            for id in [kept.id] + hits.map(\.id) {
+                guard let i = index(id) else { continue }
+                for p in card.proofs where !records[i].proofs.contains(p) { records[i].proofs.append(p) }
+                Self.learn(label: card.name, into: &records[i])
+                if let nick = card.nickname { Self.learn(label: nick, into: &records[i]) }
+                cardsOf[id, default: []].insert(n)
+            }
+        }
+        for r in records where !r.pending.isEmpty {
+            for other in r.pending {
+                guard let mine = cardsOf[r.id], let theirs = cardsOf[other], mine.isDisjoint(with: theirs),
+                      !mine.contains(where: { m in theirs.contains { PersonKey.same(cards[m].name, cards[$0].name) } }) else { continue }
+                let names = (mine.map { cards[$0].name } + theirs.map { cards[$0].name }).joined(separator: ", ")
+                log.info("\(r.name) and \(person(other)?.name ?? other) are two cards in Contacts (\(names)): kept separate")
+                keepSeparate(r.id, other)
+            }
+        }
+        return merged
     }
 
     /// After a merge, whether a ledger row under `label` (and `handle`) was the dropped person's — by the roster as it
@@ -323,13 +522,21 @@ public actor PersonRegistry {
 
     // MARK: the brain's roster
 
-    /// The `PEOPLE:` lines of the note builder's header: who exists and where they are written, capped.
+    /// The `PEOPLE:` lines of the note builder's header: who exists and where they are written, capped. Someone Brownie is
+    /// not sure about — the same name on a second chat — is listed on their own line with the file to write them in,
+    /// "People/Nitesh Kumar (Slack).md", and told apart from the one they may be, so the brain never folds the two.
+    public static let unsureLine = "Brownie is not sure these are one person; write each in their own file until the user says"
     public static func headerLines(_ people: [Person], cap: Int = 200) -> [String] {
         people.sorted { ($0.notePath == nil ? 1 : 0, $0.name.lowercased()) < ($1.notePath == nil ? 1 : 0, $1.name.lowercased()) }.prefix(cap).map { p in
             var also: [String] = []
             for a in p.aliases.map(PersonKey.displayName) where a.lowercased() != p.name.lowercased() && !also.contains(a) { also.append(a) }
             let alsoLine = also.isEmpty ? "" : " (also: " + also.prefix(4).joined(separator: ", ") + ")"
-            return "\(p.name) — \(p.notePath ?? "no note yet")" + alsoLine
+            let seen = p.sources.isEmpty ? "" : " (seen on " + p.sources.joined(separator: ", ") + ")"
+            let suggested = suggestedNotePath(for: p, among: people)
+            let file = p.notePath ?? (p.pending.isEmpty && suggested == "People/\(p.name).md" ? "no note yet" : "no note yet; write them in " + suggested)
+            let unsure = p.pending.compactMap { id in people.first { $0.id == id } }.map { o in "may be the \(o.name) of \(suggestedNotePath(for: o, among: people))" }
+            let unsureLine = unsure.isEmpty ? "" : " — " + unsure.joined(separator: "; ") + " — " + Self.unsureLine
+            return "\(p.name) — \(file)" + alsoLine + (unsure.isEmpty ? "" : seen) + unsureLine
         }
     }
 
@@ -337,6 +544,33 @@ public actor PersonRegistry {
 
     private func index(_ id: String) -> Int? { records.firstIndex { $0.id == id } }
     static func newID() -> String { "p-" + UUID().uuidString.lowercased().replacingOccurrences(of: "-", with: "").prefix(12) }
+}
+
+/// The banner's words for a suspect pair, pure so they can be checked without a window. A pending pair — the same name
+/// on a second chat, with nothing but the name to join them — is Brownie's own question, and is answered Same person or
+/// Different people; a pair that merely looks alike is offered Merge or Keep separate, as before.
+public enum PeopleQuestion {
+    public static func isPending(_ pair: (Person, Person)) -> Bool { pair.0.pending.contains(pair.1.id) || pair.1.pending.contains(pair.0.id) }
+
+    /// "Is Nitesh Kumar on Slack the same Nitesh Kumar as on WhatsApp?" — the newcomer (the second of the pair, the one
+    /// without the note) first. When both were seen on the same app, two chats under one name, the question says so
+    /// rather than naming the app twice; with no chat known for either, it asks plainly.
+    public static func title(_ pair: (Person, Person)) -> String {
+        let (kept, newcomer) = pair
+        guard isPending(pair) else { return "These two look like one person: \(kept.name) · \(newcomer.name)" }
+        let keptOn = kept.sources.first, newOn = newcomer.sources.first
+        if let a = newOn, let b = keptOn, a != b { return "Is \(newcomer.name) on \(a) the same \(kept.name) as on \(b)?" }
+        if let a = newOn ?? keptOn { return "Are the two \(newcomer.name)s on \(a) the same person?" }
+        return "Is this \(newcomer.name) the same person as \(kept.name)?"
+    }
+    public static func yes(_ pair: (Person, Person)) -> String { isPending(pair) ? "Same person" : "Merge" }
+    public static func no(_ pair: (Person, Person)) -> String { isPending(pair) ? "Different people" : "Keep separate" }
+    /// What a yes does: which record stays, and what becomes of the other's note.
+    public static func consequence(_ pair: (Person, Person)) -> String {
+        var s = "\(yes(pair)) keeps \(pair.0.name)"
+        if let p = pair.0.notePath { s += pair.1.notePath == nil ? " and their note \(p)" : " and folds the other note into \(p)" }
+        return s
+    }
 }
 
 /// The text edits a merge makes to the notes, pure so they can be checked without a vault.

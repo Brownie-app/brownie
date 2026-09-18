@@ -25,7 +25,7 @@ public enum AskOutcome: String, Codable, Sendable {
 /// Kept on this Mac only: the words never go to the brain — only "asked on the 16th · you replied at 21:29".
 public struct Ask: Codable, Sendable, Equatable, Identifiable {
     public let id: String
-    public let person: String
+    public var person: String
     public let bucket: BucketID
     public let askedAt: Date
     /// The question itself, for the person's note. Local only.
