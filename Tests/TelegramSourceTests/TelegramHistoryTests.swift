@@ -64,3 +64,17 @@ final class ScriptedChat: TDSending, @unchecked Sendable {
         #expect(h.stoppedShort, "the page cap left a thousand messages unseen")
     }
 }
+
+/// What a TDLib user object proves: the phone number a contact shares, spelled as the registry compares it; nothing otherwise.
+@Suite struct TelegramProofTests {
+    @Test func aSharedPhoneNumberIsTheProof() {
+        #expect(TelegramSource.proofs(ofUser: ["@type": "user", "id": 42, "first_name": "Nitesh", "phone_number": "919540752593"]) == ["phone:919540752593"])
+        #expect(TelegramSource.proofs(ofUser: ["@type": "user", "id": 42, "phone_number": "+91 95407 52593"]) == ["phone:919540752593"], "digits only, whichever way it came")
+    }
+
+    @Test func anUnsharedOrMalformedNumberProvesNothing() {
+        #expect(TelegramSource.proofs(ofUser: ["@type": "user", "id": 42, "first_name": "Nitesh", "phone_number": ""]) == [])
+        #expect(TelegramSource.proofs(ofUser: ["@type": "user", "id": 42, "first_name": "Nitesh"]) == [])
+        #expect(TelegramSource.proofs(ofUser: ["@type": "user", "id": 42, "phone_number": "12345"]) == [], "too short to be a phone")
+    }
+}

@@ -39,10 +39,17 @@ public struct TelegramSource: Source {
             let type = (chat["type"] as? [String: Any])?["@type"] as? String ?? ""
             let isGroup = type == "chatTypeBasicGroup" || type == "chatTypeSupergroup"
             if type == "chatTypeSupergroup", ((chat["type"] as? [String: Any])?["is_channel"] as? Bool) == true { continue }   // broadcast channels: skip
-            out.append(BucketInfo(id: BucketID("telegram:\(id)"), name: chat["title"] as? String ?? "Chat", detail: isGroup ? "Group" : "Direct", isGroup: isGroup, count: 0, handle: isGroup ? nil : PersonHandle.telegram(chatID: id)))
+            // A private chat's user carries the phone number when the contact shares it; TDLib answers getUser from its own cache.
+            var proofs: [String] = []
+            if type == "chatTypePrivate", let uid = Self.int64((chat["type"] as? [String: Any])?["user_id"]), let u = try? await c.send(["@type": "getUser", "user_id": uid]) { proofs = Self.proofs(ofUser: u) }
+            out.append(BucketInfo(id: BucketID("telegram:\(id)"), name: chat["title"] as? String ?? "Chat", detail: isGroup ? "Group" : "Direct", isGroup: isGroup, count: 0, handle: isGroup ? nil : PersonHandle.telegram(chatID: id), proofs: proofs))
         }
         return out
     }
+
+    /// What a TDLib `user` object proves: its `phone_number`, when the contact shares one. Nothing otherwise.
+    static func proofs(ofUser u: [String: Any]) -> [String] { PersonProof.all(phones: [u["phone_number"] as? String ?? ""], emails: []) }
+    static func int64(_ v: Any?) -> Int64? { (v as? Int64) ?? (v as? Int).map(Int64.init) }
 
     public func buckets(since marks: [BucketID: ItemKey], enabled: Set<BucketID>?) async throws -> [Bucket] {
         guard let c = Self.shared, await c.authState == .ready else { throw SourceError.notAvailable(.needsSignIn) }

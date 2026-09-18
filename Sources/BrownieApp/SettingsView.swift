@@ -10,6 +10,7 @@ import Scheduling
 import LocalSources
 import CloudSources
 import TelegramSource
+import Agent
 
 struct SettingsView: View {
     @EnvironmentObject var m: AppModel
@@ -71,6 +72,12 @@ struct SourcesPane: View {
                 }
             }
         }.walkthroughTarget("sources")
+        CardBox(padding: 0) {
+            SettingRow(title: "Contacts", detail: "Links the same person across WhatsApp, iMessage, Slack and Teams by phone and email. Read on this Mac only.") {
+                if m.permissions[.contacts] == true { Chip(text: "Allowed") }
+                else { BButton(title: "Allow") { Task { _ = await ContactLookup.requestAccess(); await m.refreshPermissions() } } }
+            }.padding(.horizontal, 16)
+        }.padding(.top, 6)
         Text("Things you said out loud").font(.system(size: 14, weight: .semibold)).padding(.top, 10)
         Sub(text: "Transcribed on this Mac with Apple's speech engine, at night. Transcripts are kept as notes; the audio is never copied and never leaves.")
         CardBox(padding: 0) {
@@ -749,7 +756,7 @@ struct SlackTokenSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Paste a Slack user token").font(.system(size: 17, weight: .semibold))
-            Text("Create a Slack app at api.slack.com/apps, add the user scopes channels:history, channels:read, groups:history, groups:read, im:history, im:read, mpim:history, mpim:read, users:read, install it to your workspace, and paste the token that starts with xoxp-. It goes to your Keychain; nothing else sees it.").font(.system(size: 12)).foregroundStyle(t.ink2)
+            Text("Create a Slack app at api.slack.com/apps, add the user scopes channels:history, channels:read, groups:history, groups:read, im:history, im:read, mpim:history, mpim:read, users:read, users:read.email, install it to your workspace, and paste the token that starts with xoxp-. It goes to your Keychain; nothing else sees it.").font(.system(size: 12)).foregroundStyle(t.ink2)
             SecureField("xoxp-…", text: $token).textFieldStyle(.roundedBorder)
             HStack { Spacer(); BButton(title: "Cancel", kind: .quiet) { dismiss() }; BButton(title: "Use token", kind: .primary) { m.useSlackToken(token); dismiss() }.disabled(!token.hasPrefix("xoxp-")) }
         }.padding(20).frame(width: 460)

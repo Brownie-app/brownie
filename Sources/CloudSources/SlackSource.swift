@@ -13,7 +13,7 @@ import Support
 public actor SlackAuth {
     public static let shared = SlackAuth()
     public static let callback = "https://www.usebrownie.com/oauth/slack"
-    public static let scopes = ["channels:history", "channels:read", "groups:history", "groups:read", "im:history", "im:read", "mpim:history", "mpim:read", "users:read"]
+    public static let scopes = ["channels:history", "channels:read", "groups:history", "groups:read", "im:history", "im:read", "mpim:history", "mpim:read", "users:read", "users:read.email"]
     public static let tokenKey = "slack.token"
     public static var isConfigured: Bool { !(Secrets.value("SLACK_CLIENT_ID") ?? "").isEmpty }
     public static var isSignedIn: Bool { Keychain.get(tokenKey) != nil }
@@ -50,16 +50,17 @@ public actor SlackAuth {
 // MARK: - Parsing (pure)
 
 public enum SlackParsing {
-    public struct Channel: Sendable, Equatable { public let id: String; public let name: String; public let isGroup: Bool; public let members: Int; public let detail: String; public var handle: String? = nil }
+    public struct Channel: Sendable, Equatable { public let id: String; public let name: String; public let isGroup: Bool; public let members: Int; public let detail: String; public var handle: String? = nil; public var proofs: [String] = [] }
 
-    /// `conversations.list` → channels and DMs. DMs get the other person's name; group DMs their members.
-    public static func channels(_ obj: [String: Any], names: [String: String]) -> [Channel] {
+    /// `conversations.list` → channels and DMs. DMs get the other person's name and what their profile proves (the
+    /// email and phone `proofs` lists by user id); group DMs their members.
+    public static func channels(_ obj: [String: Any], names: [String: String], proofs: [String: [String]] = [:]) -> [Channel] {
         (obj["channels"] as? [[String: Any]] ?? []).compactMap { c in
             guard let id = c["id"] as? String else { return nil }
             if c["is_archived"] as? Bool == true { return nil }
             if c["is_im"] as? Bool == true {
                 let u = c["user"] as? String ?? ""
-                return Channel(id: id, name: names[u] ?? u, isGroup: false, members: 2, detail: "Direct", handle: u.isEmpty ? nil : PersonHandle.slack(userID: u))
+                return Channel(id: id, name: names[u] ?? u, isGroup: false, members: 2, detail: "Direct", handle: u.isEmpty ? nil : PersonHandle.slack(userID: u), proofs: proofs[u] ?? [])
             }
             if c["is_mpim"] as? Bool == true {
                 let raw = c["name"] as? String ?? ""   // "mpdm-alice--bob--carol-1"
@@ -79,6 +80,18 @@ public enum SlackParsing {
             let p = u["profile"] as? [String: Any]
             let name = [p?["display_name"] as? String, p?["real_name"] as? String, u["real_name"] as? String, u["name"] as? String].compactMap { $0 }.first { !$0.isEmpty } ?? id
             out[id] = name
+        }
+        return out
+    }
+
+    /// `users.list` → id → what the profile proves: its email (given the `users:read.email` scope) and phone, spelled
+    /// as `PersonProof` spells them. A profile with neither, or a phone too short to be one, proves nothing.
+    public static func proofs(_ obj: [String: Any]) -> [String: [String]] {
+        var out: [String: [String]] = [:]
+        for u in obj["members"] as? [[String: Any]] ?? [] {
+            guard let id = u["id"] as? String, let p = u["profile"] as? [String: Any] else { continue }
+            let proofs = PersonProof.all(phones: [p["phone"] as? String ?? ""], emails: [p["email"] as? String ?? ""])
+            if !proofs.isEmpty { out[id] = proofs }
         }
         return out
     }
@@ -151,13 +164,13 @@ public struct SlackSource: Source {
 
     public func discoverBuckets() async throws -> [BucketInfo] {
         guard let t = token() else { throw SourceError.cannotRead("not signed in to Slack") }
-        let names = try await users(t)
+        let people = try await directory(t)
         var out: [BucketInfo] = []
         var cursor: String? = nil
         repeat {
             let r = try await call("conversations.list", t, ["types": "public_channel,private_channel,mpim,im", "exclude_archived": "true", "limit": "500", "cursor": cursor ?? ""])
             guard r["ok"] as? Bool == true else { throw SourceError.cannotRead("Slack: \(r["error"] as? String ?? "conversations.list failed")") }
-            out += SlackParsing.channels(r, names: names).map { BucketInfo(id: BucketID("slack:\($0.id)"), name: $0.name, detail: $0.detail, isGroup: $0.isGroup, count: $0.members, handle: $0.handle) }
+            out += SlackParsing.channels(r, names: people.names, proofs: people.proofs).map { BucketInfo(id: BucketID("slack:\($0.id)"), name: $0.name, detail: $0.detail, isGroup: $0.isGroup, count: $0.members, handle: $0.handle, proofs: $0.proofs) }
             cursor = (r["response_metadata"] as? [String: Any])?["next_cursor"] as? String; if cursor?.isEmpty == true { cursor = nil }
         } while cursor != nil
         log.info("\(out.count) conversations discovered")
@@ -228,16 +241,21 @@ public struct SlackSource: Source {
         return History(messages: all.sorted { $0.date < $1.date }, hitPageCap: cursor != nil)
     }
 
-    func users(_ t: String) async throws -> [String: String] {
-        var names: [String: String] = [:]
+    func users(_ t: String) async throws -> [String: String] { try await directory(t).names }
+
+    /// `users.list`, paged once: every user's display name, and what each profile proves. The same pages serve both,
+    /// so a direct chat's proofs cost no call of their own.
+    func directory(_ t: String) async throws -> (names: [String: String], proofs: [String: [String]]) {
+        var names: [String: String] = [:], proofs: [String: [String]] = [:]
         var cursor: String? = nil
         repeat {
             let r = try await call("users.list", t, ["limit": "500", "cursor": cursor ?? ""])
             guard r["ok"] as? Bool == true else { break }
             names.merge(SlackParsing.users(r)) { $1 }
+            proofs.merge(SlackParsing.proofs(r)) { $1 }
             cursor = (r["response_metadata"] as? [String: Any])?["next_cursor"] as? String; if cursor?.isEmpty == true { cursor = nil }
         } while cursor != nil
-        return names
+        return (names, proofs)
     }
 
     func call(_ method: String, _ token: String, _ args: [String: String] = [:]) async throws -> [String: Any] {
