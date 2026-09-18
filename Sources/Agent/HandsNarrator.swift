@@ -16,6 +16,14 @@ public enum HandsNarrator {
         case "find": return "Looking for \(quote(a["text"]))"
         case "wait_for": return "Waiting for \(quote(a["text"])) to appear"
         case "open_url": return "Going to \((a["url"] as? String ?? "the page").replacingOccurrences(of: "https://", with: "").replacingOccurrences(of: "http://", with: ""))"
+        case "search_web": return "Searching \(a["site"] as? String ?? "the web") for \(quote(a["query"]))"
+        case "press_text":
+            let n = a["nth"] as? Int ?? Int(a["nth"] as? String ?? "") ?? 1
+            return n > 1 ? "Pressing the \(n)\(ordinal(n)) \(quote(a["text"]))" : "Pressing \(quote(a["text"]))"
+        case "type_into": return "Typing \(quote(a["text"])) into \(quote(a["field"]))"
+        case "scroll":
+            let n = a["amount"] as? Int ?? Int(a["amount"] as? String ?? "") ?? 1
+            return "Scrolling \((a["direction"] as? String ?? "down").lowercased() == "up" ? "up" : "down")" + (n > 1 ? " ×\(n)" : "")
         case "open_chat": return "Opening the \(a["app"] as? String ?? "chat") conversation with \(a["name"] as? String ?? "them")"
         case "type_message": return "Putting the message in the box: \(quote(a["text"]))"
         case "screen": return "Looking at the screen"
@@ -36,6 +44,8 @@ public enum HandsNarrator {
         default: return tool.replacingOccurrences(of: "_", with: " ").capitalized
         }
     }
+
+    static func ordinal(_ n: Int) -> String { switch n % 100 { case 11, 12, 13: return "th"; default: switch n % 10 { case 1: return "st"; case 2: return "nd"; case 3: return "rd"; default: return "th" } } }
 
     static func quote(_ v: Any?) -> String {
         let s = (v as? String ?? "").replacingOccurrences(of: "\n", with: " ")

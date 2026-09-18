@@ -20,6 +20,13 @@ import Testing
         ("need_user", #"{"what":"the message is ready"}"#, "Stopping — the message is ready"),
         ("done", #"{"summary":"opened the alert"}"#, "Done — opened the alert"),
         ("could_not", #"{"reason":"no such app"}"#, "Couldn't — no such app"),
+        ("search_web", #"{"site":"amazon","query":"iphone 17"}"#, "Searching amazon for “iphone 17”"),
+        ("press_text", #"{"text":"Add to Cart"}"#, "Pressing “Add to Cart”"),
+        ("press_text", #"{"text":"iphone","nth":2,"role":"link"}"#, "Pressing the 2nd “iphone”"),
+        ("press_text", #"{"text":"iphone","nth":3}"#, "Pressing the 3rd “iphone”"),
+        ("type_into", #"{"field":"Search Amazon","text":"iphone"}"#, "Typing “iphone” into “Search Amazon”"),
+        ("scroll", #"{"direction":"down"}"#, "Scrolling down"),
+        ("scroll", #"{"direction":"up","amount":3}"#, "Scrolling up ×3"),
         ("something_new", "{}", "Something New"),
     ]) func lines(_ c: (String, String, String)) {
         #expect(HandsNarrator.line(tool: c.0, args: c.1) == c.2)

@@ -20,6 +20,28 @@ public enum HandsGuard {
         return !goal.lowercased().contains(a)
     }
 
+    /// The exact phrase an action's result carries when the screen did not react; the stall guard counts it.
+    public static let stallMarker = "nothing changed"
+
+    /// Notices a screen that has stopped answering: five actions in a row whose results say nothing changed, with looks
+    /// and finds in between not counting either way. Trips with the reason for `could_not`, naming the last three actions.
+    public struct StallGuard: Sendable {
+        public static let lookers: Set<String> = ["screen", "look", "wait", "wait_for", "find", "list_apps", "plan", "step_done"]
+        public var limit = 5
+        private var streak: [String] = []
+        public init() {}
+        /// `action` is how the step reads to a person. Returns the reason to stop, or nil.
+        public mutating func record(tool: String, action: String, result: String) -> String? {
+            if Self.lookers.contains(tool) { return nil }
+            guard result.contains(HandsGuard.stallMarker) else { streak.removeAll(); return nil }
+            streak.append(action)
+            guard streak.count >= limit else { return nil }
+            let last = streak.suffix(3).joined(separator: "; ")
+            streak.removeAll()
+            return "the screen stopped responding to what I tried: \(last)"
+        }
+    }
+
     /// Notices the same call made three times in a row (allowing `screen`/`wait`/`look` in between) — the sign of a loop.
     public struct RepeatGuard: Sendable {
         public static let lookers: Set<String> = ["screen", "look", "wait", "list_apps"]

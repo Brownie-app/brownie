@@ -15,6 +15,33 @@ public enum BrowserSkill {
         if t.contains(" ") || !t.contains(".") { return "https://www.google.com/search?q=" + (t.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? t) }
         return "https://" + t
     }
+    /// A site's own search page for a query — one URL instead of find-the-box, type, press Return. A site not in
+    /// the list becomes a Google search scoped to it.
+    public static func searchURL(site: String, query: String) -> String {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines).addingPercentEncoding(withAllowedCharacters: queryChars) ?? ""
+        var s = site.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        for p in ["https://", "http://", "www."] where s.hasPrefix(p) { s = String(s.dropFirst(p.count)) }
+        while s.hasSuffix("/") { s.removeLast() }
+        switch s {
+        case "amazon", "amazon.com": return "https://www.amazon.com/s?k=\(q)"
+        case "amazon.in": return "https://www.amazon.in/s?k=\(q)"
+        case "google", "google.com": return "https://www.google.com/search?q=\(q)"
+        case "youtube", "youtube.com": return "https://www.youtube.com/results?search_query=\(q)"
+        case "flipkart", "flipkart.com": return "https://www.flipkart.com/search?q=\(q)"
+        case "wikipedia", "wikipedia.org", "en.wikipedia.org": return "https://en.wikipedia.org/w/index.php?search=\(q)"
+        case "github", "github.com": return "https://github.com/search?q=\(q)"
+        case "linkedin", "linkedin.com": return "https://www.linkedin.com/search/results/all/?keywords=\(q)"
+        case "x", "x.com", "twitter", "twitter.com": return "https://x.com/search?q=\(q)"
+        case "reddit", "reddit.com": return "https://www.reddit.com/search/?q=\(q)"
+        case "maps", "google maps", "maps.google.com", "google.com/maps": return "https://www.google.com/maps/search/?api=1&query=\(q)"
+        default:
+            let scoped = ("site:" + s + " " + query.trimmingCharacters(in: .whitespacesAndNewlines)).addingPercentEncoding(withAllowedCharacters: queryChars) ?? ""
+            return "https://www.google.com/search?q=\(scoped)"
+        }
+    }
+    /// ASCII letters, digits and the four unreserved marks: everything else, including & + = space and accents, is encoded.
+    static let queryChars = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+
     /// The page is there when the title stops being a blank tab and differs from what it was.
     public static func loaded(title: String, before: String) -> Bool {
         let t = title.lowercased()
