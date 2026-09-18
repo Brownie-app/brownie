@@ -2,23 +2,33 @@ import Foundation
 import Domain
 import Support
 
-/// The nightly pass over People/ and Groups/: every note put back into its shape (`NoteSkeleton`), aged
-/// (`NoteAging`, with the status-block lines that retired lately handed in by the pipeline), and written back through
-/// `NoteMeta.restamp` — so a rewrite that is code's is never later read as the user's edit and `updated` does not
-/// move for tidying alone; a note the pass leaves as it was is not touched, byte for byte. Then the quiet notes go
-/// to Archive/. Runs after the status block is written each night, and once at launch alongside the migration.
+/// The nightly pass over People/ and Groups/: every note put back into its shape (`NoteSkeleton`), its words tidied
+/// (`NoteLint`), aged (`NoteAging`, with the status-block lines that retired lately handed in by the pipeline), and
+/// written back through `NoteMeta.restamp` — so a rewrite that is code's is never later read as the user's edit and
+/// `updated` does not move for tidying alone; a note the pass leaves as it was is not touched, byte for byte. Then
+/// the quiet notes go to Archive/. Runs after the status block is written each night, and once at launch alongside
+/// the migration.
 public enum VaultGardener {
     private static let log = Log("gardener")
 
     public struct Summary: Sendable, Equatable {
         public var notes = 0, tidied = 0, movedToEarlier = 0, retired = 0, archived = 0
+        /// The word rules' numbers across the vault: lines put in your voice, hedges removed, empty bullets dropped,
+        /// repeated bullets merged, meta lines cut.
+        public var voiced = 0, hedges = 0, dropped = 0, merged = 0, meta = 0
         public var changed: [String] = []
         public init() {}
-        /// "gardener: 12 notes tidied, 3 bullets moved to Earlier, 1 person archived"
+        /// "gardener: 12 notes tidied, 3 bullets moved to Earlier, 14 hedges removed, 2 repeated bullets merged, 1 person archived"
+        /// — the word rules' numbers only when there are any.
         public var line: String {
             func n(_ v: Int, _ one: String, _ many: String) -> String { "\(v) \(v == 1 ? one : many)" }
             var parts = [n(tidied, "note tidied", "notes tidied"), n(movedToEarlier, "bullet moved to Earlier", "bullets moved to Earlier")]
             if retired > 0 { parts.append(n(retired, "retired line kept", "retired lines kept")) }
+            if voiced > 0 { parts.append(n(voiced, "line put in your voice", "lines put in your voice")) }
+            if hedges > 0 { parts.append(n(hedges, "hedge removed", "hedges removed")) }
+            if dropped > 0 { parts.append(n(dropped, "empty bullet dropped", "empty bullets dropped")) }
+            if merged > 0 { parts.append(n(merged, "repeated bullet merged", "repeated bullets merged")) }
+            if meta > 0 { parts.append(n(meta, "meta line cut", "meta lines cut")) }
             parts.append(n(archived, "person archived", "archived"))
             return "gardener: " + parts.joined(separator: ", ")
         }
@@ -42,12 +52,17 @@ public enum VaultGardener {
                 let kind = meta.flatMap { NoteMeta.Kind(rawValue: $0.brownie) } ?? NoteMeta.Kind(rawValue: NoteMeta.kind(forPath: rel)) ?? .topic
                 let retired = retiredLines(rel)
                 var report = NoteSkeleton.Report()
-                // normalise, then age — one pass holds every invariant, so the shape and the clock are settled together
+                // normalise, tidy the words, then age — one pass holds every invariant, so the shape, the words and the clock are settled together
                 guard let text = NoteMeta.restamp(raw, path: rel, body: { old in
                     guard let (new, r) = NoteAging.pass(body: old, kind: kind, now: now, retired: retired, timeZone: timeZone), new != old else { return nil }
                     report = r; return new
                 }) else { continue }
-                do { try text.write(to: url, atomically: true, encoding: .utf8); s.tidied += 1; s.movedToEarlier += report.movedToEarlier; s.retired += report.retired; s.changed.append(rel) }
+                do {
+                    try text.write(to: url, atomically: true, encoding: .utf8)
+                    s.tidied += 1; s.movedToEarlier += report.movedToEarlier; s.retired += report.retired; s.changed.append(rel)
+                    let l = report.lint
+                    s.voiced += l.voiced; s.hedges += l.hedges; s.dropped += l.dropped; s.merged += l.merged; s.meta += l.meta
+                }
                 catch { log.warn("could not write \(rel): \(error)") }
             }
         }

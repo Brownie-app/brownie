@@ -47,10 +47,10 @@ import Domain
         // Brownie wrote one thing; the user changed the body in Obsidian; the hash on disk no longer matches.
         var m = NoteMeta.fresh(path: "People/A.md", body: "# A\n\nwhat Brownie wrote\n", today: "2026-09-01")
         m.updated = "2026-09-01"
-        try put("People/A.md", m.render() + "# A\n\nwhat the user wrote\n\n## Pending\n- thing (2026-09-10)\n", in: root)
+        try put("People/A.md", m.render() + "# A\n\nwhat was typed in Obsidian\n\n## Pending\n- thing (2026-09-10)\n", in: root)
         await VaultGardener.run(root: root, registry: nil, now: Self.now, timeZone: Self.utc, archive: false)
         let (meta, body) = NoteMeta.parse(raw("People/A.md", in: root)!, path: "People/A.md")
-        #expect(body == "# A\n\n## About\n- what the user wrote\n\n## Now\n- thing (2026-09-10)\n")
+        #expect(body == "# A\n\n## About\n- what was typed in Obsidian\n\n## Now\n- thing (2026-09-10)\n")
         #expect(meta?.bodyDiffers(body) == true, "the old hash stays, so the edit still reads as the user's")
     }
 
@@ -70,6 +70,20 @@ import Domain
         #expect(body == "# Arjun\n\n## About\n- Old friend\n<!-- met at IIT -->\n\n## Now\n- Asked about the flat (2026-09-10)\n  - the one in Pune\n\n```\n# a heading in a fence is code\n```\n")
         let again = await VaultGardener.run(root: root, registry: nil, now: Self.now, timeZone: Self.utc, archive: false)
         #expect(again.tidied == 0)
+    }
+
+    /// The line says what the word rules did, when they did anything; a night later there is nothing for them to do.
+    @Test func theLineCountsWhatTheLintDid() async throws {
+        let root = try fresh()
+        let body = "# Kanika\n\n## About\n- Standing facts about Kanika.\n- The user's colleague at Loadmill.\n\n## Now\n- The user agreed to review the deck; delivery is not confirmed. (2026-09-10)\n- Kanika shared the Q3 deck with the team (2026-09-12)\n- Earlier plans remain historical unless noted above.\n\n## Context\n- Kanika shared the Q3 deck for the team (2026-09-01)\n"
+        try put("People/Kanika.md", stamped("People/Kanika.md", body), in: root)
+        let s = await VaultGardener.run(root: root, registry: nil, now: Self.now, timeZone: Self.utc, archive: false)
+        #expect(s.line == "gardener: 1 note tidied, 0 bullets moved to Earlier, 2 lines put in your voice, 1 hedge removed, 1 empty bullet dropped, 1 repeated bullet merged, 1 meta line cut, 0 archived")
+        #expect(s.voiced == 2 && s.hedges == 1 && s.dropped == 1 && s.merged == 1 && s.meta == 1)
+        let (_, out) = NoteMeta.parse(raw("People/Kanika.md", in: root)!, path: "People/Kanika.md")
+        #expect(out == "# Kanika\n\n## About\n- Your colleague at Loadmill.\n\n## Now\n- Kanika shared the Q3 deck with the team (2026-09-12)\n- You agreed to review the deck. (2026-09-10)\n")
+        let again = await VaultGardener.run(root: root, registry: nil, now: Self.now, timeZone: Self.utc, archive: false)
+        #expect(again.tidied == 0 && again.line == "gardener: 0 notes tidied, 0 bullets moved to Earlier, 0 archived")
     }
 
     @Test func quietNotesAreArchivedInTheSamePass() async throws {
