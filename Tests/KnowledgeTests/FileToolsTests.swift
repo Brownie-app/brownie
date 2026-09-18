@@ -136,26 +136,18 @@ import Domain
     @Test func readmeOverBudgetIsRefused() async throws {
         let w = try Self.world()
         let long = "# Me\n\n" + Array(repeating: "word", count: 400).joined(separator: " ")
-        #expect(await w.refusal("write_file", ["path": "README.md", "content": long]) == "README.md would be 402 words; the portrait stays under 350 — write a shorter one")
+        #expect(await w.refusal("write_file", ["path": "README.md", "content": long]) == "README.md would be 402 words; the map stays under 350 — keep one line per folder and three to five recent updates")
         #expect(await w.refusal("write_file", ["path": "README.md", "content": "# Me\n\n" + Array(repeating: "word", count: 200).joined(separator: " ")]) == nil)
         #expect(w.raw("README.md")?.hasPrefix("---\nbrownie: portrait\n") == true)
     }
 
-    /// A README that indexes the vault's folders is not a portrait, whatever its length.
-    @Test func readmeThatReadsAsAFolderIndexIsRefused() async throws {
+    /// The README is the vault's map, and the user likes it that way: a folder index goes through.
+    @Test func readmeThatReadsAsAFolderIndexIsWelcome() async throws {
         let w = try Self.world()
         try w.put("Work/Loadmill.md", "# Loadmill\n"); try w.put("Money/Bills.md", "# Bills\n")
-        let index = "# Vivek's Knowledge Base\n\nThis knowledge base holds notes about Vivek's life.\n\n## Root folders\n- [[People]] — one note per person\n- Groups/ — the chats\n- **Work** — Loadmill and Orbit\n- Money/ — bills and invoices\n"
-        let refusal = "README.md is the portrait of the user, not a table of contents: write who they are, what they do, who matters to them and what is live this month."
-        #expect(await w.refusal("write_file", ["path": "README.md", "content": index]) == refusal)
-        let bullets = "# Vivek Upreti\n\n- People/ — everyone you talk to\n- Groups/ — your chats\n- Work — what you do\n- Money — what you owe\n"
-        #expect(await w.refusal("write_file", ["path": "README.md", "content": bullets]) == refusal, "more than half the lines are bullets naming a root folder")
-        for phrase in ["This vault is organised by theme.", "How to Use: start with People/.", "The root folders are listed below."] {
-            #expect(await w.refusal("write_file", ["path": "README.md", "content": "# Vivek Upreti\n\nYou run Orbit. \(phrase)\n"]) == refusal, "“\(phrase)” is about the vault, not the user")
-        }
-        let portrait = "# Vivek Upreti\n\nYou are a founder in Delhi, building Orbit with [[Kanika Pandey]]. Your people: Kanika, Arjun, your sister.\n\n## Live this month\n- SBI wants the proposal by 30 September\n- Work with Arjun on the pitch\n- Money for the villa is due to Karan\n"
-        #expect(await w.refusal("write_file", ["path": "README.md", "content": portrait]) == nil, "a portrait that happens to say 'work' and 'money' in bullets goes through")
-        #expect(w.raw("README.md")?.hasSuffix(portrait) == true)
+        let index = "# Knowledge Base\n\n- People/ — one note per person\n- Groups/ — the chats\n- Work — Loadmill and Orbit\n- Money — bills\n\n## Recent updates\n- Updated [[Kanika Pandey]] with the SBI deck\n"
+        #expect(await w.refusal("write_file", ["path": "README.md", "content": index]) == nil)
+        #expect(w.raw("README.md")?.hasSuffix(index) == true)
     }
 
     /// The user is never a person or a group in their own vault: the note is refused, and the sentence says where what is about them goes.
@@ -163,7 +155,7 @@ import Domain
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("tools-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let w = World(root: root, tools: FileTools.make(root: root, today: Self.today, selfNames: ["Vivek Upreti", "vivek"]))
-        let refusal = "That is you — what is about you belongs in README.md, the portrait"
+        let refusal = "That is you — what is about you belongs in a topic note under Life/ or Work/, never in People/"
         for path in ["People/Vivek Upreti.md", "People/Vivek.md", "People/Vivek Upreti — Career Materials (Jul–Aug 2026).md", "People/vivek upreti (work).md", "Groups/Vivek Upreti.md"] {
             #expect(await w.refusal("write_file", ["path": path, "content": "# X\n"]) == refusal, Comment(rawValue: path))
             #expect(w.raw(path) == nil)

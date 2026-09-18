@@ -170,3 +170,20 @@ import Domain
         for kept in ["- They discussed dinners in December. (2026-09-04)", "- Nayan asked you to transfer money for a GST payment. (2026-09-17)", "- Nayan said he had accepted a job. (2026-09-02)", "- Abhishek mentioned a Google colleague. (2026-02-14)", "- Earlier exchanges included an AI-QA course plan. (2025-10-12)", "- Nayan's messages also included contacts such as Ankit and Sher. (2026-01-01)"] { #expect(r.body.contains(kept), "\(kept) missing: \(r.body)") }
     }
 }
+
+@Suite struct NoteLintThreadTests {
+    let now = Date(timeIntervalSince1970: 1_789_000_000), utc = TimeZone(identifier: "UTC")!
+    @Test func oneThreadToldThreeTimesKeepsTheNewestTelling() {
+        let body = "# Arif\n\n## Now\n- Arif's request for a perpetual licence option remains under discussion. You spoke with Arif about paperwork for Mr. Taragi's approval and plan to ping Arif again. (2026-09-18)\n- Arif's request for a perpetual licence option was discussed. [[Kanika Pandey]] will update Arif after speaking with you. (2026-09-16)\n- You had a conversation with Arif about a process involving Madhul, Mr. Taragi, and a further call. (2026-09-16)\n"
+        let r = NoteLint.clean(body: body, kind: .person, now: now, timeZone: utc)
+        let now = r.body.components(separatedBy: "## Now\n")[1]
+        #expect(now.components(separatedBy: "\n- ").count == 2, "the two tellings of the licence thread are one; the Madhul call is its own: \(r.body)")
+        #expect(now.contains("remains under discussion") && !now.contains("was discussed"), "the newest telling stays: \(r.body)")
+        #expect(r.changes.contains("1 repeated bullet merged"))
+    }
+    @Test func aboutBulletsAndShortBulletsAreNotThreads() {
+        let body = "# K\n\n## About\n- Kanika Pandey is a Loadmill contact in Delhi who runs product.\n- Kanika Pandey is a Loadmill contact whose sister works at Loopsy in Pune.\n\n## Now\n- Lunch with Kanika. (2026-09-10)\n- Lunch with Kanika. (2026-09-12)\n"
+        let r = NoteLint.clean(body: body, kind: .person, now: now, timeZone: utc)
+        #expect(r.body.components(separatedBy: "\n- ").count == 5, "About is never threaded and three-word bullets are too short to be: \(r.body)")
+    }
+}

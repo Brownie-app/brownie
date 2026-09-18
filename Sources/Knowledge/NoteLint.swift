@@ -318,6 +318,15 @@ public enum NoteLint {
         return Set((ns as String).components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty && !stopWords.contains($0) })
     }
     /// How alike two bullets are by their words: the overlap over the union.
+    /// The first four content words of a bullet, in order — the thread it is about. A bold lead ("**Task estimations:**")
+    /// counts, since the brain uses it as the thread's name.
+    static func thread(_ text: String) -> [String] {
+        let lower = text.lowercased()
+        let ns = NSMutableString(string: lower)
+        for f in NoteSkeleton.days(in: lower).reversed() { ns.replaceCharacters(in: f.range, with: " ") }
+        let ws = (ns as String).components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty && !stopWords.contains($0) }
+        return ws.count >= 4 ? Array(ws.prefix(4)) : []
+    }
     static func jaccard(_ a: Set<String>, _ b: Set<String>) -> Double {
         let u = a.union(b).count
         return u == 0 ? 0 : Double(a.intersection(b).count) / Double(u)
@@ -330,19 +339,23 @@ public enum NoteLint {
     /// call a repeat by its words alone ("Lunch" on two days is two lunches).
     static func merge(_ p: inout NoteSkeleton.Parts, report: inout Report) {
         enum Section: Int { case about, now, context }
-        struct Entry { var origin: (section: Section, index: Int); var slot: (section: Section, index: Int); var words: Set<String>; var day: String; var length: Int; var leaf: Bool }
+        struct Entry { var origin: (section: Section, index: Int); var slot: (section: Section, index: Int); var words: Set<String>; var thread: [String]; var day: String; var length: Int; var leaf: Bool }
         var entries: [Entry] = []
         for (i, it) in p.about.enumerated() where it.kind != .verbatim {
-            entries.append(Entry(origin: (.about, i), slot: (.about, i), words: words(it.text), day: NoteSkeleton.ending(it.text)?.day ?? "", length: it.text.count, leaf: it.nested.isEmpty))
+            entries.append(Entry(origin: (.about, i), slot: (.about, i), words: words(it.text), thread: thread(it.text), day: NoteSkeleton.ending(it.text)?.day ?? "", length: it.text.count, leaf: it.nested.isEmpty))
         }
         for (section, bs) in [(Section.now, p.now), (.context, p.context)] {
-            for (i, b) in bs.enumerated() where !b.verbatim { entries.append(Entry(origin: (section, i), slot: (section, i), words: words(b.text), day: b.day ?? "", length: b.text.count, leaf: b.nested.isEmpty)) }
+            for (i, b) in bs.enumerated() where !b.verbatim { entries.append(Entry(origin: (section, i), slot: (section, i), words: words(b.text), thread: thread(b.text), day: b.day ?? "", length: b.text.count, leaf: b.nested.isEmpty)) }
         }
         var gone = [Bool](repeating: false, count: entries.count)
         for i in entries.indices where !gone[i] {
             for j in entries.indices where j > i && !gone[j] && !gone[i] {
                 let a = entries[i], b = entries[j]
-                guard min(a.words.count, b.words.count) >= 3, jaccard(a.words, b.words) >= 0.6 else { continue }
+                // one fact twice (six words in ten shared), or one thread told twice under Now/Context (the same four
+                // opening content words — "Arif's request for a perpetual licence option remains…" and "…was discussed"):
+                // the newer telling is the state, the older one is history the newer already holds
+                let sameThread = a.slot.section != .about && b.slot.section != .about && !a.thread.isEmpty && a.thread == b.thread
+                guard sameThread || (min(a.words.count, b.words.count) >= 3 && jaccard(a.words, b.words) >= 0.6) else { continue }
                 let aStays = a.day != b.day ? a.day > b.day : a.length >= b.length
                 var (stay, go) = aStays ? (i, j) : (j, i)
                 if !entries[go].leaf { (stay, go) = (go, stay) }

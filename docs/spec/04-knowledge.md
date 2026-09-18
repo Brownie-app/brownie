@@ -6,7 +6,7 @@ by the user, plus a local index Brownie maintains.
 ## Layout
 ```
 ~/Brownie Knowledge Base/
-  README.md                 ← who the user is, in ≤ 350 words; the portrait every other note hangs off
+  README.md                 ← the map: one line per folder and 3–5 recent updates, ≤ 350 words (the user prefers an index over a portrait)
   Today.md                  ← the day's cards as checkboxes for the phone; never knowledge (not indexed, counted, searched or served)
   People/<Name>.md          ← one file per person, forever; People/Archive/ for the quiet ones
   Groups/<Name>.md          ← one file per group chat; Groups/Archive/
@@ -43,6 +43,7 @@ already places, and any delete under People/ or Groups/. A live vault is stamped
   People note and is Brownie's ledger of what is open between the user and that person: ⏳ they asked
   / you promised, ✅ answered or done (shown 14 days, then a dated one-liner under Earlier), ⌛ let go
   (an ask 45 days unanswered, a promise 90 days old). Code writes it; the brain and the editor never see it.
+- **What a People note answers, in order**: where things stand today (the first bullet under Now), what is owed both ways (the status block), who they are to the user and what they are doing together (the first bullet under About). One bullet per thread: a continuing thread rewrites its bullet with the newest state; the gardener folds a second telling into the newer one.
 - **The shape** (kept by the gardener every night, so a year of runs cannot bloat or stale a note):
   `# Title` · status block · `## About` (standing facts, undated, ≤ 20) · `## Now` (dated bullets, ≤ 6,
   none older than 45 days — what the cards are made from) · `## Context` (dated, ≤ 12) · `## Earlier`
@@ -83,7 +84,7 @@ rebuilding from scratch. A token whose staging dir is gone is discarded.
 - Every merge must make the KB *more valuable*, not merely longer.
 - Source-trust tiers: the user's own words > DMs > group chats > inferred.
 - Cite nothing that isn't in a summary; never assume; prefer omission.
-- Keep shape targets (folders, density) and the README-first portrait.
+- Keep shape targets (folders, density) and the README map current.
 
 ## Index and search (`KnowledgeStore`)
 - SQLite FTS5 over note title + body; a query is the AND of its words (prefix on the last, a quoted

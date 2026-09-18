@@ -463,7 +463,7 @@ enum FileTools {
         let folder = parts.count == 2 ? parts[0] : "", title = String(parts.last!.dropLast(3))
         // The user is never a person or a group in their own vault — said before any rule about the title's shape, since it is the reason that helps.
         if isOwn(folder), SelfNames.isSelf(title, among: part.selfNames) {
-            throw Refusal("That is you — what is about you belongs in README.md, the portrait")
+            throw Refusal("That is you — what is about you belongs in a topic note under Life/ or Work/, never in People/")
         }
         // Spelled exactly: the Mac's file system would say "invoices.md" exists when only "Invoices.md" does, and that is a duplicate, not an overwrite.
         let siblings = notes(in: folder, of: part.root)
@@ -490,13 +490,10 @@ enum FileTools {
         if !exists, !isOwn(folder), siblings.count >= maxNotesPerFolder {
             throw Refusal("\(folder.isEmpty ? "the root" : folder + "/") already holds \(maxNotesPerFolder) notes (\(siblings.sorted().joined(separator: ", "))); fold this into one of them instead of adding a ninth")
         }
-        // The portrait stays a portrait: short, and about the user, never about the vault.
+        // The map stays short: what lives where and the last few updates, never a growing log.
         if same(p, "README.md") {
             let words = content.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count
-            if words > readmeWords { throw Refusal("README.md would be \(words) words; the portrait stays under \(readmeWords) — write a shorter one") }
-            if readsAsIndex(content, folders: rootFolders(of: part.root)) {
-                throw Refusal("README.md is the portrait of the user, not a table of contents: write who they are, what they do, who matters to them and what is live this month.")
-            }
+            if words > readmeWords { throw Refusal("README.md would be \(words) words; the map stays under \(readmeWords) — keep one line per folder and three to five recent updates") }
         }
         // Never a blind overwrite: the brain must have seen the note it replaces in this part.
         if exists, requireRead, !part.hasRead(p) { throw Refusal("read \(p) before overwriting it") }
@@ -542,27 +539,6 @@ enum FileTools {
         return "deleted \(p)"
     }
 
-    // MARK: the portrait
-
-    /// Whether a README body is a folder index rather than a portrait: it talks about the vault ("This knowledge
-    /// base", "This vault", "root folders", "How to Use"), or more than half of its non-empty lines are bullets that
-    /// name a root folder — `[[People]]`, `People/`, `**Groups**`, or the folder's bare name as a whole word.
-    static func readsAsIndex(_ content: String, folders: [String]) -> Bool {
-        let lower = content.lowercased()
-        if ["this knowledge base", "this vault", "root folders", "how to use"].contains(where: { lower.contains($0) }) { return true }
-        let lines = content.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-        guard !lines.isEmpty else { return false }
-        let names = dedupe((folders + ownFolders).map { $0.lowercased() })
-        let bullet = try! NSRegularExpression(pattern: #"^(?:[-*•]|\d+[.)])\s+"#)
-        let slashed = try! NSRegularExpression(pattern: #"(?<![\w/])[A-Z][\w &-]{0,30}/(?![\w/])"#)
-        let indexLines = lines.filter { line in
-            guard bullet.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) != nil else { return false }
-            if slashed.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) != nil { return true }
-            let words = Set(line.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init))
-            return names.contains { words.contains($0) }
-        }
-        return indexLines.count * 2 > lines.count
-    }
 
     // MARK: titles and shape
 
