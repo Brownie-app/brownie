@@ -60,6 +60,16 @@ public enum NoteLint {
         }
         p.now = bullets(p.now, report: &report)
         p.context = bullets(p.context, report: &report)
+        // Earlier's month lines get the voice and the hedges taken out clause by clause, never a clause dropped whole
+        // unless it is filler: the retired lines are matched against these clauses, and those carry no hedges.
+        p.earlier = p.earlier.map { line in
+            var out = line
+            out.clauses = line.clauses.compactMap { c -> String? in
+                var w = c; voice(&w, report: &report); w = unhedged(w, report: &report)
+                return w.isEmpty || filler(w) ? nil : w
+            }
+            return out.clauses.isEmpty ? line : out
+        }
         merge(&p, report: &report)
     }
 
@@ -89,7 +99,9 @@ public enum NoteLint {
 
     // MARK: voice
 
-    static let userMark = try! NSRegularExpression(pattern: #"\b([Tt])he user(['’]s)?\b"#)
+    static let userMark = try! NSRegularExpression(pattern: #"\b([Tt])he user(?:(['’]s)\b|\b(?! (?:experience|experiences|interface|interfaces|journey|journeys|base|story|stories|testing|research|feedback|guide|guides|name|names|account|accounts|id|ids|manual|manuals|flow|flows|profile|profiles|group|groups|level|levels|input|inputs|session|sessions|role|roles|permission|permissions|behaviou?rs?|personas?|acceptance|onboarding|management|retention|growth|segments?|surveys?|interviews?|stud(?:y|ies)|adoption|engagement|community|communities|agent|agents|device|devices)\b))"#)
+    /// After "you said/plans/…", a "he" or "she" is the user again ("the user said he would" → "you said you would").
+    static let pronounAfterYou = try! NSRegularExpression(pattern: #"\b([Yy]ou (?:said|says|believes?d?|thinks|thought|expects?|expected|plans?|planned|agreed?s?|confirms?|confirmed|mentions?|mentioned|notes?|noted|adds?|added|replies|replied|feels?|felt|hopes?|hoped|wants?|wanted|thinks|thought|indicated|indicates|stated|states)) (?:he|she) (would|will|had|has|is|was|could|can|might|may|should|did|does|wanted|wants|needs|needed|plans|planned|intends|intended|expects|expected)\b"#)
     static let verbAfterYou = try! NSRegularExpression(pattern: #"\b[Yy]ou (is|was|has|does|says|plans|agrees|expects|believes|needs|wants)\b"#)
     static let selfAfterYou = try! NSRegularExpression(pattern: #"\b[Yy]ou (himself|herself)\b"#)
     static let sentenceStart = try! NSRegularExpression(pattern: #"(?:^|[.!?]\s+)$"#)
@@ -125,6 +137,7 @@ public enum NoteLint {
             ns.replaceCharacters(in: m.range(at: 1), with: verb)
         }
         pass(selfAfterYou) { m, ns in ns.replaceCharacters(in: m.range(at: 1), with: "yourself") }
+        pass(pronounAfterYou) { m, ns in ns.replaceCharacters(in: m.range, with: ns.substring(with: m.range(at: 1)) + " you " + ns.substring(with: m.range(at: 2))) }
         return s
     }
     /// Whether the word before `location` marks "you" as an object: a cue word, or a past-tense verb ("reminded you").
@@ -153,10 +166,27 @@ public enum NoteLint {
         #"\bthe timing and transition are not independently confirmed\b"#,
         #"\bit does not create a new pending action\b"#,
         #"\b(?:the )?(?:outcome|result|reply|response|status|delivery|completion|timing|details?) (?:is|are|was|were) not (?:yet )?(?:recorded|established|confirmed|captured|known)\b"#,
+        #"\bno\b[^.;,]{0,60}\b(?:is|are|was|were) (?:recorded|established|confirmed|captured|documented|noted)(?: here| yet)?"#,
+        #"\bneither\b[^.;]{0,80}\bnor\b[^.;]{0,80}\b(?:is|are|was|were) (?:recorded|established|confirmed|captured)"#,
+        #"[^.;]*\b(?:do|does|did) not (?:establish|confirm|record|create|imply)\b[^.;]*"#,
+        #"\b(?:is|are|was|were) (?:intentionally |deliberately )?not recorded(?: here)?\b"#,
+        #"\b(?:the )?actual (?:identifiers|numbers|amounts|figures|details)(?: and [^.;]{0,40})? (?:are|is) (?:intentionally |deliberately )?(?:not recorded|omitted|left out)(?: here)?"#,
+        #"\bthese materials concern\b[^.;]*"#,
+        #"\b(?:were|was|is|are) not consistently confirmed\b[^.;]*"#,
+        #"\b(?:so )?there (?:is|are|was|were) no (?:reliable|firm|confirmed)\b[^.;]*"#,
+        #"\b(?:these|this|those|that) (?:was|were|is|are) (?:just |only |purely )?conversational context\b[^.;]*"#,
+        #"\bnot (?:confirmed|established|firm) (?:referrals?|outcomes?|plans?|commitments?|dates?|bookings?)\b[^.;]*"#,
+        #"\b(?:is|are|was|were) resolved only at that level\b[^.;]*"#,
+        #"\b(?:those|these|such) (?:references|mentions|names) are not treated as commitments\b[^.;]*"#,
+        #"\b(?:amounts?|figures|account details|identifiers|account numbers)(?: and [^.;]{0,30})? (?:are|is|were) (?:intentionally |deliberately )?(?:omitted|left out|not (?:recorded|included|kept))\b[^.;]*"#,
+        #"^(?:the )?[^.;]{0,60}\b(?:were|was|are|is) (?:just |only |still )?(?:proposals?|a proposal|ideas? only|tentative|speculative|hypothetical)\s*\.?\s*$"#,
+        #"\b(?:individual |the )?(?:recurring )?(?:contacts|people|members) now have (?:their own |separate )notes\b[^.;]*"#,
     ].map { try! NSRegularExpression(pattern: $0, options: .caseInsensitive) }
     /// Where one clause ends and the next begins: a semicolon, a spaced dash, a full stop before a capital, or a comma
     /// with a conjunction. The break belongs to the clause before it.
-    static let clauseBreak = try! NSRegularExpression(pattern: #";\s+|\s+[—–]\s+|\.\s+(?=[A-Z\[("“])|,\s+(?:but|though|although|and|so|while|which|yet)\s+"#)
+    /// A full stop that ends an abbreviation ("Mr. Taragi", "e.g. Slack", an initial) ends no sentence.
+    static let abbreviation = #"(?<!\b[Mm]r|\b[Mm]rs|\b[Mm]s|\b[Dd]r|\b[Jj]r|\b[Ss]r|\b[Ss]t|\bvs|\betc|\be\.g|\bi\.e|\bcf|\bno|\b[A-Z])"#
+    static let clauseBreak = try! NSRegularExpression(pattern: #";\s+|\s+[—–]\s+|"# + abbreviation + #"\.\s+(?=[A-Z\[("“])|,\s+(?:but|though|although|and|so|while|which|yet)\s+"#)
     static let aside = try! NSRegularExpression(pattern: #"\s*\(([^()]*)\)"#)
     static let terminal: Set<Character> = [".", "!", "?"]
 
@@ -168,8 +198,30 @@ public enum NoteLint {
     /// The words without their hedges: an aside in parentheses that is one goes whole; then the clauses, each judged on
     /// its own, the ones that hedge gone and the rest joined by the breaks that led into them, the end tidied (a
     /// dangling break off, the full stop back) and the first word given its capital when the clause that had it went.
+    /// Sentences that are hedges from their first word to their full stop, whatever commas and "and"s they hold:
+    /// the sentence goes whole, so no half of it is left as a fragment ("References to calls involving Arif.").
+    static let sentencePatterns: [NSRegularExpression] = [
+        #"^\s*(?:\w+\s+)?these materials concern\b"#,
+        #"^\s*(?:individual |the )?(?:recurring )?(?:contacts|people|members) now have (?:their own |separate )notes\b"#,
+        #"^\s*references to\b.*\b(?:do|does|did) not (?:establish|create|imply)\b"#,
+        #"^\s*(?:the )?actual (?:identifiers|numbers|amounts|figures|details)\b.*\bnot recorded\b"#,
+        #"^\s*(?:no|neither)\b.*\b(?:is|are|was|were) (?:recorded|established|confirmed|captured|documented|noted)(?: here| yet)?\s*$"#,
+    ].map { try! NSRegularExpression(pattern: $0, options: .caseInsensitive) }
+    static let sentenceEnd = try! NSRegularExpression(pattern: #"(?<=[.!?])"# + abbreviation.replacingOccurrences(of: "|", with: #"\.|"#).replacingOccurrences(of: #"\b[A-Z])"#, with: #"\b[A-Z]\.)"#) + #"\s+(?=[A-Z\[("“])"#)
+    static func withoutHedgeSentences(_ text: String, cut: inout Int) -> String {
+        let shield = shields(text), whole = text as NSString
+        var pieces: [String] = [], at = 0
+        for m in sentenceEnd.matches(in: text, range: NSRange(location: 0, length: whole.length)) where free(m.range, of: shield) {
+            pieces.append(whole.substring(with: NSRange(location: at, length: m.range.upperBound - at))); at = m.range.upperBound
+        }
+        pieces.append(whole.substring(from: at))
+        let kept = pieces.filter { s in !sentencePatterns.contains { $0.firstMatch(in: s, range: NSRange(location: 0, length: (s as NSString).length)) != nil } }
+        cut += pieces.count - kept.count
+        return kept.count == pieces.count ? text : tidy(kept.joined())
+    }
     static func unhedged(_ text: String, report: inout Report) -> String {
-        var s = text, cut = 0
+        var cut = 0
+        var s = withoutHedgeSentences(text, cut: &cut)
         let ns = NSMutableString(string: s)
         for m in aside.matches(in: s, range: NSRange(location: 0, length: ns.length)).reversed() where hedge(ns.substring(with: m.range(at: 1))) {
             ns.replaceCharacters(in: m.range, with: ""); cut += 1

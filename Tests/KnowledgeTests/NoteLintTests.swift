@@ -126,3 +126,47 @@ import Domain
         #expect(clean(tidy).body == tidy && clean(tidy).changes.isEmpty)
     }
 }
+
+@Suite struct NoteLintRealVaultShapesTests {
+    let now = Date(timeIntervalSince1970: 1_789_000_000), utc = TimeZone(identifier: "UTC")!
+    @Test func theUserExperienceIsANounAndAPronounAfterYouSaidIsYou() {
+        let body = "# K\n\n## Now\n- They agreed to improve the user experience; the user said he would not back out of the venture. (2026-09-15)\n"
+        let out = NoteLint.clean(body: body, kind: .person, now: now, timeZone: utc).body
+        #expect(out.contains("improve the user experience; you said you would not back out"), "\(out)")
+    }
+    @Test func theGeneralHedgeShapesGo() {
+        let body = "# K\n\n## Now\n- They discussed going full-time; neither a deal closure nor a full-time transition is confirmed. (2026-09-18)\n- Kanika plans to use Browserbase's design. No upgraded-UI delivery is confirmed. (2026-09-16)\n- You shared the company's tax details. The actual identifiers and email addresses are intentionally not recorded. (2026-08-27)\n- Kanika's July request for feedback and the 27 Aug SBI call. References to calls involving Arif and others do not establish a remaining user action or completed outcome. (2026-09-01)\n\n## About\n- Akash — TPM.\n- Context These materials concern recruiting and peer review. Individual recurring contacts now have separate notes so their pending requests can be tracked.\n"
+        let r = NoteLint.clean(body: body, kind: .person, now: now, timeZone: utc)
+        #expect(!r.body.contains("is confirmed") && !r.body.contains("not recorded") && !r.body.contains("do not establish") && !r.body.contains("These materials") && !r.body.contains("separate notes"), "\(r.body)")
+        #expect(r.body.contains("- They discussed going full-time. (2026-09-18)") && r.body.contains("- Kanika plans to use Browserbase's design. (2026-09-16)") && r.body.contains("- You shared the company's tax details. (2026-08-27)"), "\(r.body)")
+        #expect(!r.body.contains("- Context"), "a bullet left with one word is dropped: \(r.body)")
+        let again = NoteLint.clean(body: r.body, kind: .person, now: now, timeZone: utc).body
+        #expect(again == r.body, "idempotent")
+    }
+}
+
+@Suite struct NoteLintSentencesAndEarlierTests {
+    let now = Date(timeIntervalSince1970: 1_789_000_000), utc = TimeZone(identifier: "UTC")!
+    @Test func aHedgeSentenceGoesWholeNotHalf() {
+        let body = "# K\n\n## About\n- Akash — TPM.\n- Context These materials concern recruiting, peer review, and career development. Individual recurring contacts now have separate notes so their pending requests can be tracked.\n\n## Context\n- Kanika's July request for feedback, the August coordination, and the 27 Aug SBI call. References to calls involving Arif, Madhul, Mr. Taragi, and others do not establish a remaining user action or completed outcome. (2026-09-01)\n"
+        let out = NoteLint.clean(body: body, kind: .person, now: now, timeZone: utc).body
+        #expect(!out.contains("Career development") && !out.contains("References to") && !out.contains("Context These"), "\(out)")
+        #expect(out.contains("- Kanika's July request for feedback, the August coordination, and the 27 Aug SBI call. (2026-09-01)"), "\(out)")
+    }
+    @Test func earlierMonthLinesGetTheVoiceAndLoseTheirHedges() {
+        let body = "# N\n\n## Earlier\n- 2026-08 — The user's planned QA account creation was discussed; no later summary confirms completion; they asked for the deck — you replied 3 Aug\n"
+        let r = NoteLint.clean(body: body, kind: .person, now: now, timeZone: utc)
+        #expect(r.body.contains("- 2026-08 — Your planned QA account creation was discussed; they asked for the deck — you replied 3 Aug"), "\(r.body)")
+        #expect(NoteLint.clean(body: r.body, kind: .person, now: now, timeZone: utc).body == r.body, "idempotent")
+    }
+}
+
+@Suite struct NoteLintMoreHedgesTests {
+    let now = Date(timeIntervalSince1970: 1_789_000_000), utc = TimeZone(identifier: "UTC")!
+    @Test func theQuieterHedgesGoToo() {
+        let body = "# A\n\n## Now\n- They discussed dinners in December. The dates and plans were not consistently confirmed, so there is no reliable upcoming itinerary or dinner commitment. (2026-09-04)\n- Nayan asked you to transfer money for a GST payment. Amounts and account details are omitted. (2026-09-17)\n- Nayan said he had accepted a job, so earlier job-search uncertainty is resolved only at that level. (2026-09-02)\n\n## Context\n- Abhishek mentioned a Google colleague. These were conversational context, not confirmed referrals or outcomes. (2026-02-14)\n- Earlier exchanges included an AI-QA course plan. The course and content ideas were proposals. (2025-10-12)\n- Nayan's messages also included contacts such as Ankit and Sher; those references are not treated as commitments by you. (2026-01-01)\n"
+        let r = NoteLint.clean(body: body, kind: .person, now: now, timeZone: utc)
+        for gone in ["not consistently confirmed", "no reliable", "are omitted", "only at that level", "conversational context", "were proposals", "not treated as commitments"] { #expect(!r.body.contains(gone), "\(gone) stayed: \(r.body)") }
+        for kept in ["- They discussed dinners in December. (2026-09-04)", "- Nayan asked you to transfer money for a GST payment. (2026-09-17)", "- Nayan said he had accepted a job. (2026-09-02)", "- Abhishek mentioned a Google colleague. (2026-02-14)", "- Earlier exchanges included an AI-QA course plan. (2025-10-12)", "- Nayan's messages also included contacts such as Ankit and Sher. (2026-01-01)"] { #expect(r.body.contains(kept), "\(kept) missing: \(r.body)") }
+    }
+}
