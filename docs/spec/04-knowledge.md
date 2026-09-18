@@ -34,15 +34,26 @@ past 350 words, a period-stamped or near-duplicate title, a second People/ file 
 already places, and any delete under People/ or Groups/. A live vault is stamped once at bootstrap.
 
 ## People and groups
-- **The registry** (`.brownie/people.json`): every person seen, with their spellings and chat handles
-  (WhatsApp JID, phone, Telegram id, Slack user, email). One matcher, `PersonKey`, decides whether two
-  labels are the same person, and every place that compares people (loops, asks, the quiet check, card
-  dedupe, the household) goes through it. Two names that may be one person are shown on the Notes screen
-  as a banner — *Merge* folds the notes and ledgers, *Keep separate* is remembered and never asked again.
+- **The registry** (`.brownie/people.json`): every person seen, with their spellings, chat handles
+  (WhatsApp phone, iMessage address, Telegram id, Slack and Teams user ids) and **proofs** — a phone or an
+  email, spelled one way. One matcher, `PersonKey`, decides whether two labels look like the same person,
+  and every place that compares people (loops, asks, the quiet check, card dedupe, the household) goes
+  through it. **Proof joins, a name alone asks**: a new chat handle joins an existing person only when a
+  phone or email matches (from the handle itself, a Slack or Teams profile, or one Contacts card holding
+  both); a name-only match opens its own record and its own note (`People/Nitesh Kumar (Slack).md`) and the
+  Notes screen asks "Is Nitesh Kumar on Slack the same Nitesh Kumar as on WhatsApp?" — *Same person* folds
+  the notes and ledgers, *Different people* is remembered and never asked again. Until answered, nothing
+  crosses between the two. The user's own name (Settings → Your name) is never a person.
 - **The status block** (`<!-- brownie:status -->` … `<!-- /brownie:status -->`) sits under the title of a
   People note and is Brownie's ledger of what is open between the user and that person: ⏳ they asked
   / you promised, ✅ answered or done (shown 14 days, then a dated one-liner under Earlier), ⌛ let go
   (an ask 45 days unanswered, a promise 90 days old). Code writes it; the brain and the editor never see it.
+  An ask is judged from its **window** — the messages after it from both sides — by rules first and the
+  on-device reader when they cannot tell: answered by you, confirmed by them ("thanks, works now"),
+  declined, promised for later, or still open; a reply that was not about the ask keeps it open. The night
+  judge may close an ask answered on another channel (`ask_updates`), and a closed ask closes the loop it
+  came from. A loop needs a deliverable that can be seen done (`LoopQuality`): sentiments, plans to talk and
+  promises to nobody in particular never enter the ledger.
 - **What a People note answers, in order**: where things stand today (the first bullet under Now), what is owed both ways (the status block), who they are to the user and what they are doing together (the first bullet under About). One bullet per thread: a continuing thread rewrites its bullet with the newest state; the gardener folds a second telling into the newer one.
 - **The shape** (kept by the gardener every night, so a year of runs cannot bloat or stale a note):
   `# Title` · status block · `## About` (standing facts, undated, ≤ 20) · `## Now` (dated bullets, ≤ 6,
