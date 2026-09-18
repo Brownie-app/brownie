@@ -189,6 +189,9 @@ final class AppModel: ObservableObject {
         await refreshPermissions()
         // Every note gets Brownie's front-matter once; a note that has it already is not touched, so this is cheap on every start.
         let registry = PersonRegistry(vault: knowledge.rootURL, selfNames: selfNames); await registry.load()
+        // What the address book proves: two chats on one card are one person, and a pair Brownie was unsure about is answered.
+        let cards = await Self.contactCards()
+        if !cards.isEmpty { await registry.link(contacts: cards); try? await registry.save() }
         await VaultMigration.addFrontMatter(root: knowledge.rootURL, registry: registry, now: Date())
         // The user is never a person in their own vault: a People note titled after them moves to Life/, and a loop with them as the other party goes.
         await VaultMigration.moveSelfNotes(root: knowledge.rootURL, registry: registry, store: store, selfNames: selfNames, now: Date())
@@ -494,8 +497,10 @@ final class AppModel: ObservableObject {
     private func rebuildCoordinator() {
         let logger = sendLogger
         coordinator = RunCoordinator(.init(store: store, knowledge: knowledge, sources: sourcesForRun, reader: reader, brain: brain, policy: policy,
-                                            calendarText: { CalendarSource.judgeContext() }, stage: { p, d in logger.setPurpose(p, detail: d) }, selfNames: selfNames))
+                                            calendarText: { CalendarSource.judgeContext() }, stage: { p, d in logger.setPurpose(p, detail: d) }, selfNames: selfNames, contacts: Self.contactCards))
     }
+    /// The address book's cards for the registry; cards come from Contacts once allowed.
+    static let contactCards: @Sendable () async -> [ContactCard] = { [] }
     var runCoordinator: RunCoordinator? { rebuildCoordinator(); return coordinator }
 
     // MARK: runs
