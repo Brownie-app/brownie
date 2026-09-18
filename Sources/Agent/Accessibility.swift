@@ -5,7 +5,7 @@ import ApplicationServices
 /// A compact, numbered snapshot of the frontmost app's UI via the Accessibility API. Elements get
 /// stable ids for one snapshot so the brain can say "press 14".
 public struct UISnapshot: Sendable {
-    public struct Element: Sendable {
+    public struct Element: Sendable, Equatable {
         public let id: Int
         public let role: String
         public let title: String
@@ -45,6 +45,8 @@ public final class AXSession {
     private var refs: [Int: AXUIElement] = [:]
     /// What each id looked like when it was numbered, so a stale reference (Chrome rebuilds its tree constantly) can be found again.
     private var descs: [Int: UISnapshot.Element] = [:]
+    /// Where the last screenshot sat, so a click given in image pixels lands on the screen.
+    public var screenMap: ScreenMap?
 
     public init() {}
     private var enhanced = Set<pid_t>()
@@ -137,26 +139,38 @@ public final class AXSession {
         return out
     }
 
-    /// The live element for an id. A reference the app has since thrown away is re-found by role, title and place.
-    func element(_ id: Int) -> AXUIElement? {
-        guard let el = refs[id] else { return nil }
-        if attr(el, kAXRoleAttribute) != nil { return el }
+    /// A numbered element, resolved once: the live reference when its role still reads, else the description it was
+    /// numbered with and one re-find. `el` is nil when neither the old reference nor the re-find answered; `desc` still
+    /// carries the frame it had, which is enough to click.
+    public struct Resolved {
+        public let el: AXUIElement?
+        public let desc: UISnapshot.Element
+        public let live: Bool
+    }
+    /// One resolution per action. Chrome throws references away within a second or two, so a stale one is re-found
+    /// exactly once: the same role and title in a fresh shallow snapshot, else the same words near the same place deep
+    /// in the page (a 2 s search). The old id is re-pointed at whatever was found, so the caller's numbering holds.
+    public func resolve(_ id: Int) -> Resolved? {
         guard let want = descs[id] else { return nil }
+        if let el = refs[id], attr(el, kAXRoleAttribute) != nil { return Resolved(el: el, desc: want, live: true) }
         let keep = (refs, descs)
-        guard let fresh = snapshot() else { refs = keep.0; descs = keep.1; return nil }
-        var found = Self.rematch(want, in: fresh.elements).flatMap { refs[$0.id] }
+        var found: AXUIElement?
+        if let fresh = snapshot() { found = Self.rematch(want, in: fresh.elements).flatMap { refs[$0.id] } }
         refs = keep.0; descs = keep.1
         if found == nil, !(want.title.isEmpty && want.value.isEmpty) {
-            // deep nodes (a product on a web page) never appear in the shallow snapshot: look for the same words near the same place
             let words = want.title.isEmpty ? want.value : want.title
-            let hits = search(String(words.prefix(40)), limit: 8)
-            let best = hits.filter { $0.role == want.role }.min(by: { Self.dist($0.frame, want.frame) < Self.dist($1.frame, want.frame) }) ?? hits.first
-            found = best.flatMap { refs[$0.id] }
+            let hits = search(String(words.prefix(40)), limit: 8, budget: 2)
+            found = Self.nearest(want, in: hits).flatMap { refs[$0.id] }
             refs = keep.0; descs = keep.1
         }
-        // keep the caller's numbering: the old id now points at the re-found element
         if let found { refs[id] = found }
-        return found
+        return Resolved(el: found, desc: want, live: false)
+    }
+    /// The live element for an id, or nil — the recipe replayer's and the typer's view of `resolve`.
+    func element(_ id: Int) -> AXUIElement? { resolve(id)?.el }
+    /// Among deep search hits, the one with the same role nearest the old place; failing the role, the first hit.
+    static func nearest(_ want: UISnapshot.Element, in hits: [UISnapshot.Element]) -> UISnapshot.Element? {
+        hits.filter { $0.role == want.role }.min(by: { dist($0.frame, want.frame) < dist($1.frame, want.frame) }) ?? hits.first
     }
     /// The same element in a newer snapshot: same role and title, closest frame; a title-less element must match by frame.
     static func rematch(_ want: UISnapshot.Element, in elements: [UISnapshot.Element]) -> UISnapshot.Element? {
@@ -208,8 +222,55 @@ public final class AXSession {
         return w != nil
     }
 
-    func snapshotRole(_ id: Int) -> String { element(id).flatMap { attr($0, kAXRoleAttribute) as? String }.map { String($0.dropFirst(2)) } ?? (descs[id]?.role ?? "?") }
-    func titleOf(_ id: Int) -> String { element(id).flatMap { (attr($0, kAXTitleAttribute) as? String) ?? (attr($0, kAXDescriptionAttribute) as? String) } ?? "" }
+    // MARK: thin calls on a resolved element — one AX round trip each, no re-resolving
+
+    /// AXPress on the element itself; false when the action is refused.
+    func press(_ el: AXUIElement) -> Bool { AXUIElementPerformAction(el, kAXPressAction as CFString) == .success }
+    func canSetValue(_ el: AXUIElement) -> Bool { var ok = DarwinBoolean(false); return AXUIElementIsAttributeSettable(el, kAXValueAttribute as CFString, &ok) == .success && ok.boolValue }
+    func set(_ text: String, on el: AXUIElement) -> Bool { AXUIElementSetAttributeValue(el, kAXValueAttribute as CFString, text as CFTypeRef) == .success }
+    func focus(_ el: AXUIElement) -> Bool { AXUIElementSetAttributeValue(el, kAXFocusedAttribute as CFString, kCFBooleanTrue) == .success }
+    func value(of el: AXUIElement) -> String {
+        guard let v = attr(el, kAXValueAttribute) else { return "" }
+        return (v as? String) ?? ((v as? NSNumber).map { $0.stringValue } ?? "")
+    }
+
+    /// The frontmost app's focused window, and its title read straight off it — no tree walk.
+    private func focusedWindow() -> AXUIElement? {
+        guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
+        var w: CFTypeRef?; AXUIElementCopyAttributeValue(AXUIElementCreateApplication(app.processIdentifier), kAXFocusedWindowAttribute as CFString, &w)
+        return w.map { $0 as! AXUIElement }
+    }
+    public func windowTitle() -> String { focusedWindow().flatMap { attr($0, kAXTitleAttribute) as? String } ?? "" }
+    /// The focused window's frame in screen points, or nil when there is none.
+    public func windowBounds() -> CGRect? { focusedWindow().map(frame).flatMap { $0.width > 0 ? $0 : nil } }
+
+    /// The window title, the focused element and what sits at `point` — three or four calls, cheap enough to take
+    /// before and after every action.
+    public func signature(at point: CGPoint? = nil) -> ScreenSignature {
+        var focus = ""
+        if let app = NSWorkspace.shared.frontmostApplication {
+            var f: CFTypeRef?
+            AXUIElementCopyAttributeValue(AXUIElementCreateApplication(app.processIdentifier), kAXFocusedUIElementAttribute as CFString, &f)
+            if let f { focus = words(of: f as! AXUIElement) }
+        }
+        return ScreenSignature(window: windowTitle(), focus: focus, atPoint: point.map { elementAt($0).map(words(of:)) ?? "" })
+    }
+    /// The deepest element under a screen point, by the app's own hit test.
+    func elementAt(_ p: CGPoint) -> AXUIElement? {
+        guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
+        var el: AXUIElement?
+        return AXUIElementCopyElementAtPosition(AXUIElementCreateApplication(app.processIdentifier), Float(p.x), Float(p.y), &el) == .success ? el : nil
+    }
+    /// "Role “title”" (or the value when there is no title) — an element's words for a signature.
+    private func words(of el: AXUIElement) -> String {
+        let role = String((attr(el, kAXRoleAttribute) as? String ?? "AX?").dropFirst(2))
+        let title = (attr(el, kAXTitleAttribute) as? String) ?? (attr(el, kAXDescriptionAttribute) as? String) ?? ""
+        let label = title.isEmpty ? ((attr(el, kAXValueAttribute) as? String) ?? "") : title
+        return "\(role) “\(label.prefix(60))”"
+    }
+
+    /// The title an id was numbered with — for narration, never a live read (a stale reference would cost a re-find).
+    func titleOf(_ id: Int) -> String { descs[id]?.title ?? "" }
 
     private func attr(_ el: AXUIElement, _ name: String) -> AnyObject? {
         var v: CFTypeRef?; AXUIElementCopyAttributeValue(el, name as CFString, &v); return v
@@ -238,15 +299,20 @@ public enum VirtualInput {
             usleep(8_000)
         }
     }
-    static let keyCodes: [String: CGKeyCode] = ["return": 36, "enter": 36, "tab": 48, "space": 49, "delete": 51, "escape": 53, "esc": 53, "left": 123, "right": 124, "down": 125, "up": 126, "a": 0, "c": 8, "v": 9, "x": 7, "z": 6, "s": 1, "f": 3, "n": 45, "w": 13, "t": 17, "l": 37]
-    static func key(_ combo: String) {
-        let parts = combo.lowercased().split(separator: "+").map(String.init)
+    static let keyCodes: [String: CGKeyCode] = ["return": 36, "enter": 36, "tab": 48, "space": 49, "delete": 51, "backspace": 51, "escape": 53, "esc": 53, "left": 123, "right": 124, "down": 125, "up": 126,
+                                                "pagedown": 121, "pageup": 116, "home": 115, "end": 119, "a": 0, "c": 8, "v": 9, "x": 7, "z": 6, "s": 1, "f": 3, "n": 45, "w": 13, "t": 17, "l": 37, "r": 15, "k": 40]
+    /// "cmd+shift+a" → the key code and modifier flags, or nil for a key this table does not know — so the caller can
+    /// say so instead of reporting a press that never happened.
+    public static func parse(_ combo: String) -> (code: CGKeyCode, flags: CGEventFlags)? {
         var flags = CGEventFlags()
         var code: CGKeyCode?
-        for p in parts {
-            switch p { case "cmd", "command": flags.insert(.maskCommand); case "shift": flags.insert(.maskShift); case "alt", "option": flags.insert(.maskAlternate); case "ctrl", "control": flags.insert(.maskControl); default: code = keyCodes[p] }
+        for p in combo.lowercased().split(separator: "+").map(String.init) {
+            switch p { case "cmd", "command": flags.insert(.maskCommand); case "shift": flags.insert(.maskShift); case "alt", "option", "opt": flags.insert(.maskAlternate); case "ctrl", "control": flags.insert(.maskControl); default: code = keyCodes[p] }
         }
-        guard let code else { return }
+        return code.map { ($0, flags) }
+    }
+    static func key(_ combo: String) {
+        guard let (code, flags) = parse(combo) else { return }
         let d = CGEvent(keyboardEventSource: nil, virtualKey: code, keyDown: true); d?.flags = flags; d?.post(tap: .cghidEventTap)
         let u = CGEvent(keyboardEventSource: nil, virtualKey: code, keyDown: false); u?.flags = flags; u?.post(tap: .cghidEventTap)
     }
