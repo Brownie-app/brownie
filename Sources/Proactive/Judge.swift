@@ -29,7 +29,8 @@ public struct Judge: Sendable {
         return (f.items, u)
     }
 
-    public func judge(summaries: [SummaryRecord], calendar: String?, instructions: String, openLoops: [Loop], max: Int = 8, household: Household? = nil, asks: String = "") async throws -> (Findings, Usage) {
+    /// `selfNames` are the user's own names: the judge is told them so `person` on a loop is never the user.
+    public func judge(summaries: [SummaryRecord], calendar: String?, instructions: String, openLoops: [Loop], max: Int = 8, household: Household? = nil, asks: String = "", selfNames: [String] = []) async throws -> (Findings, Usage) {
         guard !summaries.isEmpty else { return (Findings(items: [], newLoops: [], updates: []), .zero) }
         let corpus = Self.trim(summaries.enumerated().map { Self.line($1, $0 + 1, shared: household?.isShared($1.bucket) ?? false) }.joined(separator: "\n"), to: BrainLimits.corpusPartBudget)
         var p = template
@@ -40,13 +41,16 @@ public struct Judge: Sendable {
         p = p.replacingOccurrences(of: "{{summaries}}", with: corpus)
         p = p.replacingOccurrences(of: "{{household}}", with: Self.householdBlock(household))
         p = p.replacingOccurrences(of: "{{asks}}", with: asks)
+        p = p.replacingOccurrences(of: "{{self}}", with: Self.selfBlock(selfNames))
         p = p.replacingOccurrences(of: "{{loops}}", with: openLoops.isEmpty ? "" : "OPEN LOOPS BROWNIE ALREADY TRACKS (report only closures, in loop_updates, by id):\n" + openLoops.map(\.judgeLine).joined(separator: "\n") + "\n")
         let r = try await brain.complete(BrainRequest(system: "You return only the JSON the user asks for.", input: p, schema: Self.schema, effort: .high, maxOutputTokens: 8000, timeout: 1200))
         guard let data = r.jsonData, let obj = try? JSONDecoder().decode(Wrapper.self, from: data) else { throw BrainError.badResponse("judge returned no JSON") }
         let now = clock.now()
         let loops = (obj.loops ?? []).compactMap { l -> Loop? in
             guard !l.person.isEmpty, !l.what.isEmpty else { return nil }
-            var loop = Loop(direction: l.direction == "mine" ? .mine : .theirs, person: l.person, what: l.what, quote: l.quote, sourceLabel: l.source, due: l.due, dueDate: Self.date(l.dueISO, clock: clock), openedAt: now)
+            // The date: the judge's ISO day when it worked one out, else the words it used ("September6", "by the 30th") read against the clock.
+            let dueDate = Self.date(l.dueISO, clock: clock) ?? DueWords.date(l.due, now: now, timeZone: clock.timeZone)
+            var loop = Loop(direction: l.direction == "mine" ? .mine : .theirs, person: l.person, what: l.what, quote: l.quote, sourceLabel: l.source, due: l.due, dueDate: dueDate, openedAt: now)
             loop.owner = Self.cleanOwner(l.owner)
             return loop
         }
@@ -75,6 +79,13 @@ public struct Judge: Sendable {
         if l == "me" || l == "user" || l == "the user" || l == "you" { return "me" }
         if l == "either" || l == "both" || l == "anyone" { return "either" }
         return String(r.split(separator: " ").first ?? Substring(r))
+    }
+    /// Who the user is, so `person` never names them: a loop the user made is `mine` with `person` the one it was made to.
+    static func selfBlock(_ names: [String]) -> String {
+        let clean = SelfNames.clean(names)
+        guard let first = clean.first else { return "" }
+        let also = clean.dropFirst().isEmpty ? "" : " (also written \(clean.dropFirst().joined(separator: ", ")))"
+        return "THE USER IS \(first)\(also). `person` on a loop or an item is always the other party — never the user under any spelling. A promise the user made is `mine` with `person` the one it was made to; a promise made to the user is `theirs` with `person` the one who made it. Never open a loop in which the user owes something to themselves.\n"
     }
     static func householdBlock(_ h: Household?) -> String {
         guard let h, !h.others.isEmpty else { return "" }

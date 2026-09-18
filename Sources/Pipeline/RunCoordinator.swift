@@ -22,11 +22,15 @@ public actor RunCoordinator {
         /// FINISH also tidies what lives outside the store — the transcript cache and the log files, at their real paths;
         /// tests run against their own folders and turn this off.
         public var diskHousekeeping = true
+        /// The user's own names — the Mac's full name, the account name, the household member marked `isMe` — so no
+        /// stage ever takes the user for a person: the judge is told, a loop whose other party is the user is dropped,
+        /// the file tools refuse `People/<user>.md`, and the registry opens no record for them.
+        public var selfNames: [String] = []
         public init(store: any RunStore, knowledge: any KnowledgeStore, sources: [any Source], reader: (any LocalModel)?, brain: (any Brain)?,
                     policy: any SensitivityPolicy, clock: Clock = SystemClock(), calendarText: @escaping @Sendable () async -> String? = { nil },
-                    stage: @escaping @Sendable (String, String) -> Void = { _, _ in }) {
+                    stage: @escaping @Sendable (String, String) -> Void = { _, _ in }, selfNames: [String] = []) {
             self.store = store; self.knowledge = knowledge; self.sources = sources; self.reader = reader; self.brain = brain
-            self.policy = policy; self.clock = clock; self.calendarText = calendarText; self.stage = stage
+            self.policy = policy; self.clock = clock; self.calendarText = calendarText; self.stage = stage; self.selfNames = SelfNames.clean(selfNames)
         }
     }
 
@@ -112,7 +116,7 @@ public actor RunCoordinator {
             let unjudged = try await store.summaries(since: weekAgo).contains { $0.mergedAt != nil }
             if let brain = deps.brain, !summaries.isEmpty || unjudged {
                 // Who exists, from the People notes and every earlier run: the brain is told, so it writes each person in one file.
-                let registry = PersonRegistry(vault: deps.knowledge.rootURL, now: { [clock = deps.clock] in clock.now() })
+                let registry = PersonRegistry(vault: deps.knowledge.rootURL, now: { [clock = deps.clock] in clock.now() }, selfNames: deps.selfNames)
                 await registry.load()
                 // Anyone tonight's summaries, open asks or open loops name comes back from Archive/ before the brain writes, so it finds
                 // their one file where it expects it — by the chat's handle where one is known, so a contact saved under a bare number,
@@ -126,7 +130,7 @@ public actor RunCoordinator {
                     deps.stage("Update your notes", "\(summaries.count) summaries and the notes they touch")
                     let builder = try KnowledgeBuilder(brain: brain, store: deps.knowledge, runStore: store, now: { [clock = deps.clock] in clock.now() }, timeZone: deps.clock.timeZone,
                                                        coverage: { [tz = deps.clock.timeZone] in let all = SourceCoverage.decode(try? await store.value(SettingKey.coverage)); return all.isEmpty ? nil : CoverageLine.render(all, timeZone: tz) },
-                                                       people: { await registry.people() })
+                                                       people: { await registry.people() }, selfNames: deps.selfNames)
                     let readStats = stats
                     // The notes a brain without file tools lost to a refusal are counted whether or not the sync went through.
                     do { usage = try await builder.sync(summaries: summaries, progress: { p in var p = p; p.stats = readStats; onEvent(.progress(p)) }, onEvent: { e in if case .message(let m) = e { onEvent(.thought(m)) } }) }
@@ -169,15 +173,21 @@ public actor RunCoordinator {
                 let settled = AskLedger.closures(loops: openLoops, asks: asks, now: deps.clock.now())
                 if settled != openLoops { var all = await LoopLedger.load(store); for l in settled where l.status == .closed { if let i = all.firstIndex(where: { $0.id == l.id }) { all[i] = l } }; await LoopLedger.save(all, store); log.info("\(settled.filter { $0.status == .closed }.count) loop(s) closed by the user's own replies") }
                 let openNow = settled.filter { $0.status == .open }
-                let (findings, u1) = try await Judge(brain: brain, clock: deps.clock).judge(summaries: recent, calendar: cal, instructions: instructions, openLoops: openNow, max: 8, household: household, asks: AskLedger.judgeLines(asks, loops: ledger, now: deps.clock.now()))
+                let (findings, u1) = try await Judge(brain: brain, clock: deps.clock).judge(summaries: recent, calendar: cal, instructions: instructions, openLoops: openNow, max: 8, household: household, asks: AskLedger.judgeLines(asks, loops: ledger, now: deps.clock.now()), selfNames: deps.selfNames)
                 usage = usage + u1
                 // Promises said out loud: parsed from transcript summaries, deterministically, so none is missed.
                 let spoken = recent.filter { $0.kind == .transcript }.flatMap { TranscriptPromises.parse(summary: $0.text, recording: $0.title.isEmpty ? $0.bucketName : $0.title, date: $0.itemDate ?? $0.createdAt, now: deps.clock.now()) }
                 if !spoken.isEmpty { deps.stage("Promises said out loud", "\(spoken.count) from \(recent.filter { $0.kind == .transcript }.count) recording(s)"); log.info("\(spoken.count) spoken promise(s) found") }
                 let already = await LoopLedger.load(store)
-                let newSpoken = spoken.filter { f in !already.contains { $0.id == f.loop.id || ($0.status == .open && LoopLedger.same($0, f.loop)) } }
+                // The bar, before anything enters the ledger: a deliverable, owed to someone other than the user, once —
+                // a sentiment, a loop with the user as the other party, or the mirror of a loop admitted tonight is turned away and logged.
+                let gate = LoopQuality.admit(findings.newLoops + spoken.map(\.loop), selfNames: deps.selfNames, existing: already)
+                for r in gate.rejected { log.info("loop not opened (\(r.reason)): \(r.loop.direction == .mine ? "the user → \(r.loop.person)" : "\(r.loop.person) → the user") · \(r.loop.what)") }
+                let admittedIDs = Set(gate.kept.map(\.id))
+                let newSpoken = spoken.filter { f in admittedIDs.contains(f.loop.id) && !already.contains { $0.id == f.loop.id || ($0.status == .open && LoopLedger.same($0, f.loop)) } }
                 let candidates = findings.items + TranscriptPromises.candidates(newSpoken)
-                let allLoops = LoopLedger.merge(existing: already, found: findings.newLoops + newSpoken.map(\.loop), updates: findings.updates, items: candidates, now: deps.clock.now())
+                // A spoken promise carries a stable id, so one the ledger already holds (closed or not) is not fed again.
+                let allLoops = LoopLedger.merge(existing: already, found: gate.kept.filter { l in !already.contains { $0.id == l.id } }, updates: findings.updates, items: candidates, now: deps.clock.now())
                 await LoopLedger.save(allLoops, store)
                 // Every ask and loop names someone: the registry learns each spelling and handle (the sync may have added
                 // People notes, so it is seeded again first), and the app is told who looks like one person twice.

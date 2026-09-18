@@ -394,4 +394,24 @@ import Platform
         #expect(PersonNotes.rewriteLinks(in: "See [[Kanika Pandey]].", from: "Kanika Pandey Loadmill", to: "Kanika Pandey") == nil, "nothing to change")
         #expect(PersonNotes.rewriteLinks(in: "x", from: "A", to: "A") == nil)
     }
+
+    /// The user is never a person: a note titled after them seeds nobody, a loop or ask under their name registers nobody.
+    @Test func theUsersOwnNameOpensNoRecord() async throws {
+        let v = try Self.vault()
+        let r = PersonRegistry(vault: v.root, now: { Self.t0 }, selfNames: ["Vivek Upreti", "vivek", " ", ""])
+        #expect(r.selfNames == ["Vivek Upreti", "vivek"], "blank names are dropped")
+        await r.seed(from: Self.folders([("People/Vivek Upreti — Career Materials (Jul–Aug 2026).md", "Vivek Upreti — Career Materials (Jul–Aug 2026)"), ("People/Vivek.md", "Vivek"), ("People/Kanika Pandey.md", "Kanika Pandey")]))
+        #expect(await r.people().map(\.name) == ["Kanika Pandey"], "only Kanika seeds")
+        let a = await r.register(label: "Vivek Upreti", handle: nil), b = await r.register(label: "vivek", handle: "whatsapp:+91")
+        #expect(a == "" && b == "", "the empty id names nobody")
+        let learned = await r.people()
+        #expect(learned.count == 1 && learned[0].handles.isEmpty, "nothing was learned")
+        #expect(await r.register(label: "Vivek Sharma", handle: nil) == "", "a first name the user shares is the user too — PersonKey.same, the ledgers' rule")
+        let arjun = await r.register(label: "Arjun Mehta", handle: nil)
+        await r.remove(arjun)
+        #expect(await r.people().map(\.name) == ["Kanika Pandey"])
+        try await r.save()
+        let again = v.registry(); await again.load()
+        #expect(await again.people().map(\.name) == ["Kanika Pandey"], "a removed record stays removed on disk")
+    }
 }

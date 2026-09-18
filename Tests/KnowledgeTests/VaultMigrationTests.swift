@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import Domain
+import Platform
 @testable import Knowledge
 
 /// The one-time stamp on a live vault: every note gets the block once, and a second run finds nothing to do.
@@ -68,5 +69,55 @@ import Domain
 
     @Test func aMissingVaultIsNothingToDo() async {
         #expect(await VaultMigration.addFrontMatter(root: URL(fileURLWithPath: "/nonexistent/brownie-\(UUID().uuidString)"), registry: nil, now: Self.now) == 0)
+    }
+
+    // MARK: the user is never a person
+
+    /// The vault as the user found it: a People note titled after them, a registry record for it, and a loop that
+    /// names them as the other party. After the pass the note is a topic under Life/, the record and the loop are gone,
+    /// and the real people are untouched.
+    @Test func aPeopleNoteAboutTheUserMovesToLifeAndTheirRecordAndLoopsGo() async throws {
+        let root = try fresh()
+        let title = "Vivek Upreti — Career Materials (Jul–Aug 2026)"
+        try put("People/\(title).md", "# \(title)\n\n## About\n- Placeholder\n\n## Now\n- CV sent to SBI (2026-08-20)\n", in: root)
+        try put("People/Vivek.md", "---\naliases:\n  - VU\n  - Vivek Upreti\n---\n# Vivek\nThe user, by mistake.\n", in: root)
+        try put("People/Kanika Pandey.md", "# Kanika Pandey\nfriend\n", in: root)
+        try put("Life/Career Materials (Jul–Aug 2026).md", "# Career Materials (Jul–Aug 2026)\nthe user's own note\n", in: root)
+        // The registry as an older Brownie left it: a record for the user, with the note as its path, beside Kanika's.
+        let stale = PersonRegistry(vault: root, now: { Self.now })
+        let kanika = await stale.register(label: "Kanika Pandey", handle: "whatsapp:+919")
+        let vivek = await stale.register(label: title, handle: nil)
+        await stale.setNotePath("People/\(title).md", for: vivek)
+        try await stale.save()
+        let names = ["Vivek Upreti", "vivek"]
+        let registry = PersonRegistry(vault: root, now: { Self.now }, selfNames: names)
+        await registry.load()
+        #expect(await registry.person(vivek) != nil)
+        _ = await VaultMigration.addFrontMatter(root: root, registry: registry, now: Self.now, timeZone: Self.utc)
+        let store = try SQLiteRunStore.inMemory()
+        let loops = [Loop(id: "SELF", direction: .mine, person: "Vivek Upreti", what: "Close one more deal after SBI", quote: "q", sourceLabel: "WhatsApp · Fri", due: nil, openedAt: Self.now),
+                     Loop(id: "KEEP", direction: .mine, person: "Kanika Pandey", what: "Send the proposal", quote: "q", sourceLabel: "WhatsApp · Fri", due: nil, openedAt: Self.now)]
+        try await store.setValue(SettingKey.loops, String(data: try JSONEncoder().encode(loops), encoding: .utf8))
+
+        let moved = await VaultMigration.moveSelfNotes(root: root, registry: registry, store: store, selfNames: names, now: Self.now, timeZone: Self.utc)
+        #expect(moved == 2, "the dashed title and the bare name both move")
+        #expect(raw("People/\(title).md", in: root) == nil && raw("People/Vivek.md", in: root) == nil)
+        let life = try #require(raw("Life/Career Materials (Jul–Aug 2026) 2.md", in: root), "never over the note already there: ' 2' is added")
+        let meta = try #require(NoteMeta.parse(life, path: "Life/Career Materials (Jul–Aug 2026) 2.md").meta)
+        #expect(meta.brownie == "topic" && meta.id == nil && meta.aliases.isEmpty, "a topic's block now, with no person id")
+        #expect(life.hasSuffix("# Career Materials (Jul–Aug 2026)\n\n## About\n- Placeholder\n\n## Now\n- CV sent to SBI (2026-08-20)\n"), "the title loses the name; the body is kept")
+        #expect(meta.contentHash == NoteMeta.hash("# Career Materials (Jul–Aug 2026)\n\n## About\n- Placeholder\n\n## Now\n- CV sent to SBI (2026-08-20)\n") && !meta.userEdited, "the hash follows the retitle, so the move is not an edit")
+        #expect(raw("Life/Career Materials (Jul–Aug 2026).md", in: root)!.hasSuffix("the user's own note\n"), "the user's own note is untouched")
+        let bare = try #require(raw("Life/Vivek.md", in: root), "a note that is only the name keeps it as its title")
+        #expect(bare.contains("aliases: [VU]\n") && bare.hasSuffix("# Vivek\nThe user, by mistake.\n"), "the user's own alias stays; the self spellings go")
+        #expect(raw("People/Kanika Pandey.md", in: root)!.hasSuffix("# Kanika Pandey\nfriend\n"))
+        let gone = await registry.person(vivek), stays = await registry.person(kanika)
+        #expect(gone == nil && stays != nil, "the user's record is gone, Kanika's stays")
+        let onDisk = PersonRegistry(vault: root, now: { Self.now }); await onDisk.load()
+        #expect(await onDisk.person(vivek) == nil, "and gone from the file")
+        let ledger = try JSONDecoder().decode([Loop].self, from: Data((try await store.value(SettingKey.loops) ?? "").utf8))
+        #expect(ledger.map(\.id) == ["KEEP"], "the loop with the user as the other party is dropped")
+        #expect(await VaultMigration.moveSelfNotes(root: root, registry: registry, store: store, selfNames: names, now: Self.now, timeZone: Self.utc) == 0, "a second run finds nothing")
+        #expect(await VaultMigration.moveSelfNotes(root: root, registry: registry, store: store, selfNames: [], now: Self.now, timeZone: Self.utc) == 0, "no names, nothing to do")
     }
 }

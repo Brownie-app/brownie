@@ -19,6 +19,8 @@ import Support
         private var inputs: [String] = []
         var failPart: Int?
         var failJudge = false
+        /// What the judge answers, when a test wants loops back rather than nothing.
+        var judgeReply = #"{"action_items":[],"loops":[],"loop_updates":[]}"#
         func validate() async throws {}
         func complete(_ r: BrainRequest) async throws -> BrainResult {
             if r.schema?.contains("\"files\"") == true {
@@ -29,7 +31,7 @@ import Support
             if r.schema?.contains("action_items") == true {
                 if failJudge { throw BrainError.usageLimit(retryAfter: nil) }
                 lock.withLock { inputs.append(r.input) }
-                return BrainResult(text: #"{"action_items":[],"loops":[],"loop_updates":[]}"#, usage: Usage(inputTokens: 1, outputTokens: 1))
+                return BrainResult(text: judgeReply, usage: Usage(inputTokens: 1, outputTokens: 1))
             }
             return BrainResult(text: "A letter.", usage: .zero)
         }
@@ -49,8 +51,8 @@ import Support
 
     struct World {
         let dir: URL, kb: FileKnowledgeStore, store: SQLiteRunStore
-        func coordinator(_ brain: Fake) -> RunCoordinator {
-            var deps = RunCoordinator.Dependencies(store: store, knowledge: kb, sources: [], reader: Reader(), brain: brain, policy: DefaultSensitivityPolicy(), clock: RunCoordinatorTests.clock)
+        func coordinator(_ brain: Fake, selfNames: [String] = []) -> RunCoordinator {
+            var deps = RunCoordinator.Dependencies(store: store, knowledge: kb, sources: [], reader: Reader(), brain: brain, policy: DefaultSensitivityPolicy(), clock: RunCoordinatorTests.clock, selfNames: selfNames)
             deps.diskHousekeeping = false
             return RunCoordinator(deps)
         }
@@ -136,6 +138,33 @@ import Support
         let after = try JSONDecoder().decode([Loop].self, from: Data((try await w.store.value(SettingKey.loops) ?? "").utf8))
         #expect(after.first { $0.id == old.id }?.status == .lapsed && after.first { $0.id == old.id }?.lapsedAt == Self.today, "let go, dated tonight, before the judge ran")
         #expect(after.first { $0.id == young.id }?.status == .open)
+    }
+
+    /// The night the user's vault went wrong, replayed: the judge reports sentiments as promises, the same promise once per
+    /// side, a due as "September6" and a loop with the user as the other party. The ledger takes the deliverables only, once,
+    /// dated — and the judge was told who the user is.
+    @Test func newLoopsClearTheBarBeforeTheyEnterTheLedger() async throws {
+        let w = try Self.world()
+        try await w.seed(2, tag: "a")
+        let brain = Fake()
+        brain.judgeReply = #"""
+        {"action_items":[],"loop_updates":[],"loops":[
+          {"person":"Kanika Pandey","direction":"mine","what":"Build a company with Kanika","quote":"q","source":"WhatsApp · Fri","due":null,"dueISO":null,"owner":null},
+          {"person":"Kanika Pandey","direction":"mine","what":"Focus on her network","quote":"q","source":"WhatsApp · Fri","due":null,"dueISO":null,"owner":null},
+          {"person":"Kanika Pandey","direction":"theirs","what":"Provide her sister's number and email for Loopsy","quote":"q","source":"WhatsApp · Fri","due":null,"dueISO":null,"owner":null},
+          {"person":"Kanika Pandey","direction":"mine","what":"Provide Vivek's sister's number and email for Loopsy","quote":"q","source":"WhatsApp · Fri","due":null,"dueISO":null,"owner":null},
+          {"person":"Vivek Upreti","direction":"mine","what":"Close one more deal after SBI","quote":"q","source":"WhatsApp · Fri","due":null,"dueISO":null,"owner":null},
+          {"person":"Arif","direction":"mine","what":"Send Arif the final proposal for comments on slides 6–11","quote":"q","source":"Mail · Tue","due":"September6","dueISO":null,"owner":null}
+        ]}
+        """#
+        #expect(await w.coordinator(brain, selfNames: ["Vivek Upreti", "vivek"]).run(trigger: .test, onEvent: { _ in }) == .ran(cards: 0))
+        #expect(brain.judged.first?.contains("THE USER IS Vivek Upreti (also written vivek).") == true, "the judge is told who the user is")
+        let ledger = try JSONDecoder().decode([Loop].self, from: Data((try await w.store.value(SettingKey.loops) ?? "").utf8))
+        #expect(ledger.map(\.what) == ["Provide her sister's number and email for Loopsy", "Send Arif the final proposal for comments on slides 6–11"], "two deliverables, the mirror folded, the sentiments and the user's own loop gone")
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = Self.clock.timeZone
+        #expect(ledger.last?.due == "September6" && ledger.last?.dueDate == cal.date(from: DateComponents(year: 2026, month: 9, day: 6, hour: 9)), "the words stay; the date is read from them")
+        let registry = PersonRegistry(vault: w.kb.rootURL); await registry.load()
+        #expect(await registry.people().map(\.name).sorted() == ["Arif", "Kanika Pandey"], "no record was opened for the user")
     }
 
     @Test func mergedRowsSurviveAJudgeThatFailsAndAreJudgedTheNextNightEvenWithNothingNew() async throws {
