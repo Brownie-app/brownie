@@ -9,7 +9,7 @@ import Domain
 /// a trace: "they asked … — you replied 16 Sep". A cap never drops: what is past it moves down (About to Context,
 /// Now to Context, Context to Earlier — a "since" standing fact back up to About with its date) and only Earlier lets
 /// go, saying so. Every rule takes `now`, so each is testable against a fixed clock, and every rule is idempotent for
-/// the same `now`.
+/// the same `now`. The word rules (`NoteLint`) run in the same pass, between the parse and the clock.
 public enum NoteAging {
     public static let nowDays = 45, earlierDays = 365, earlierCap = 12, monthLineChars = 240
 
@@ -20,13 +20,15 @@ public enum NoteAging {
         return (out, out == body ? [] : report.changes)
     }
 
-    /// The whole pass on one body — parse, settle, render — with the numbers behind it; nil for a kind the shape
-    /// does not cover or a note carrying an unresolved sync conflict, both left exactly as they are.
+    /// The whole pass on one body — parse, the word rules (`NoteLint`, on the pieces so they read every bullet in its
+    /// section with its date), settle, render — with the numbers behind it; nil for a kind the shape does not cover or
+    /// a note carrying an unresolved sync conflict, both left exactly as they are.
     static func pass(body: String, kind: NoteMeta.Kind, now: Date, retired: [String], timeZone: TimeZone) -> (body: String, report: NoteSkeleton.Report)? {
         guard kind == .person || kind == .group else { return nil }
         var report = NoteSkeleton.Report()
-        let parts = NoteSkeleton.parse(body, now: now, timeZone: timeZone, report: &report)
+        var parts = NoteSkeleton.parse(body, now: now, timeZone: timeZone, report: &report)
         guard !parts.conflict else { return nil }
+        NoteLint.clean(&parts, report: &report.lint)
         return (NoteSkeleton.render(settle(parts, now: now, timeZone: timeZone, retired: retired, report: &report)), report)
     }
 

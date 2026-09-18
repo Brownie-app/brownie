@@ -9,11 +9,13 @@ import Domain
 /// becomes Now, an unknown heading's dated bullets become Context and the rest About, every Now and Context bullet
 /// ends with `(YYYY-MM-DD)`, `(since YYYY-MM-DD)` or `(date unclear)`. The one rule above the shape: nothing the user
 /// wrote is lost. A date is read only where the shape puts it — at the end of a bullet, in parentheses or after a dash —
-/// and a date in the middle of a sentence is words; whatever the parser has no opinion about (an HTML comment, a table,
-/// a fenced code block, a block quote, a `###` sub-heading) is carried through as it was, in the section it sat in;
-/// the lines indented under a bullet stay under it. Only the status block is Brownie's to take out. The time rules
-/// (what leaves Now, what Earlier forgets) live in `NoteAging` and are applied here too, so a normalised note holds
-/// every invariant at once. Idempotent for the same `now`: a normalised note passes through unchanged.
+/// or where the brain's other habit puts it, opening the bullet ("**16 Sep 2026:** …", "2026-09-16 — …"), from where
+/// it moves to the end; a date in the middle of a sentence is words; whatever the parser has no opinion about (an HTML
+/// comment, a table, a fenced code block, a block quote, a `###` sub-heading) is carried through as it was, in the
+/// section it sat in; the lines indented under a bullet stay under it. Only the status block is Brownie's to take out.
+/// The time rules (what leaves Now, what Earlier forgets) live in `NoteAging` and are applied here too, with the
+/// `NoteLint` word rules between, so a normalised note holds every invariant at once. Idempotent for the same `now`:
+/// a normalised note passes through unchanged.
 public enum NoteSkeleton {
     public static let aboutCap = 30, nowCap = 6, contextCap = 12
     public static let unclear = "(date unclear)"
@@ -79,10 +81,11 @@ public enum NoteSkeleton {
         var folded: [String] = []
         var conflict = false
     }
-    /// What one pass did, in numbers; `changes` says it in words.
+    /// What one pass did, in numbers; `changes` says it in words. The word rules' numbers ride along in `lint`.
     struct Report: Equatable {
         var folded: [String] = []
         var dated = 0, unclear = 0, impossible = 0
+        var lint = NoteLint.Report()
         var movedToEarlier = 0, movedToContext = 0, movedToAbout = 0, aboutToContext = 0, retired = 0
         var droppedEarlier = 0, droppedClauses = 0
         /// The counted changes in words; a body that changed with nothing to count (sections put in order) says so.
@@ -94,6 +97,7 @@ public enum NoteSkeleton {
             if dated > 0 { out.append(n(dated, "bullet dated", "bullets dated")) }
             if unclear > 0 { out.append(n(unclear, "bullet marked date unclear", "bullets marked date unclear")) }
             if impossible > 0 { out.append(n(impossible, "impossible date marked unclear", "impossible dates marked unclear")) }
+            out += lint.counted
             if movedToEarlier > 0 { out.append(n(movedToEarlier, "bullet moved to Earlier", "bullets moved to Earlier")) }
             if movedToContext > 0 { out.append(n(movedToContext, "bullet moved to Context", "bullets moved to Context")) }
             if aboutToContext > 0 { out.append(n(aboutToContext, "About bullet past the cap moved to Context", "About bullets past the cap moved to Context")) }
@@ -350,11 +354,39 @@ public enum NoteSkeleton {
         let leftover = rest.filter { !$0.isWhitespace && !"–—-→,/".contains($0) }
         return leftover.isEmpty ? last.day : nil
     }
-    /// The plausible window: nothing ten years back, nothing two years on.
-    static func dateWindow(now: Date, timeZone: TimeZone) -> (min: String, max: String) {
+    /// The plausible window — nothing ten years back, nothing two years on — and today, which a bare "16 Sep" is read against.
+    typealias Window = (min: String, max: String, today: String)
+    static func dateWindow(now: Date, timeZone: TimeZone) -> Window {
         var cal = Calendar(identifier: .gregorian); cal.timeZone = timeZone
         let lo = cal.date(byAdding: .year, value: -10, to: now) ?? now, hi = cal.date(byAdding: .year, value: 2, to: now) ?? now
-        return (NoteMeta.day(lo, timeZone), NoteMeta.day(hi, timeZone))
+        return (NoteMeta.day(lo, timeZone), NoteMeta.day(hi, timeZone), NoteMeta.day(now, timeZone))
+    }
+
+    /// "**16 Sep 2026:** words", "16 Sep 2026 — words", "2026-09-16: words", "Sep 16: words": a date opening the
+    /// bullet, bold or not, with a colon or a spaced dash after it (the colon inside or outside the bold). The head is
+    /// whatever sits before the first such separator; `headDay` then says whether it is a date at all.
+    static let leadingMark = try! NSRegularExpression(pattern: #"^(?:\*\*\s*([\w ,.\-]{3,24}?)\s*(?::\s*\*\*|\*\*\s*:|\*\*\s*[—–])|([\w ,.\-]{3,24}?)\s*(?::|[—–]))\s*(\S.*)$"#)
+    static let bareDayMonth = try! NSRegularExpression(pattern: #"^(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3,9})\.?$"#)
+    static let bareMonthDay = try! NSRegularExpression(pattern: #"^([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?$"#)
+
+    /// The head of a bullet as a day: a full date in any of the three styles, or a bare "16 Sep" / "Sep 16", which takes
+    /// the year that makes it most recent without putting it after today.
+    static func headDay(_ head: String, today: String) -> String? {
+        if let d = pureDate(head) { return d }
+        let ns = head as NSString, all = NSRange(location: 0, length: ns.length)
+        var found: (day: String, month: Int)?
+        if let m = bareDayMonth.firstMatch(in: head, range: all), let mo = months[ns.substring(with: m.range(at: 2)).lowercased()] { found = (ns.substring(with: m.range(at: 1)), mo) }
+        else if let m = bareMonthDay.firstMatch(in: head, range: all), let mo = months[ns.substring(with: m.range(at: 1)).lowercased()] { found = (ns.substring(with: m.range(at: 2)), mo) }
+        guard let (day, month) = found, let year = Int(today.prefix(4)) else { return nil }
+        for y in [year, year - 1] { if let d = validDay(y: String(y), m: String(month), d: day), d <= today { return d } }
+        return nil
+    }
+    /// The words after a date opening the bullet, and the day it names; nil when the bullet opens with words.
+    static func leading(_ text: String, today: String) -> (rest: String, day: String)? {
+        guard let m = leadingMark.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)), let rest = Range(m.range(at: 3), in: text) else { return nil }
+        let head = m.range(at: 1).location != NSNotFound ? m.range(at: 1) : m.range(at: 2)
+        guard let hr = Range(head, in: text), let day = headDay(String(text[hr]), today: today) else { return nil }
+        return (String(text[rest]).trimmingCharacters(in: .whitespaces), day)
     }
 
     /// The date at the end of a bullet, where the shape puts it, and the words before it: "(2026-09-16)", "(16 Sep
@@ -371,15 +403,24 @@ public enum NoteSkeleton {
         return nil
     }
 
-    /// One bullet made dated: the date at its end is read and normalised; a bullet that ends in words is unclear, its
-    /// words whole. A date outside the window is a slip, not a fact: the bullet is unclear and keeps the slip as words.
-    static func dated(_ it: Item, window: (min: String, max: String), report: inout Report) -> Bullet {
+    /// One bullet made dated: the date at its end is read and normalised; a date opening the bullet comes off, and is
+    /// the bullet's date when the end gave none (a bullet with both keeps the end's); a bullet that opens and ends in
+    /// words is unclear, its words whole. A date outside the window is a slip, not a fact: the bullet keeps the slip
+    /// as words and is unclear unless its head names a day.
+    static func dated(_ it: Item, window: Window, report: inout Report) -> Bullet {
         let text = it.text.trimmingCharacters(in: .whitespaces)
-        guard let (before, day, since) = ending(text) else { report.unclear += 1; return Bullet(text: text, day: nil, nested: it.nested) }
-        guard let d = day else { return Bullet(text: before, day: nil, nested: it.nested) }
-        if d < window.min || d > window.max { report.impossible += 1; return Bullet(text: text, day: nil, nested: it.nested) }
-        if !text.hasSuffix(since ? "(since \(d))" : "(\(d))") { report.dated += 1 }
-        return Bullet(text: before, day: d, since: since, nested: it.nested)
+        let end = ending(text)
+        var words = text, day: String?, since = false
+        if let end {
+            if let d = end.day, d < window.min || d > window.max { report.impossible += 1 } else { (words, day, since) = end }
+        }
+        if let lead = leading(words, today: window.today), lead.day >= window.min, lead.day <= window.max {
+            words = lead.rest
+            if day == nil { day = lead.day }
+            report.dated += 1
+        } else if end == nil { report.unclear += 1 }
+        else if let d = day, !text.hasSuffix(since ? "(since \(d))" : "(\(d))") { report.dated += 1 }
+        return Bullet(text: words, day: day, since: since, nested: it.nested)
     }
     /// A line already in the Earlier shape: its month and clauses.
     static func monthLine(_ text: String) -> (String, [String])? {
@@ -391,7 +432,7 @@ public enum NoteSkeleton {
     /// else the last one anywhere in it — and its clause: the words whole, except that a date at the end in the shape's
     /// own form and a month opening the line ("July 2026: joined the team" → "joined the team") come off, since the
     /// month line carries them.
-    static func monthOf(_ text: String, window: (min: String, max: String)) -> (month: String, clause: String)? {
+    static func monthOf(_ text: String, window: Window) -> (month: String, clause: String)? {
         if let d = days(in: text).last?.day { return d >= window.min && d <= window.max ? (String(d.prefix(7)), stripDate(text)) : nil }
         let ns = text as NSString
         // both patterns capture (month word, year) or (year, month number) as groups 1-2 or 3-4

@@ -49,6 +49,32 @@ import Domain
         #expect(out.changes.contains("3 bullets marked date unclear") && out.changes.contains("2 bullets dated"))
     }
 
+    @Test func aDateOpeningABulletMovesToItsEnd() {
+        let body = "# A\n\n## Now\n- **16 Sep 2026:** Kanika shared the deck with the team\n- 16 Sep 2026 — Kanika called\n- 2026-09-16: Priya wrote\n- **12 Sep 2026**: colon outside the bold\n- **10 Sep 2026** — a dash after the bold\n- Sep 15, 2026: month first\n- 11 September 2026 — the month written out\n- 2026-09-16: Kanika (Loadmill)\n"
+        let out = norm(body)
+        #expect(section("## Now", of: out.body) == ["- Kanika shared the deck with the team (2026-09-16)", "- Kanika called (2026-09-16)", "- Priya wrote (2026-09-16)", "- Kanika (Loadmill) (2026-09-16)", "- month first (2026-09-15)", "- colon outside the bold (2026-09-12)"],
+                "bold or not, colon or dash, the date comes off the head and goes to the end, the words as they were; six stay under Now")
+        #expect(section("## Context", of: out.body) == ["- the month written out (2026-09-11)", "- a dash after the bold (2026-09-10)"])
+        #expect(out.changes.contains("8 bullets dated") && !out.body.contains("date unclear"))
+        #expect(norm(out.body).changes.isEmpty, "idempotent")
+    }
+
+    @Test func aBareDayAndMonthTakeTheMostRecentYearNotInTheFuture() {
+        let out = norm("# A\n\n## Now\n- 14 Sep: lunch with Priya at Blue Tokai\n- Sep 20: ahead of today, so last year\n- 16 Sep — today itself\n")
+        #expect(out.body == "# A\n\n## Now\n- today itself (2026-09-16)\n- lunch with Priya at Blue Tokai (2026-09-14)\n\n## Earlier\n- 2025-09 — ahead of today, so last year\n")
+        #expect(norm(out.body).changes.isEmpty)
+    }
+
+    @Test func aBulletWithBothDatesKeepsTheOneAtTheEndAndWordsWithAColonAreWords() {
+        let out = norm("# A\n\n## Now\n- 2026-09-01: both dates (2026-09-05)\n- **1 Sep 2026:** marked unclear by an older pass (date unclear)\n- Kanika: said hi (2026-09-10)\n- **Kanika:** a bold name\n- Score 3-2: fine\n- 2026-09-16 14:00: a time is not a date\n")
+        #expect(section("## Now", of: out.body) == ["- Kanika: said hi (2026-09-10)", "- both dates (2026-09-05)", "- marked unclear by an older pass (2026-09-01)", "- **Kanika:** a bold name (date unclear)", "- Score 3-2: fine (date unclear)", "- 2026-09-16 14:00: a time is not a date (date unclear)"],
+                "the end's date wins and the head's comes off; a head that is not a date stays as words")
+        #expect(norm(out.body).changes.isEmpty)
+        let slip = norm("# A\n\n## Now\n- **16 Sep 2026:** born (1926-09-16)\n")
+        #expect(slip.body == "# A\n\n## Now\n- born (1926-09-16) (2026-09-16)\n" && slip.changes.contains("1 impossible date marked unclear"), "an impossible date at the end is a slip kept as words; the head then dates the bullet")
+        #expect(norm(slip.body).changes.isEmpty)
+    }
+
     @Test func anImpossibleYearIsUnclearAndTheSlipStaysAsWords() {
         let out = norm("# A\n\n## Now\n- Born (1926-09-16)\n- Wedding (2040-01-01)\n- Fine (2026-09-01)\n")
         #expect(out.body == "# A\n\n## Now\n- Fine (2026-09-01)\n- Born (1926-09-16) (date unclear)\n- Wedding (2040-01-01) (date unclear)\n")
