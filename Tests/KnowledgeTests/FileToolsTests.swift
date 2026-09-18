@@ -141,6 +141,39 @@ import Domain
         #expect(w.raw("README.md")?.hasPrefix("---\nbrownie: portrait\n") == true)
     }
 
+    /// A README that indexes the vault's folders is not a portrait, whatever its length.
+    @Test func readmeThatReadsAsAFolderIndexIsRefused() async throws {
+        let w = try Self.world()
+        try w.put("Work/Loadmill.md", "# Loadmill\n"); try w.put("Money/Bills.md", "# Bills\n")
+        let index = "# Vivek's Knowledge Base\n\nThis knowledge base holds notes about Vivek's life.\n\n## Root folders\n- [[People]] — one note per person\n- Groups/ — the chats\n- **Work** — Loadmill and Orbit\n- Money/ — bills and invoices\n"
+        let refusal = "README.md is the portrait of the user, not a table of contents: write who they are, what they do, who matters to them and what is live this month."
+        #expect(await w.refusal("write_file", ["path": "README.md", "content": index]) == refusal)
+        let bullets = "# Vivek Upreti\n\n- People/ — everyone you talk to\n- Groups/ — your chats\n- Work — what you do\n- Money — what you owe\n"
+        #expect(await w.refusal("write_file", ["path": "README.md", "content": bullets]) == refusal, "more than half the lines are bullets naming a root folder")
+        for phrase in ["This vault is organised by theme.", "How to Use: start with People/.", "The root folders are listed below."] {
+            #expect(await w.refusal("write_file", ["path": "README.md", "content": "# Vivek Upreti\n\nYou run Orbit. \(phrase)\n"]) == refusal, "“\(phrase)” is about the vault, not the user")
+        }
+        let portrait = "# Vivek Upreti\n\nYou are a founder in Delhi, building Orbit with [[Kanika Pandey]]. Your people: Kanika, Arjun, your sister.\n\n## Live this month\n- SBI wants the proposal by 30 September\n- Work with Arjun on the pitch\n- Money for the villa is due to Karan\n"
+        #expect(await w.refusal("write_file", ["path": "README.md", "content": portrait]) == nil, "a portrait that happens to say 'work' and 'money' in bullets goes through")
+        #expect(w.raw("README.md")?.hasSuffix(portrait) == true)
+    }
+
+    /// The user is never a person or a group in their own vault: the note is refused, and the sentence says where what is about them goes.
+    @Test func aPeopleOrGroupsNoteAboutTheUserIsRefused() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("tools-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let w = World(root: root, tools: FileTools.make(root: root, today: Self.today, selfNames: ["Vivek Upreti", "vivek"]))
+        let refusal = "That is you — what is about you belongs in README.md, the portrait"
+        for path in ["People/Vivek Upreti.md", "People/Vivek.md", "People/Vivek Upreti — Career Materials (Jul–Aug 2026).md", "People/vivek upreti (work).md", "Groups/Vivek Upreti.md"] {
+            #expect(await w.refusal("write_file", ["path": path, "content": "# X\n"]) == refusal, Comment(rawValue: path))
+            #expect(w.raw(path) == nil)
+        }
+        #expect(try await w.write("People/Kanika Pandey.md", "# Kanika Pandey\n") == "wrote People/Kanika Pandey.md (16 bytes)")
+        #expect(try await w.write("Life/Vivek Upreti — Career Materials.md", "# Career Materials\n").hasPrefix("wrote"), "a topic note may carry the name")
+        let plain = try Self.world()
+        #expect(await plain.refusal("write_file", ["path": "People/Vivek Upreti.md", "content": "# Vivek Upreti\n"]) == nil, "with no self names known, nothing is refused")
+    }
+
     @Test func aSecondPeoplePathForAKnownPersonIsRefused() async throws {
         let w = try Self.world(people: [Self.person("p-1", "Arjun Mehta", aliases: ["Arjun"], note: "People/Arjun Mehta.md"), Self.person("p-2", "Nitesh", note: nil)])
         try w.put("People/Arjun Mehta.md", Self.owned("# Arjun Mehta\n", path: "People/Arjun Mehta.md"))

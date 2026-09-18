@@ -43,16 +43,20 @@ public actor PersonRegistry {
     /// merge or "keep separate" the app made while a run held its own copy is not written over.
     private var loaded: [Person] = []
     private var mergesSinceLoad: [(keep: String, drop: String)] = []
+    private var removedSinceLoad: [String] = []
     private let now: @Sendable () -> Date
+    /// The user's own names: never a person here, whatever a note is titled or a loop says.
+    public nonisolated let selfNames: [String]
     private let log = Log("people")
 
     private struct File: Codable { var version = 1; var people: [Person] }
 
-    public init(vault: URL, now: @escaping @Sendable () -> Date = { Date() }) {
+    public init(vault: URL, now: @escaping @Sendable () -> Date = { Date() }, selfNames: [String] = []) {
         fileURL = vault.appendingPathComponent(Self.directory, isDirectory: true).appendingPathComponent(Self.file)
         peopleURL = vault.appendingPathComponent("People", isDirectory: true)
-        self.now = now
+        self.now = now; self.selfNames = SelfNames.clean(selfNames)
     }
+    nonisolated func isSelf(_ label: String) -> Bool { SelfNames.isSelf(label, among: selfNames) }
 
     // MARK: persistence
 
@@ -70,11 +74,20 @@ public actor PersonRegistry {
     public func save() throws {
         if let d = try? Data(contentsOf: fileURL), let disk = Self.decode(d), disk != loaded {
             records = Self.reconcile(disk: disk, mine: records, loaded: loaded, merges: mergesSinceLoad)
+            records.removeAll { removedSinceLoad.contains($0.id) }   // a record this instance removed stays removed
         }
         try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         let enc = JSONEncoder(); enc.dateEncodingStrategy = .iso8601; enc.outputFormatting = [.prettyPrinted, .sortedKeys]
         try enc.encode(File(people: records)).write(to: fileURL, options: .atomic)
-        loaded = records; mergesSinceLoad = []
+        loaded = records; mergesSinceLoad = []; removedSinceLoad = []
+    }
+
+    /// A record that should never have existed — the user's own, found by the migration — is gone, from every
+    /// `notSame` list too. Nothing else removes a person: a merge folds, an archive keeps.
+    public func remove(_ id: String) {
+        guard let i = index(id) else { return }
+        records.remove(at: i); removedSinceLoad.append(id)
+        for j in records.indices { records[j].notSame.removeAll { $0 == id } }
     }
 
     private static func decode(_ d: Data) -> [Person]? {
@@ -129,7 +142,8 @@ public actor PersonRegistry {
         guard peopleFolder != nil || peopleDirectoryHoldsNoNote() else { return }
         for i in records.indices where records[i].notePath.map({ !present.contains($0) }) ?? false { records[i].notePath = nil }
         guard let peopleFolder else { return }
-        let notes = peopleFolder.notes.sorted(by: { $0.relativePath < $1.relativePath })
+        // A note titled after the user is nobody's: the migration moves it out of People/; until then it claims no record.
+        let notes = peopleFolder.notes.filter { !isSelf($0.title) }.sorted(by: { $0.relativePath < $1.relativePath })
         for note in notes where !records.contains(where: { $0.notePath == note.relativePath }) {
             if let i = exactIndex(label: note.title), records[i].notePath == nil { records[i].notePath = note.relativePath }
         }
@@ -175,8 +189,10 @@ public actor PersonRegistry {
     /// A label that could be either of two people sharing its key, and spells neither exactly, is nobody's to
     /// learn: nothing is attached (a handle attached by a guess would route every later ask to the wrong note,
     /// and no "keep separate" could undo it) and no third record is opened; the likelier of the two is returned.
+    /// The user's own name opens no record and learns nothing: it comes back as the empty id, which names nobody.
     @discardableResult
     public func register(label: String, handle: String?) -> String {
+        guard !isSelf(label) else { return "" }
         if let id = resolve(label: label, handle: handle) {
             let i = index(id)!
             Self.learn(label: label, into: &records[i])

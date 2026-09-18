@@ -39,16 +39,18 @@ public actor KnowledgeBuilder {
     private let coverage: @Sendable () async -> String?
     private let people: @Sendable () async -> [Person]
     private let instructions: String
+    private let selfNames: [String]
 
     /// `coverage` renders the "how far back each source has been read" lines for the brain's header; nil skips them.
     /// `people` is the registry's roster, so the brain knows which file each person already has. `instructions` is what
     /// the user's ratings of the notes taught (the note feedback digest), given to both prompts at `{{instructions}}`.
+    /// `selfNames` are the user's own, so the tools refuse a People or Groups note about them.
     public init(brain: any Brain, store: any KnowledgeStore, runStore: any RunStore, bundle: Bundle? = nil,
                 partBudget: Int = BrainLimits.corpusPartBudget, now: @escaping @Sendable () -> Date = { Date() }, timeZone: TimeZone = .current,
-                coverage: @escaping @Sendable () async -> String? = { nil }, people: @escaping @Sendable () async -> [Person] = { [] }, instructions: String = "") throws {
+                coverage: @escaping @Sendable () async -> String? = { nil }, people: @escaping @Sendable () async -> [Person] = { [] }, instructions: String = "", selfNames: [String] = []) throws {
         let bundle = bundle ?? Bundle.module
         self.brain = brain; self.store = store; self.runStore = runStore
-        self.partBudget = partBudget; self.now = now; self.timeZone = timeZone; self.coverage = coverage; self.people = people; self.instructions = instructions
+        self.partBudget = partBudget; self.now = now; self.timeZone = timeZone; self.coverage = coverage; self.people = people; self.instructions = instructions; self.selfNames = SelfNames.clean(selfNames)
         buildPrompt = try String(contentsOf: bundle.url(forResource: "build", withExtension: "md", subdirectory: "Prompts") ?? bundle.url(forResource: "build", withExtension: "md")!, encoding: .utf8)
         updatePrompt = try String(contentsOf: bundle.url(forResource: "update", withExtension: "md", subdirectory: "Prompts") ?? bundle.url(forResource: "update", withExtension: "md")!, encoding: .utf8)
     }
@@ -154,7 +156,7 @@ public actor KnowledgeBuilder {
         let system = (isBuild ? buildPrompt : updatePrompt).replacingOccurrences(of: "{{instructions}}", with: instructions.trimmingCharacters(in: .whitespacesAndNewlines))
         let input = await header() + "Working directory: the knowledge base root (use relative paths).\n\nSUMMARIES:\n\n" + corpus
         // One set of tools per part: the roster it checks People/ paths against, the day it stamps, and what it has read.
-        let part = FileTools.Part(root: staging, people: await people(), today: NoteMeta.day(now(), timeZone))
+        let part = FileTools.Part(root: staging, people: await people(), today: NoteMeta.day(now(), timeZone), selfNames: selfNames)
         if let agentic = brain as? AgenticBrain, brain.descriptor.capabilities.contains(.files) {
             let effort: Effort = isBuild ? .high : .medium   // first build thinks hard; nightly merges don't need to
             let ended = FinishBox()
@@ -320,10 +322,12 @@ enum FileTools {
     /// The roster follows a note the tools bring back from Archive/, so the rest of the part writes it where it now is.
     final class Part: @unchecked Sendable {
         let root: URL, today: String
+        /// The user's own names: a People or Groups note titled with one is refused.
+        let selfNames: [String]
         private let lock = NSLock()
         private var read = Set<String>()
         private var roster: [Person]
-        init(root: URL, people: [Person], today: String) { self.root = root; self.roster = people; self.today = today }
+        init(root: URL, people: [Person], today: String, selfNames: [String] = []) { self.root = root; self.roster = people; self.today = today; self.selfNames = SelfNames.clean(selfNames) }
         var people: [Person] { lock.withLock { roster } }
         func markRead(_ p: String) { lock.withLock { _ = read.insert(p) } }
         func hasRead(_ p: String) -> Bool { lock.withLock { read.contains(p) } }
@@ -331,8 +335,8 @@ enum FileTools {
         func retarget(from: String, to: String) { lock.withLock { for i in roster.indices where roster[i].notePath == from { roster[i].notePath = to } } }
     }
 
-    static func make(root: URL, people: [Person] = [], today: String = NoteMeta.day(Date(), .current)) -> [Tool] {
-        make(Part(root: root, people: people, today: today))
+    static func make(root: URL, people: [Person] = [], today: String = NoteMeta.day(Date(), .current), selfNames: [String] = []) -> [Tool] {
+        make(Part(root: root, people: people, today: today, selfNames: selfNames))
     }
     static func make(_ part: Part) -> [Tool] {
         [
@@ -343,7 +347,7 @@ enum FileTools {
             Tool(name: "read_file", description: "Read a note's prose at a relative path. Brownie's front-matter and status block are kept out of what you see and put back when you write, so never write them yourself. An existing note must be read before write_file may overwrite it.", parametersSchema: #"{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}"#) { data in
                 try read(part, path: arg(data)["path"] as? String ?? "")
             },
-            Tool(name: "write_file", description: "Create or overwrite a note at a relative path with its full prose (no front-matter, no status block). `sources` optionally names the apps the note draws on. Refused, with the reason, when the note was not read first, when it would be the eleventh root folder or the ninth note in a folder other than People/ or Groups/, when README.md would pass 350 words, when the title is period-stamped or differs from an existing note only by case or punctuation, when the folder is spelled in another case than the one that exists, or when it would be a second People/ note for someone who already has one.", parametersSchema: #"{"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"},"sources":{"type":"array","items":{"type":"string"}}},"required":["path","content"]}"#) { data in
+            Tool(name: "write_file", description: "Create or overwrite a note at a relative path with its full prose (no front-matter, no status block). `sources` optionally names the apps the note draws on. Refused, with the reason, when the note was not read first, when it would be the eleventh root folder or the ninth note in a folder other than People/ or Groups/, when README.md would pass 350 words or read as an index of folders instead of a portrait of the user, when the title is period-stamped or differs from an existing note only by case or punctuation, when the folder is spelled in another case than the one that exists, when it would be a second People/ note for someone who already has one, or when it would be a People/ or Groups/ note about the user themselves.", parametersSchema: #"{"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"},"sources":{"type":"array","items":{"type":"string"}}},"required":["path","content"]}"#) { data in
                 let a = arg(data)
                 return try write(part, path: a["path"] as? String ?? "", content: a["content"] as? String ?? "", sources: a["sources"] as? [String])
             },
@@ -457,6 +461,10 @@ enum FileTools {
         guard parts.count <= 2 else { throw Refusal("notes live one level deep (Folder/Note.md); \(p) is nested deeper") }
         try checkSpelling(p, parts: parts, root: part.root)
         let folder = parts.count == 2 ? parts[0] : "", title = String(parts.last!.dropLast(3))
+        // The user is never a person or a group in their own vault — said before any rule about the title's shape, since it is the reason that helps.
+        if isOwn(folder), SelfNames.isSelf(title, among: part.selfNames) {
+            throw Refusal("That is you — what is about you belongs in README.md, the portrait")
+        }
         // Spelled exactly: the Mac's file system would say "invoices.md" exists when only "Invoices.md" does, and that is a duplicate, not an overwrite.
         let siblings = notes(in: folder, of: part.root)
         let exists = siblings.contains(title)
@@ -482,10 +490,13 @@ enum FileTools {
         if !exists, !isOwn(folder), siblings.count >= maxNotesPerFolder {
             throw Refusal("\(folder.isEmpty ? "the root" : folder + "/") already holds \(maxNotesPerFolder) notes (\(siblings.sorted().joined(separator: ", "))); fold this into one of them instead of adding a ninth")
         }
-        // The portrait stays a portrait.
+        // The portrait stays a portrait: short, and about the user, never about the vault.
         if same(p, "README.md") {
             let words = content.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count
             if words > readmeWords { throw Refusal("README.md would be \(words) words; the portrait stays under \(readmeWords) — write a shorter one") }
+            if readsAsIndex(content, folders: rootFolders(of: part.root)) {
+                throw Refusal("README.md is the portrait of the user, not a table of contents: write who they are, what they do, who matters to them and what is live this month.")
+            }
         }
         // Never a blind overwrite: the brain must have seen the note it replaces in this part.
         if exists, requireRead, !part.hasRead(p) { throw Refusal("read \(p) before overwriting it") }
@@ -529,6 +540,28 @@ enum FileTools {
         try FileManager.default.removeItem(at: url)
         part.forget(p)
         return "deleted \(p)"
+    }
+
+    // MARK: the portrait
+
+    /// Whether a README body is a folder index rather than a portrait: it talks about the vault ("This knowledge
+    /// base", "This vault", "root folders", "How to Use"), or more than half of its non-empty lines are bullets that
+    /// name a root folder — `[[People]]`, `People/`, `**Groups**`, or the folder's bare name as a whole word.
+    static func readsAsIndex(_ content: String, folders: [String]) -> Bool {
+        let lower = content.lowercased()
+        if ["this knowledge base", "this vault", "root folders", "how to use"].contains(where: { lower.contains($0) }) { return true }
+        let lines = content.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        guard !lines.isEmpty else { return false }
+        let names = dedupe((folders + ownFolders).map { $0.lowercased() })
+        let bullet = try! NSRegularExpression(pattern: #"^(?:[-*•]|\d+[.)])\s+"#)
+        let slashed = try! NSRegularExpression(pattern: #"(?<![\w/])[A-Z][\w &-]{0,30}/(?![\w/])"#)
+        let indexLines = lines.filter { line in
+            guard bullet.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) != nil else { return false }
+            if slashed.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) != nil { return true }
+            let words = Set(line.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init))
+            return names.contains { words.contains($0) }
+        }
+        return indexLines.count * 2 > lines.count
     }
 
     // MARK: titles and shape

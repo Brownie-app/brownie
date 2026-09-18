@@ -186,8 +186,10 @@ final class AppModel: ObservableObject {
         await loadSettings()
         await refreshPermissions()
         // Every note gets Brownie's front-matter once; a note that has it already is not touched, so this is cheap on every start.
-        let registry = PersonRegistry(vault: knowledge.rootURL); await registry.load()
+        let registry = PersonRegistry(vault: knowledge.rootURL, selfNames: selfNames); await registry.load()
         await VaultMigration.addFrontMatter(root: knowledge.rootURL, registry: registry, now: Date())
+        // The user is never a person in their own vault: a People note titled after them moves to Life/, and a loop with them as the other party goes.
+        await VaultMigration.moveSelfNotes(root: knowledge.rootURL, registry: registry, store: store, selfNames: selfNames, now: Date())
         // People and Groups notes in shape and aged; a tidy vault is untouched. Nothing is archived here (the night does that after its
         // swap), and nothing is touched while a sync is mid-way — its staging copy of every note would take a rewrite for the user's edit.
         let syncPending = ((try? await store.value(SettingKey.kbResume)) ?? nil) != nil
@@ -457,10 +459,16 @@ final class AppModel: ObservableObject {
         if brainConfig.engine == .local { rebuildBrain() } else { rebuildCoordinator() }
     }
 
+    /// The user's own names — the Mac's full name, the account name, the household member marked `isMe` — so no stage
+    /// of a run, and no note, ever takes the user for a person.
+    var selfNames: [String] {
+        SelfNames.clean([NSFullUserName(), (try? FileManager.default.attributesOfItem(atPath: NSHomeDirectory()))?[.ownerAccountName] as? String, household?.me?.name])
+    }
+
     private func rebuildCoordinator() {
         let logger = sendLogger
         coordinator = RunCoordinator(.init(store: store, knowledge: knowledge, sources: sourcesForRun, reader: reader, brain: brain, policy: policy,
-                                            calendarText: { CalendarSource.judgeContext() }, stage: { p, d in logger.setPurpose(p, detail: d) }))
+                                            calendarText: { CalendarSource.judgeContext() }, stage: { p, d in logger.setPurpose(p, detail: d) }, selfNames: selfNames))
     }
     var runCoordinator: RunCoordinator? { rebuildCoordinator(); return coordinator }
 
