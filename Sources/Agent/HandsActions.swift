@@ -103,11 +103,24 @@ public enum PressPick {
     }
     public static func fits(_ e: UISnapshot.Element, _ role: Role) -> Bool { role == .any || (roleSets[role]?.contains(e.role) ?? true) }
 
-    /// Best first. Elements of the wrong role are left out entirely.
+    static func wordCount(_ s: String) -> Int { s.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).count }
+    /// A one- or two-word query on a busy page ("iPhone" on a results page) matches the related-search chips and the
+    /// navigation ("iphone 13", "iphone unlocked") as well as the results themselves; the results are the links with
+    /// substance in their names. When any candidate has five words or more, the ones with three or fewer step aside —
+    /// they are still reachable by their own words.
+    static func substantive(_ hits: [UISnapshot.Element], q: String) -> [UISnapshot.Element] {
+        guard wordCount(q) <= 2, hits.contains(where: { wordCount($0.title) >= 5 }) else { return hits }
+        let kept = hits.filter { wordCount($0.title) >= 4 || StepMatch.norm($0.title) == q }
+        return kept.isEmpty ? hits : kept
+    }
+    /// Best first: the closest match, then what can be pressed over what merely says the words, then top to bottom and
+    /// left to right — the order a person reads a page, so "the first result" is the first result. Elements of the
+    /// wrong role are left out entirely.
     public static func rank(hits: [UISnapshot.Element], text: String, role: Role = .any) -> [UISnapshot.Element] {
         let q = StepMatch.norm(text)
-        return hits.filter { fits($0, role) }.sorted { a, b in
-            let ka = (match(a, q), tier(a.role), a.title.count, a.frame.minY, a.frame.minX), kb = (match(b, q), tier(b.role), b.title.count, b.frame.minY, b.frame.minX)
+        let fitting = substantive(hits.filter { fits($0, role) }, q: q)
+        return fitting.sorted { a, b in
+            let ka = (match(a, q), tier(a.role), a.frame.minY, a.frame.minX, a.title.count), kb = (match(b, q), tier(b.role), b.frame.minY, b.frame.minX, b.title.count)
             return ka < kb
         }
     }

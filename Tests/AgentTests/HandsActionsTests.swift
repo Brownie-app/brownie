@@ -84,16 +84,25 @@ import Foundation
         let hits = [el(1, "StaticText", "iphone", y: 100), el(2, "Link", "iphone 13", y: 200), el(3, "Link", "Apple iPhone 17 Pro Max, 256GB, Deep Blue", y: 300)]
         #expect(PressPick.choose(hits: hits, text: "Apple iPhone 17")?.id == 3)
         #expect(PressPick.choose(hits: hits, text: "iphone")?.id == 1, "an exact title wins even as plain text")
-        #expect(PressPick.choose(hits: hits, text: "iphone", role: .link)?.id == 2, "role link: the shortest link that says it")
-        #expect(PressPick.choose(hits: hits, text: "iphone", nth: 2, role: .link)?.id == 3, "nth walks down the ranking")
-        #expect(PressPick.choose(hits: hits, text: "iphone", nth: 3, role: .link) == nil)
+        #expect(PressPick.choose(hits: hits, text: "iphone", role: .link)?.id == 3, "role link: the chip steps aside for the link with substance")
+        #expect(PressPick.choose(hits: hits, text: "iphone", nth: 2, role: .link) == nil, "the chip is not in the ranking at all")
         #expect(PressPick.choose(hits: hits, text: "iphone", role: .button) == nil, "no button says it")
     }
     @Test func aFieldQueryTakesTheFieldOverTheLinkWithTheLongerName() {
         let hits = [el(1, "Link", "Search, option, forward slash", y: 40), el(2, "TextField", "Search Amazon", y: 60)]
         #expect(PressPick.choose(hits: hits, text: "Search", role: .field)?.id == 2)
-        #expect(PressPick.choose(hits: hits, text: "Search")?.id == 2, "both carry the phrase and both are pressable: the shorter title wins")
+        #expect(PressPick.choose(hits: hits, text: "Search")?.id == 1, "both carry the phrase and both are pressable: the one higher on the page wins")
         #expect(PressPick.choose(hits: hits, text: "Search", role: .link)?.id == 1)
+    }
+    /// The Amazon results page as the log showed it: chips above, products below. "iPhone" means a product.
+    @Test func onAResultsPageTheFirstResultIsAProductNotAChip() {
+        let hits = [el(1, "Link", "iphone 13", y: 120), el(2, "Link", "iphone unlocked", x: 200, y: 120), el(3, "Link", "iphone 16", x: 400, y: 120),
+                    el(4, "Link", "Apple iPhone 17 Pro Max, US Version, 256GB, eSIM, Deep Blue- Unlocked", y: 400), el(5, "Link", "Apple iPhone 16, 128GB, Black - Unlocked", y: 700)]
+        #expect(PressPick.rank(hits: hits, text: "iPhone", role: .link).map(\.id) == [4, 5], "chips step aside; products in reading order")
+        #expect(PressPick.choose(hits: hits, text: "iphone 13", role: .link)?.id == 1, "a chip asked for by its own words is still found")
+        #expect(PressPick.rank(hits: hits, text: "Apple iPhone 16").first?.id == 5)
+        let noProducts = [el(1, "Link", "iphone 13", y: 120), el(2, "Link", "iphone unlocked", x: 200, y: 120)]
+        #expect(PressPick.choose(hits: noProducts, text: "iphone", role: .link)?.id == 1, "with nothing substantive on the page the chips stay in play")
     }
     @Test func tiesGoTopToBottomThenLeftToRight() {
         let hits = [el(1, "Link", "Buy now", x: 500, y: 300), el(2, "Link", "Buy now", x: 100, y: 300), el(3, "Link", "Buy now", x: 100, y: 100)]
