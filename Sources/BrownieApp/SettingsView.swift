@@ -61,6 +61,7 @@ struct SourcesPane: View {
                             else if m.availability[s.id] == .available { BButton(title: "Sign out", kind: .quiet) { m.signOutGoogle() } }
                         }
                         if s.id == "telegram" {
+                            BButton(title: TelegramSource.OwnApp.inUse ? "Your own app" : "Use your own app…", kind: .quiet) { showTelegramApp = true }
                             if case .needsSignIn = m.availability[s.id] { BButton(title: "Sign in to Telegram") { showTelegram = true } }
                             else if m.availability[s.id] == .available { BButton(title: "Sign out", kind: .quiet) { m.telegramSignOut() } }
                         }
@@ -153,9 +154,11 @@ struct SourcesPane: View {
         }
         .sheet(isPresented: $showAdd) { AddMCPSheet().environmentObject(m).environment(\.theme, t) }
         .sheet(isPresented: $showTelegram) { TelegramSignIn().environmentObject(m).environment(\.theme, t) }
+        .sheet(isPresented: $showTelegramApp) { TelegramAppSheet().environmentObject(m).environment(\.theme, t) }
     }
     @State private var showAdd = false
     @State private var showTelegram = false
+    @State private var showTelegramApp = false
     @State private var chatFilter = ""
     func mcpDetail(_ sid: SourceID, _ mf: MCPManifest) -> String {
         switch m.availability[sid] { case .available: return "Connected · \(mf.url)"; case .needsSignIn: return "Token rejected — remove and add again with a valid token"; case .unavailable(let w): return w; default: return mf.url }
@@ -746,6 +749,52 @@ struct TelegramSignIn: View {
     }
 }
 
+
+/// The user's own Telegram app: an api id and hash from my.telegram.org, kept in their Keychain and used from the
+/// next launch. Telegram rate-limits and bans by api id, so a person who wants to be independent of the id Brownie
+/// ships — or who is on a build without one — registers their own in a minute.
+struct TelegramAppSheet: View {
+    @EnvironmentObject var m: AppModel
+    @Environment(\.theme) var t
+    @Environment(\.dismiss) var dismiss
+    @State private var id = TelegramSource.OwnApp.currentID ?? ""
+    @State private var hash = ""
+    @State private var error: String?
+    @State private var saved = false
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Your own Telegram app").font(.system(size: 17, weight: .semibold))
+            Text(TelegramSource.OwnApp.inUse ? "Brownie is using your own Telegram app (API ID \(TelegramSource.OwnApp.currentID ?? "")). Telegram rate-limits and bans by app, so yours keeps you independent of the one Brownie ships."
+                 : "Brownie ships with its own Telegram app id, shared by everyone who uses Brownie. Telegram rate-limits and bans by app, so if that id is ever throttled, every Brownie user feels it. Your own id, registered in a minute, keeps you independent.")
+                .font(.system(size: 12)).foregroundStyle(t.ink2)
+            Text("Sign in at my.telegram.org with your phone number, open “API development tools”, create an app with any name, and copy the two values below.").font(.system(size: 12)).foregroundStyle(t.ink2)
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) { Text("API ID").font(.system(size: 11, weight: .medium)); TextField("21724", text: $id).textFieldStyle(.roundedBorder).frame(width: 120).font(.system(size: 13, design: .monospaced)) }
+                VStack(alignment: .leading, spacing: 4) { Text("API hash").font(.system(size: 11, weight: .medium)); SecureField("32 characters", text: $hash).textFieldStyle(.roundedBorder).frame(width: 300).font(.system(size: 13, design: .monospaced)) }
+            }
+            if let error { HStack(spacing: 6) { Image(systemName: "exclamationmark.circle").foregroundStyle(t.bad); Text(error).font(.system(size: 12)).foregroundStyle(t.bad) } }
+            if saved {
+                HStack(spacing: 6) { Image(systemName: "checkmark.circle.fill").foregroundStyle(t.ok); Text("Saved to your Keychain. It takes effect when Brownie reopens; then sign in to Telegram again.").font(.system(size: 12)) }
+            }
+            Text("Nothing goes through a Brownie server — there isn't one. The values stay in your Keychain on this Mac.").font(.system(size: 11)).foregroundStyle(t.ink2)
+            HStack {
+                if TelegramSource.OwnApp.inUse { BButton(title: "Back to Brownie's app", kind: .quiet) { TelegramSource.OwnApp.useBrownies(); m.telegramSignOut(); m.announcement = "Brownie's own Telegram app from the next launch — reopen Brownie, then sign in to Telegram again."; dismiss() } }
+                Spacer()
+                BButton(title: saved ? "Reopen Brownie now" : "Cancel", kind: .quiet) { if saved { m.relaunch() } else { dismiss() } }
+                if !saved { BButton(title: "Use mine", kind: .primary) { save() } }
+            }
+        }.padding(24).frame(width: 560).foregroundStyle(t.ink).background(t.content)
+    }
+    func save() {
+        switch TelegramSource.OwnApp.validate(id: id, hash: hash) {
+        case .failure(let p): error = p.text
+        case .success(let v):
+            TelegramSource.OwnApp.use(id: v.id, hash: v.hash)
+            m.telegramSignOut()   // the session on the old app ends; the new one is opened after the relaunch
+            error = nil; saved = true
+        }
+    }
+}
 
 /// For workspaces where the Brownie Slack app isn't approved: a user token from the user's own Slack app.
 struct SlackTokenSheet: View {

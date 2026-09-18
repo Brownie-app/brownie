@@ -369,6 +369,14 @@ final class AppModel: ObservableObject {
     func telegramCode(_ code: String) async -> String? { do { try await TelegramSource.shared?.setCode(code); return nil } catch { return "\(error)" } }
     func telegramPassword(_ pw: String) async -> String? { do { try await TelegramSource.shared?.setPassword(pw); return nil } catch { return "\(error)" } }
     func telegramSignOut() { Task { try? await TelegramSource.shared?.logOut(); await refreshSources() } }
+    /// Quit and reopen: a moment after this process ends, the app is opened again. Used when a change (the Telegram app
+    /// credentials) can only take effect at launch.
+    func relaunch() {
+        let path = Bundle.main.bundlePath
+        let p = Process(); p.executableURL = URL(fileURLWithPath: "/bin/sh"); p.arguments = ["-c", "sleep 1; open \"\(path)\""]
+        try? p.run()
+        NSApp.terminate(nil)
+    }
 
     func signOutGoogle() { Task { await GoogleAuth.shared.signOut(); await refreshSources() } }
 

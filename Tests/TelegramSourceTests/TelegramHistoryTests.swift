@@ -78,3 +78,20 @@ final class ScriptedChat: TDSending, @unchecked Sendable {
         #expect(TelegramSource.proofs(ofUser: ["@type": "user", "id": 42, "phone_number": "12345"]) == [], "too short to be a phone")
     }
 }
+
+@Suite struct TelegramOwnAppTests {
+    func problem(_ id: String, _ hash: String) -> TelegramSource.OwnApp.Problem? {
+        if case .failure(let p) = TelegramSource.OwnApp.validate(id: id, hash: hash) { return p }
+        return nil
+    }
+    @Test func theTwoValuesAreCheckedBeforeTheyAreKept() {
+        #expect(problem("", "") == .empty)
+        #expect(problem("21724", "") == .badHash)
+        #expect(problem("12", String(repeating: "a", count: 32)) == .badID)
+        #expect(problem("2172x", String(repeating: "a", count: 32)) == .badID)
+        #expect(problem("21724", "not-hex-not-hex-not-hex-not-hex-") == .badHash)
+        guard case .success(let ok) = TelegramSource.OwnApp.validate(id: " 21724 ", hash: " 3E0CB5EFCD1132D2A4A2D0F0C3D8D6E1 ") else { Issue.record("a good pair was refused"); return }
+        #expect(ok.id == "21724" && ok.hash == "3e0cb5efcd1132d2a4a2d0f0c3d8d6e1", "trimmed, the hash lower-cased")
+        #expect(TelegramSource.OwnApp.Problem.badID.text.contains("five to ten digits"))
+    }
+}

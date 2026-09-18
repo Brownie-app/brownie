@@ -13,6 +13,38 @@ public struct TelegramSource: Source {
 
     public static var isConfigured: Bool { (Secrets.value("TELEGRAM_API_ID") ?? "").isEmpty == false }
 
+    /// The user's own Telegram app (my.telegram.org → API development tools), kept in their Keychain, where `Secrets`
+    /// reads it before the credentials Brownie ships. Their own id keeps them independent of the shared one: a shared
+    /// api id that Telegram rate-limits or bans takes every Brownie user down with it; theirs is theirs alone.
+    public enum OwnApp {
+        public static let idKey = "TELEGRAM_API_ID", hashKey = "TELEGRAM_API_HASH"
+        /// The id and hash as typed, or what is wrong with them. An api id is 5–10 digits; a hash is 32 hex characters.
+        public static func validate(id: String, hash: String) -> Result<(id: String, hash: String), Problem> {
+            let i = id.trimmingCharacters(in: .whitespacesAndNewlines), h = hash.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard !i.isEmpty || !h.isEmpty else { return .failure(.empty) }
+            guard i.count >= 5, i.count <= 10, i.allSatisfy(\.isNumber) else { return .failure(.badID) }
+            guard h.count == 32, h.allSatisfy({ $0.isHexDigit }) else { return .failure(.badHash) }
+            return .success((i, h))
+        }
+        public enum Problem: Error, Equatable {
+            case empty, badID, badHash
+            public var text: String {
+                switch self {
+                case .empty: return "Both fields are needed — the API ID and the API hash from my.telegram.org."
+                case .badID: return "The API ID is a number of five to ten digits (for example 21724)."
+                case .badHash: return "The API hash is 32 letters and digits, a to f and 0 to 9."
+                }
+            }
+        }
+        /// Whether the user's own app is what Brownie will use at the next launch.
+        public static var inUse: Bool { !(Keychain.get(idKey) ?? "").isEmpty }
+        public static var currentID: String? { Keychain.get(idKey).flatMap { $0.isEmpty ? nil : $0 } }
+        /// Keeps the user's own app for the next launch. The client that is running was built with the old
+        /// credentials and cannot change them: the app must be reopened, and the Telegram session signed in again.
+        public static func use(id: String, hash: String) { Keychain.set(idKey, id); Keychain.set(hashKey, hash) }
+        public static func useBrownies() { Keychain.set(idKey, nil); Keychain.set(hashKey, nil) }
+    }
+
     /// One shared client for the app.
     public static let shared: TDClient? = {
         guard let id = Secrets.value("TELEGRAM_API_ID").flatMap(Int32.init), let hash = Secrets.value("TELEGRAM_API_HASH") else { return nil }
