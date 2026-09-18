@@ -47,6 +47,26 @@ import Domain
         #expect(today.contains("- ✅ 16 Sep — they asked: “beer?” — you replied 16 Sep 04:20\n"), "a judged reply carries no 'not checked'")
     }
 
+    /// Each verdict has its own line — their word, the user's no, a promise still open, the judge's word from another channel.
+    @Test func eachVerdictHasItsOwnLine() {
+        var theirs = ask("t", askedAgo: 2 * day, q: "did you get the file?"); theirs.settle(.confirmedByThem, at: now.addingTimeInterval(-day), by: "rules")
+        var no = ask("n", askedAgo: 2 * day, answeredAgo: day, q: "can you share the deck?"); no.settle(.declined, at: now.addingTimeInterval(-day), by: "rules")
+        var promised = ask("p", askedAgo: 2 * day, answeredAgo: day, q: "estimates?"); promised.settle(.promised, at: now.addingTimeInterval(-day), by: "reader")
+        var slack = ask("s", askedAgo: 2 * day, q: "postgres url?"); slack.settle(.answered, at: now, by: "judge", how: "on Slack"); slack.answeredAt = now
+        var sorted = ask("a", askedAgo: 2 * day, answeredAgo: 1.5 * day, q: "the url?"); sorted.settle(.answered, at: now.addingTimeInterval(-day), by: "rules")
+        var lapsedPromise = ask("l", askedAgo: 46 * day, answeredAgo: 45 * day, q: "the old deck?"); lapsedPromise.settle(.promised, at: now.addingTimeInterval(-45 * day), by: "rules"); lapsedPromise.lapsedAt = now.addingTimeInterval(-day)
+        let b = StatusBlock.render(person: "Nitesh", asks: [theirs, no, promised, slack, sorted, lapsedPromise], loops: [], now: now, timeZone: utc)
+        #expect(b.contains("- ✅ 14 Sep — they asked: “did you get the file?” — they said it's done, 15 Sep\n"))
+        #expect(b.contains("- ✅ 14 Sep — they asked: “can you share the deck?” — you said no, 15 Sep\n"))
+        #expect(b.contains("- ⏳ 14 Sep — they asked: “estimates?” — you said you would, 15 Sep; still open\n"))
+        #expect(b.contains("- ✅ 14 Sep — they asked: “postgres url?” — answered on Slack, 16 Sep (the judge)\n"))
+        #expect(b.contains("- ✅ 14 Sep — they asked: “the url?” — you replied 15 Sep 05:20\n"), "dated by the line that answered, not the first reply")
+        #expect(b.contains("- ⌛ 1 Aug — they asked: “the old deck?” — you said you would, 2 Aug; no longer tracked (lapsed 15 Sep)\n"))
+        #expect(b == StatusBlock.render(person: "Nitesh", asks: [theirs, no, promised, slack, sorted, lapsedPromise], loops: [], now: now.addingTimeInterval(3 * day), timeZone: utc), "the same bytes on another day")
+        var judgeNoHow = slack; judgeNoHow.outcomeHow = nil
+        #expect(StatusBlock.render(person: "Nitesh", asks: [judgeNoHow], loops: [], now: now, timeZone: utc).contains("— answered elsewhere, 16 Sep (the judge)"))
+    }
+
     @Test func settledItemsLeaveAfterFourteenDaysAndRetiredLinesNameThem() {
         let asks = [ask("shown", askedAgo: 20 * day, answeredAgo: 13 * day, q: "still shown?", addressed: true), ask("gone", askedAgo: 20 * day, answeredAgo: 14.5 * day, q: "left today?", addressed: true),
                     ask("older", askedAgo: 40 * day, answeredAgo: 28 * day, q: "long gone?", addressed: true), ask("lapsed", askedAgo: 60 * day, q: "let go?", lapsedAgo: 14.1 * day),

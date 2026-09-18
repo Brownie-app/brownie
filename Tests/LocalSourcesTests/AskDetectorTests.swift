@@ -76,6 +76,38 @@ import Domain
         #expect(cut.split(separator: "\n").count == 6 && cut.split(separator: "\n").last!.count == 65 && cut.split(separator: "\n").last!.hasPrefix("estimates estimates"))
     }
 
+    @Test func theWindowIsTheExchangeAfterTheAskFromBothSides() {
+        let b = BucketID("whatsapp:507"), since = t0.addingTimeInterval(-3600)
+        let msgs = [m(1, "hi", mins: 0), m(2, "can you send the url?", mins: 5), m(3, "need it for the test", mins: 6), m(4, "let me check", me: true, mins: 10), m(5, "thanks,\nworks now", mins: 12), m(6, "", me: true, mins: 13)]
+        let asks = AskDetector.detect(msgs, person: "Nitesh", bucket: b, since: since)
+        #expect(asks.count == 1)
+        #expect(asks[0].window == [AskLine(at: msgs[2].date, mine: false, text: "need it for the test"), AskLine(at: msgs[3].date, mine: true, text: "let me check"), AskLine(at: msgs[4].date, mine: false, text: "thanks, works now")],
+                "both sides, oldest first, one line each; a blank line is left out")
+        #expect(asks[0].reply == "let me check" && asks[0].answeredAt == msgs[3].date, "the reply is still the user's first message, as before")
+        #expect(AskDetector.detect([msgs[0], msgs[1]], person: "Nitesh", bucket: b, since: since)[0].window == [], "nothing after it yet: an empty window")
+        // a later read brings a longer window under the same id
+        let later = AskDetector.detect(msgs + [m(7, "welcome", me: true, mins: 20)], person: "Nitesh", bucket: b, since: since)[0]
+        #expect(later.id == asks[0].id && later.window?.count == 4 && later.window?.last?.text == "welcome")
+    }
+
+    @Test func theWindowKeepsTheNewestTwelveLinesAndFitsTheRoom() {
+        let b = BucketID("whatsapp:507"), since = t0.addingTimeInterval(-3600)
+        let chatter = (0..<20).map { m(10 + $0, "line \($0)", me: $0 % 2 == 0, mins: 10 + Double($0)) }
+        let w = AskDetector.detect([m(1, "can you send the url?", mins: 5)] + chatter, person: "Nitesh", bucket: b, since: since)[0].window!
+        #expect(w.count == 12 && w.first?.text == "line 8" && w.last?.text == "line 19", "the newest twelve, oldest first")
+        #expect(w.map(\.mine) == (8..<20).map { $0 % 2 == 0 })
+        // one long line and eleven short ones: the short ones keep every word, the long one takes what is left of the room
+        let long = m(40, String(repeating: "estimates ", count: 200), me: true, mins: 40)
+        let cut = AskDetector.detect([m(1, "can you send the url?", mins: 5)] + chatter + [long], person: "Nitesh", bucket: b, since: since)[0].window!
+        #expect(cut.count == 12 && cut.dropLast().allSatisfy { $0.text.hasPrefix("line ") } && cut.last!.text.count == 900 - cut.dropLast().reduce(0) { $0 + $1.text.count })
+        #expect(cut.reduce(0) { $0 + $1.text.count } == 900)
+        // twelve long lines share the room evenly
+        let longs = (0..<12).map { m(50 + $0, String(repeating: "x", count: 500), me: false, mins: 50 + Double($0)) }
+        let even = AskDetector.detect([m(1, "can you send the url?", mins: 5)] + longs, person: "Nitesh", bucket: b, since: since)[0].window!
+        #expect(even.allSatisfy { $0.text.count == 75 })
+        #expect(AskDetector.fit([], room: 900) == [] && AskDetector.fit(["ab", "cd"], room: 900) == ["ab", "cd"])
+    }
+
     /// A source of two direct chats that remembers how far back each was read.
     final class TwoChats: ChatReader, Source, @unchecked Sendable {
         static let descriptor = SourceDescriptor(id: "fake", name: "Fake", detail: "", door: .localDatabase, supportsPerBucketOptIn: true)

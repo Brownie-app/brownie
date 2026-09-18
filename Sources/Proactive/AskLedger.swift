@@ -9,20 +9,46 @@ public enum AskLedger {
     public static let retention: TimeInterval = 90 * 86400
 
     /// New scans replace what they cover (an answer can arrive later); asks that waited too long are let go; old asks fall off after the retention.
+    /// A fresh scan always brings the newest window. An ask already settled keeps its verdict and everything the verdict
+    /// rests on — a later read never reopens it; the same person asking again is a new ask. One still open keeps a
+    /// judgement made about the very same exchange, and is judged afresh when there is more to read.
     public static func merge(existing: [Ask], found: [Ask], now: Date) -> [Ask] {
         var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
         for f in found {
             var f = f
             if let old = byID[f.id] {
-                // a fresh scan brings the reply; the judgement already made about that same reply is kept, a different reply is judged afresh
-                if old.answeredAt == f.answeredAt, old.reply == f.reply { f.addressed = old.addressed }
-                // let go stays let go — unless a reply finally came
-                if f.answeredAt == nil { f.lapsedAt = old.lapsedAt }
+                if old.isSettled {
+                    f.answeredAt = old.answeredAt; f.reply = old.reply; f.addressed = old.addressed
+                    f.outcome = old.outcome; f.outcomeAt = old.outcomeAt; f.outcomeBy = old.outcomeBy; f.outcomeHow = old.outcomeHow
+                } else {
+                    if old.window == f.window, old.answeredAt == f.answeredAt, old.reply == f.reply {
+                        f.addressed = old.addressed; f.outcome = old.outcome; f.outcomeAt = old.outcomeAt; f.outcomeBy = old.outcomeBy; f.outcomeHow = old.outcomeHow
+                    }
+                    // let go stays let go — unless a reply finally came
+                    if f.answeredAt == nil { f.lapsedAt = old.lapsedAt }
+                }
             }
             byID[f.id] = f
         }
         let kept = byID.values.filter { now.timeIntervalSince($0.askedAt) < retention }
         return StatusRules.lapse(asks: kept, now: now).sorted { ($1.askedAt, $0.id) < ($0.askedAt, $1.id) }
+    }
+
+    /// The judge's word that an open ask was answered somewhere else — a Slack summary showing the user sent the URL
+    /// that was asked for on WhatsApp. The ask closes as answered, dated tonight, with the judge's few words on where.
+    /// Only an open ask: the judge can close, never reopen, and an ask let go stays let go. The id is matched leniently
+    /// — with or without its "ask-" prefix, or cut short — since the judge writes it back by hand.
+    public static func apply(updates: [(idPrefix: String, how: String)], to asks: [Ask], now: Date) -> [Ask] {
+        var out = asks
+        for u in updates {
+            var key = u.idPrefix.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            for p in ["ask-", "ask "] where key.hasPrefix(p) { key = String(key.dropFirst(p.count)) }
+            guard key.count >= 4, let i = out.firstIndex(where: { $0.isOpen && $0.id.dropFirst(4).hasPrefix(key) }) else { continue }
+            let how = String(u.how.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "."))).prefix(80))
+            out[i].settle(.answered, at: now, by: "judge", how: how.isEmpty ? nil : how)
+            if out[i].answeredAt == nil { out[i].answeredAt = now }
+        }
+        return out
     }
 
     /// How far back one source's chats are read for asks: to the oldest ask from it still waiting, an hour earlier so the
@@ -44,33 +70,66 @@ public enum AskLedger {
     }
 
     static let answering = ["answer", "reply", "respond", "get back", "question", "guidance", "tell", "let", "confirm", "share", "send"]
-    /// Loops the user owed someone that their reply settled: a `mine` loop about answering that person, opened before the reply.
+    /// Loops the user owed someone that their reply settled: a `mine` loop about answering that person, opened before the
+    /// reply. Only an ask the user's own reply in the chat settled: not one closed on their word or the judge's, where
+    /// "you replied" would not be true.
     public static func closures(loops: [Loop], asks: [Ask], now: Date) -> [Loop] {
         loops.map { l in
             guard l.status == .open, l.direction == .mine, answering.contains(where: { l.what.lowercased().contains($0) }) else { return l }
-            guard let a = asks.first(where: { $0.isAnswered && samePerson($0.person, l.person) && $0.askedAt <= l.openedAt && l.openedAt <= $0.answeredAt! }) else { return l }
-            var l = l; l.status = .closed; l.closedAt = a.answeredAt; l.closedHow = "you replied"; l.closedBy = "reply"
+            guard let a = asks.first(where: { a in a.isAnswered && a.byReply && samePerson(a.person, l.person) && a.askedAt <= l.openedAt && StatusRules.settledAt(a).map { l.openedAt <= $0 } == true }) else { return l }
+            var l = l; l.status = .closed; l.closedAt = StatusRules.settledAt(a); l.closedHow = "you replied"; l.closedBy = "reply"
             return l
         }
     }
 
-    /// What the judge is told — dates only, never the words. An ask let go is said to be let go, never "no reply yet",
-    /// and loops let go are listed so the judge neither reports them nor finds them again.
+    /// Loops that the asks they came from settled: an open loop with the same person whose `what` shares half its
+    /// words with a settled ask's question — the judge opened "Send Nitesh the estimates" the night Nitesh asked for
+    /// them, and the night the ask closes (the user sent them, Nitesh said he has them, or the judge saw them sent on
+    /// Slack) the loop goes with it, once. A loop opened more than a day after the ask settled is newer news and stays.
+    public static func followers(loops: [Loop], asks: [Ask], now: Date) -> [Loop] {
+        loops.map { l in
+            guard l.status == .open else { return l }
+            guard let a = asks.first(where: { a in a.isSettled && samePerson(a.person, l.person) && StatusRules.settledAt(a).map { l.openedAt <= $0 + 86400 } == true && overlap(a.question, l.what) >= 0.5 }) else { return l }
+            var l = l; l.status = .closed; l.closedAt = StatusRules.settledAt(a) ?? now; l.closedHow = "the ask it came from was answered"; l.closedBy = "ask"
+            return l
+        }
+    }
+    /// The share of the question's words a promise carries, with the ledger's own words and a little stemming ("estimate" ~ "estimates").
+    static func overlap(_ question: String, _ what: String) -> Double {
+        let q = LoopLedger.words(question), w = LoopLedger.words(what)
+        guard !q.isEmpty, !w.isEmpty else { return 0 }
+        let shared = q.filter { qw in w.contains { $0 == qw || $0.hasPrefix(qw) || qw.hasPrefix($0) } }
+        return Double(shared.count) / Double(min(q.count, w.count))
+    }
+
+    /// What the judge is told — dates only, never the words. Each open ask carries its id, so the judge can say in
+    /// `ask_updates` that the summaries show it answered somewhere else. An ask let go is said to be let go, never
+    /// "no reply yet", and loops let go are listed so the judge neither reports them nor finds them again.
     public static func judgeLines(_ asks: [Ask], loops: [Loop] = [], now: Date) -> String {
         let f = DateFormatter(); f.dateFormat = "d MMM HH:mm"
         let open = asks.filter(\.isOpen)
-        let answered = asks.filter { $0.isAnswered && StatusRules.isShown(settledAt: $0.answeredAt, now: now) }
+        let answered = asks.filter { $0.isAnswered && StatusRules.isShown(settledAt: StatusRules.settledAt($0), now: now) }
         let lapsed = asks.filter { $0.isLapsed && StatusRules.isShown(settledAt: $0.lapsedAt, now: now) }
         var out = ""
         if !asks.isEmpty {
             var lines: [String] = []
             for a in open.prefix(20) {
-                if let r = a.answeredAt { lines.append("- \(a.person) asked the user something on \(f.string(from: a.askedAt)) · the user wrote at \(f.string(from: r)) but NOT about it — still unanswered (\(when(a.askedAt, now: now)))") }
-                else { lines.append("- \(a.person) asked the user something on \(f.string(from: a.askedAt)) · NO REPLY YET (\(when(a.askedAt, now: now)))") }
+                let head = "- ask \(a.id) · \(a.person) asked the user something on \(f.string(from: a.askedAt))"
+                if a.outcome == .promised { lines.append(head + " · the user said they would get to it (\(f.string(from: a.outcomeAt ?? a.answeredAt ?? a.askedAt))) — still open (\(when(a.askedAt, now: now)))") }
+                else if let r = a.answeredAt { lines.append(head + " · the user wrote at \(f.string(from: r)) but NOT about it — still unanswered (\(when(a.askedAt, now: now)))") }
+                else { lines.append(head + " · NO REPLY YET (\(when(a.askedAt, now: now)))") }
             }
-            for a in answered.prefix(20) { lines.append("- \(a.person) asked the user something on \(f.string(from: a.askedAt)) · the user replied \(f.string(from: a.answeredAt!)) — done") }
+            for a in answered.prefix(20) {
+                let head = "- \(a.person) asked the user something on \(f.string(from: a.askedAt))", at = f.string(from: StatusRules.settledAt(a) ?? a.askedAt)
+                switch a.outcome {
+                case .confirmedByThem: lines.append(head + " · they said it is settled \(at) — done")
+                case .declined: lines.append(head + " · the user said no \(at) — done")
+                case .answered where a.outcomeBy == "judge": lines.append(head + " · answered \(a.outcomeHow ?? "elsewhere") \(at) — done")
+                default: lines.append(head + " · the user replied \(at) — done")
+                }
+            }
             for a in lapsed.prefix(20) { lines.append("- \(a.person) asked the user something on \(f.string(from: a.askedAt)) · LAPSED — no reply in \(StatusRules.askLapseDays) days; Brownie let it go, do not make an item for it") }
-            if !lines.isEmpty { out += "ASKS IN DIRECT CHATS (read from the chats themselves; a reply means it is answered — do not make an item to answer or update that person again unless they wrote after the reply):\n" + lines.joined(separator: "\n") + "\n" }
+            if !lines.isEmpty { out += "ASKS IN DIRECT CHATS (read from the chats themselves; a reply means it is answered — do not make an item to answer or update that person again unless they wrote after the reply; an OPEN one the summaries plainly show the user answered somewhere else goes in ask_updates by its id):\n" + lines.joined(separator: "\n") + "\n" }
         }
         let letGo = loops.filter { $0.status == .lapsed && StatusRules.isShown(settledAt: StatusRules.settledAt($0), now: now) }
         if !letGo.isEmpty {
@@ -101,7 +160,7 @@ public enum StatusRules {
     static var askLapseDays: Int { Int(askLapse / 86400) }
     static var loopLapseDays: Int { Int(loopLapse / 86400) }
 
-    /// Open asks that have waited the full term are let go, dated now. Nothing else changes.
+    /// Open asks that have waited the full term are let go, dated now — a promise to get to it counts from the asking, like no reply. Nothing else changes.
     public static func lapse(asks: [Ask], now: Date) -> [Ask] {
         asks.map { a in
             guard a.isOpen, now.timeIntervalSince(a.askedAt) >= askLapse else { return a }
@@ -120,8 +179,9 @@ public enum StatusRules {
         }
     }
 
-    /// The moment an item settled — answered, closed or let go. Nil while it is still open.
-    public static func settledAt(_ a: Ask) -> Date? { a.isAnswered ? a.answeredAt : a.lapsedAt }
+    /// The moment an item settled — answered, closed or let go. Nil while it is still open. For an ask, the line that
+    /// decided it (their receipt, the user's refusal, the judge's night) — or, from before there were verdicts, the reply.
+    public static func settledAt(_ a: Ask) -> Date? { a.isAnswered ? (a.outcomeAt ?? a.answeredAt) : a.lapsedAt }
     public static func settledAt(_ l: Loop) -> Date? {
         switch l.status {
         case .open: return nil
@@ -187,11 +247,21 @@ public enum StatusBlock {
         for a in theirAsks {
             func head(_ icon: String) -> String { "- \(icon) \(day.string(from: a.askedAt)) — they asked: “\(a.question.replacingOccurrences(of: "\n", with: " "))” — " }
             let line: String
-            if a.isAnswered { line = head("✅") + "you replied \(time.string(from: a.answeredAt!))" + (a.addressed == nil ? " _(not checked)_" : "") }
+            if a.isAnswered {
+                let at = StatusRules.settledAt(a) ?? a.askedAt
+                switch a.outcome {
+                case .confirmedByThem: line = head("✅") + "they said it's done, \(day.string(from: at))"
+                case .declined: line = head("✅") + "you said no, \(day.string(from: at))"
+                case .answered where a.outcomeBy == "judge": line = head("✅") + "answered \(a.outcomeHow ?? "elsewhere"), \(day.string(from: at)) (the judge)"
+                default: line = head("✅") + "you replied \(time.string(from: at))" + (a.addressed == nil ? " _(not checked)_" : "")
+                }
+            }
             else if let gone = a.lapsedAt {
-                let why = a.answeredAt.map { "you wrote \(time.string(from: $0)) but not about this" } ?? "no reply in \(StatusRules.askLapseDays) days"
+                let why = a.outcome == .promised ? "you said you would, \(day.string(from: a.outcomeAt ?? a.answeredAt ?? gone))"
+                    : a.answeredAt.map { "you wrote \(time.string(from: $0)) but not about this" } ?? "no reply in \(StatusRules.askLapseDays) days"
                 line = head("⌛") + why + "; no longer tracked (lapsed \(day.string(from: gone)))"
             }
+            else if a.outcome == .promised { line = head("⏳") + "you said you would, \(day.string(from: a.outcomeAt ?? a.answeredAt ?? a.askedAt)); still open" }
             else if let r = a.answeredAt { line = head("⏳") + "you wrote \(time.string(from: r)) but not about this; still open" }
             else { line = head("⏳") + "no reply yet" }
             out.append(Entry(line: line, settledAt: StatusRules.settledAt(a)))

@@ -16,23 +16,41 @@ public enum AskDetector {
         return askStarts.contains { t.hasPrefix($0 + " ") || t.hasPrefix($0 + ",") || t == $0 } || askStarts.filter { $0.count > 4 }.contains { t.contains(" " + $0 + " ") && t.count < 120 && !$0.hasPrefix("share") }
     }
 
-    /// Asks in one direct chat (ascending messages), each with the user's first reply after it — or, for an ask whose
-    /// reply was already judged to be about something else (`judged`, by ask id), the user's newest message after
-    /// that reply, with every user message between the two in the text the judge reads (oldest first, the newest
-    /// `repliesShown` of them), so one night's verdict moves past all of them: an answer buried behind five unrelated
-    /// messages is found the night it is read, not five nights on. Until there is a newer message the judged reply
-    /// stands, with the same text as before, so the ask still reads "you wrote, but not about this" and is not judged again.
+    /// Asks in one direct chat (ascending messages), each with the exchange after it — the window, both sides, the
+    /// newest `windowLines` of them — which is what the verdict on it is read from, and with the user's first reply
+    /// after it, kept as it always was: or, for an ask whose reply was already judged to be about something else
+    /// (`judged`, by ask id), the user's newest message after that reply, with every user message between the two in
+    /// the text (oldest first, the newest `repliesShown` of them). Until there is a newer message the judged reply
+    /// stands, with the same text as before, so the ask still reads "you wrote, but not about this".
     public static func detect(_ messages: [ChatMessage], person: String, bucket: BucketID, since: Date, handle: String? = nil, judged: [String: Date] = [:]) -> [Ask] {
         var out: [Ask] = []
         let recent = messages.filter { $0.date >= since }.sorted { $0.date < $1.date }
         for (i, m) in recent.enumerated() where !m.isMe && isAsk(m.text) {
             let id = "ask-" + String("\(bucket.rawValue)|\(m.rowID)".utf8.reduce(into: UInt64(1469598103934665603)) { $0 = ($0 ^ UInt64($1)) &* 1099511628211 }, radix: 16)
             // a burst of their messages with a question in the middle: the reply that counts is the first "Me" after the burst
-            let replies = recent[(i + 1)...].filter(\.isMe)
+            let after = recent[(i + 1)...]
+            let replies = after.filter(\.isMe)
             let reply = judged[id].flatMap { j in replies.last { $0.date > j } ?? replies.first { $0.date == j } } ?? replies.first
-            out.append(Ask(id: id, person: person, bucket: bucket, askedAt: m.date, question: String(m.text.prefix(200)), answeredAt: reply?.date, reply: reply.map { replyText(replies, upTo: $0) }, handle: handle))
+            out.append(Ask(id: id, person: person, bucket: bucket, askedAt: m.date, question: String(m.text.prefix(200)), answeredAt: reply?.date, reply: reply.map { replyText(replies, upTo: $0) }, handle: handle, window: window(after)))
         }
         return out
+    }
+
+    /// How much of the exchange after an ask the verdict is read from: the newest twelve lines, sharing about 900 characters.
+    static let windowLines = 12, windowRoom = 900
+    /// The window: the newest lines after the ask from both sides, oldest first, each on one line, blank ones (a bare
+    /// attachment) left out, and cut to fit the room together — the short ones keep every word, the long ones share what is left.
+    static func window(_ after: ArraySlice<ChatMessage>) -> [AskLine] {
+        let lines = after.map { ($0, $0.text.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)) }.filter { !$0.1.isEmpty }.suffix(windowLines)
+        let cut = fit(lines.map(\.1), room: windowRoom)
+        return zip(lines, cut).map { AskLine(at: $0.0.date, mine: $0.0.isMe, text: $1) }
+    }
+    static func fit(_ texts: [String], room: Int) -> [String] {
+        var budget = room, left = texts.count, cut = [Int](repeating: 0, count: texts.count)
+        for i in texts.indices.sorted(by: { texts[$0].count < texts[$1].count }) {
+            let take = min(texts[i].count, budget / max(left, 1)); cut[i] = take; budget -= take; left -= 1
+        }
+        return zip(texts, cut).map { String($0.prefix($1)) }
     }
 
     /// How many of the user's messages the judge is shown at once, and the room they share — the judge's prompt cuts at 400.
