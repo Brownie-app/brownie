@@ -2,7 +2,9 @@ import Foundation
 
 /// A kept summary, tagged with where it came from (the KB builder's trust tier). `sid` is the stable
 /// id the notes cite (a short hash of source, bucket, kind and item key); rows written before it
-/// existed carry nil. `mergedAt` is set once the builder has folded the row into the notes.
+/// existed carry nil. `mergedAt` is set once the builder has folded the row into the notes; `judgedAt`
+/// once the judge has seen it, after which the row is evidence only — kept thirty days, so a note the
+/// user rated still has its inputs beside it — and is never fed to the judge again.
 public struct SummaryRecord: Sendable, Identifiable, Equatable {
     public let id: Int64
     public let runID: Int64
@@ -16,12 +18,17 @@ public struct SummaryRecord: Sendable, Identifiable, Equatable {
     public let createdAt: Date
     public let sid: String?
     public let mergedAt: Date?
+    public let judgedAt: Date?
     public init(id: Int64, runID: Int64, source: SourceID, bucket: BucketID, bucketName: String, kind: SourceKind,
-                title: String, text: String, itemDate: Date?, createdAt: Date, sid: String? = nil, mergedAt: Date? = nil) {
+                title: String, text: String, itemDate: Date?, createdAt: Date, sid: String? = nil, mergedAt: Date? = nil, judgedAt: Date? = nil) {
         self.id = id; self.runID = runID; self.source = source; self.bucket = bucket; self.bucketName = bucketName
         self.kind = kind; self.title = title; self.text = text; self.itemDate = itemDate; self.createdAt = createdAt
-        self.sid = sid; self.mergedAt = mergedAt
+        self.sid = sid; self.mergedAt = mergedAt; self.judgedAt = judgedAt
     }
+    /// In the notes, not yet seen by the judge: what tonight's judge is owed.
+    public var awaitsJudge: Bool { mergedAt != nil && judgedAt == nil }
+    /// How long a merged row stays as evidence once the judge has seen it.
+    public static let evidenceWindow: TimeInterval = 30 * 86400
     /// The date the notes should file it under: when the item happened, else when it was read.
     public var effectiveDate: Date { itemDate ?? createdAt }
 }
@@ -125,14 +132,16 @@ public protocol RunStore: Sendable {
     func clearBucket(_ bucket: BucketID) async throws
     /// Forgets every cursor of one source, so its next run is a first read again (the way "Read further back" widens a window).
     func resetCursors(for source: SourceID) async throws
-    // summaries (ephemeral): fed to the notes exactly once, oldest first, then deleted
+    // summaries (ephemeral): fed to the notes exactly once, oldest first, judged once, then kept thirty days as evidence and deleted
     func summaries(since: Date?) async throws -> [SummaryRecord]
     /// Rows the notes have not absorbed yet, ordered by when the item happened (read time when undated), then id.
     func unmergedSummaries() async throws -> [SummaryRecord]
     /// Records that these rows are now in the notes, so no later run feeds them again.
     func markMerged(ids: [Int64], at: Date) async throws
-    /// Drops every row that is already in the notes; unmerged rows wait for the next sync.
-    func deleteMerged() async throws
+    /// FINISH: the judge has seen every merged row. Each is stamped judged, so no later night hands it to the judge
+    /// again, and stays as evidence for `keepFor` after it merged — a rated note's inputs are still there to read —
+    /// before it is let go. Unmerged rows wait for the next sync.
+    func retireMerged(now: Date, keepFor: TimeInterval) async throws
     /// The panic path only: throws away every summary, merged or not.
     func wipeSummaries() async throws
     // drop log

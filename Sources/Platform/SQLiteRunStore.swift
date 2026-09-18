@@ -24,7 +24,7 @@ public actor SQLiteRunStore: RunStore {
             set_aside INTEGER NOT NULL DEFAULT 0, gated TEXT);
         CREATE TABLE IF NOT EXISTS summary(id INTEGER PRIMARY KEY, run_id INTEGER NOT NULL, source_id TEXT NOT NULL,
             bucket_id TEXT NOT NULL, bucket_name TEXT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL, text TEXT NOT NULL,
-            item_date REAL, created_at REAL NOT NULL, sid TEXT, merged_at REAL);
+            item_date REAL, created_at REAL NOT NULL, sid TEXT, merged_at REAL, judged_at REAL);
         CREATE INDEX IF NOT EXISTS summary_created ON summary(created_at);
         CREATE TABLE IF NOT EXISTS drop_log(id INTEGER PRIMARY KEY, run_id INTEGER NOT NULL, source_id TEXT NOT NULL,
             bucket_name TEXT NOT NULL, reason TEXT NOT NULL, at REAL NOT NULL);
@@ -38,6 +38,9 @@ public actor SQLiteRunStore: RunStore {
         let columns = Set(try db.query("PRAGMA table_info(summary)").compactMap { $0["name"].text })
         if !columns.contains("sid") { try db.exec("ALTER TABLE summary ADD COLUMN sid TEXT") }
         if !columns.contains("merged_at") { try db.exec("ALTER TABLE summary ADD COLUMN merged_at REAL") }
+        // Stores from before merged rows stayed as evidence: a merged row still here was never judged (the old FINISH
+        // deleted judged rows), so it reads back unjudged and is owed to the judge — exactly as before.
+        if !columns.contains("judged_at") { try db.exec("ALTER TABLE summary ADD COLUMN judged_at REAL") }
         // Stores from before a cursor carried what its bucket set aside or the bad-dated items already recorded.
         let cursorColumns = Set(try db.query("PRAGMA table_info(bucket_cursor)").compactMap { $0["name"].text })
         if !cursorColumns.contains("set_aside") { try db.exec("ALTER TABLE bucket_cursor ADD COLUMN set_aside INTEGER NOT NULL DEFAULT 0") }
@@ -173,7 +176,17 @@ public actor SQLiteRunStore: RunStore {
         }
     }
 
-    public func deleteMerged() throws { try db.run("DELETE FROM summary WHERE merged_at IS NOT NULL") }
+    /// Judged rows are stamped, never deleted on the night: what merged more than `keepFor` ago goes, in the same transaction.
+    public func retireMerged(now: Date, keepFor: TimeInterval) throws {
+        try db.transaction {
+            try db.run("UPDATE summary SET judged_at=? WHERE merged_at IS NOT NULL AND judged_at IS NULL", [.init(now)])
+            try deleteJudged(mergedBefore: now.addingTimeInterval(-keepFor))
+        }
+    }
+    /// Only a row the judge has seen is evidence that can age out; one merged but never judged is still owed a judgement.
+    private func deleteJudged(mergedBefore cutoff: Date) throws {
+        try db.run("DELETE FROM summary WHERE judged_at IS NOT NULL AND merged_at < ?", [.real(cutoff.timeIntervalSince1970)])
+    }
 
     public func wipeSummaries() throws { try db.run("DELETE FROM summary") }
 
@@ -182,7 +195,7 @@ public actor SQLiteRunStore: RunStore {
                       bucket: BucketID(r["bucket_id"].text ?? ""), bucketName: r["bucket_name"].text ?? "",
                       kind: SourceKind(rawValue: r["kind"].text ?? "") ?? .document, title: r["title"].text ?? "",
                       text: r["text"].text ?? "", itemDate: r["item_date"].date, createdAt: r["created_at"].date ?? Date(),
-                      sid: r["sid"].text, mergedAt: r["merged_at"].date)
+                      sid: r["sid"].text, mergedAt: r["merged_at"].date, judgedAt: r["judged_at"].date)
     }
 
     // MARK: drops
@@ -228,15 +241,16 @@ public actor SQLiteRunStore: RunStore {
 
     // MARK: reset
 
-    /// Retention: drop log and run rows older than 90 days, the send log older than 30, and Sunday letters older
-    /// than 26 weeks (the week's key is its ISO week; the pointer keys beside them are not dated and stay). The vault
-    /// health history trims itself as it is appended, so it is not touched here.
+    /// Retention: drop log and run rows older than 90 days, the send log and judged summaries older than 30, and Sunday
+    /// letters older than 26 weeks (the week's key is its ISO week; the pointer keys beside them are not dated and stay).
+    /// The vault health history trims itself as it is appended, so it is not touched here.
     public func prune(now: Date) throws { try prune(now: now, olderThan: 90) }
     public func prune(now: Date, olderThan days: Int) throws {
         let cutoff = now.addingTimeInterval(-Double(days) * 86400).timeIntervalSince1970
         try db.run("DELETE FROM drop_log WHERE at < ?", [.real(cutoff)])
         try db.run("DELETE FROM run WHERE started_at < ?", [.real(cutoff)])
         try db.run("DELETE FROM send_log WHERE at < ?", [.real(now.addingTimeInterval(-30 * 86400).timeIntervalSince1970)])
+        try deleteJudged(mergedBefore: now.addingTimeInterval(-SummaryRecord.evidenceWindow))
         for key in try keys(withPrefix: "proactive.weekly.") where Self.weekIsOlder(key, than: Self.weeklyKeep, at: now) { try setValue(key, nil) }
     }
     static let weeklyKeep = 26

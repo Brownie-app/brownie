@@ -38,15 +38,17 @@ public actor KnowledgeBuilder {
     private let timeZone: TimeZone
     private let coverage: @Sendable () async -> String?
     private let people: @Sendable () async -> [Person]
+    private let instructions: String
 
     /// `coverage` renders the "how far back each source has been read" lines for the brain's header; nil skips them.
-    /// `people` is the registry's roster, so the brain knows which file each person already has.
+    /// `people` is the registry's roster, so the brain knows which file each person already has. `instructions` is what
+    /// the user's ratings of the notes taught (the note feedback digest), given to both prompts at `{{instructions}}`.
     public init(brain: any Brain, store: any KnowledgeStore, runStore: any RunStore, bundle: Bundle? = nil,
                 partBudget: Int = BrainLimits.corpusPartBudget, now: @escaping @Sendable () -> Date = { Date() }, timeZone: TimeZone = .current,
-                coverage: @escaping @Sendable () async -> String? = { nil }, people: @escaping @Sendable () async -> [Person] = { [] }) throws {
+                coverage: @escaping @Sendable () async -> String? = { nil }, people: @escaping @Sendable () async -> [Person] = { [] }, instructions: String = "") throws {
         let bundle = bundle ?? Bundle.module
         self.brain = brain; self.store = store; self.runStore = runStore
-        self.partBudget = partBudget; self.now = now; self.timeZone = timeZone; self.coverage = coverage; self.people = people
+        self.partBudget = partBudget; self.now = now; self.timeZone = timeZone; self.coverage = coverage; self.people = people; self.instructions = instructions
         buildPrompt = try String(contentsOf: bundle.url(forResource: "build", withExtension: "md", subdirectory: "Prompts") ?? bundle.url(forResource: "build", withExtension: "md")!, encoding: .utf8)
         updatePrompt = try String(contentsOf: bundle.url(forResource: "update", withExtension: "md", subdirectory: "Prompts") ?? bundle.url(forResource: "update", withExtension: "md")!, encoding: .utf8)
     }
@@ -148,7 +150,8 @@ public actor KnowledgeBuilder {
     }
 
     private func runPart(isBuild: Bool, corpus: String, in staging: URL, onEvent: @escaping @Sendable (AgentEvent) -> Void) async throws -> Usage {
-        let system = isBuild ? buildPrompt : updatePrompt
+        // What the user's ratings taught goes in at the prompt's `{{instructions}}` — an empty string when nothing has been said.
+        let system = (isBuild ? buildPrompt : updatePrompt).replacingOccurrences(of: "{{instructions}}", with: instructions.trimmingCharacters(in: .whitespacesAndNewlines))
         let input = await header() + "Working directory: the knowledge base root (use relative paths).\n\nSUMMARIES:\n\n" + corpus
         // One set of tools per part: the roster it checks People/ paths against, the day it stamps, and what it has read.
         let part = FileTools.Part(root: staging, people: await people(), today: NoteMeta.day(now(), timeZone))

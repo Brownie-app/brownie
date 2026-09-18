@@ -98,13 +98,14 @@ import Support
         #expect(Self.titles("a", 30, in: brain.judged[0]) == 30, "every row the notes now hold")
         #expect(Self.titles("b", 5, in: brain.judged[0]) == 0, "not one row the notes have not seen")
         let after2 = try await w.rows()
-        #expect(after2.count == 5 && after2.allSatisfy { $0.mergedAt == nil }, "the judged rows are gone; the five wait")
+        #expect(after2.filter { $0.mergedAt == nil }.count == 5 && after2.filter { $0.judgedAt == Self.today }.count == 30 && after2.count == 35, "the judged rows stay as evidence, stamped; the five wait")
 
         // Night 3: the five reach the notes and the judge — and the thirty are not judged a second time.
         #expect(await Self.night(w, brain) == .ran(cards: 0))
         #expect(brain.judged.count == 2)
         #expect(Self.titles("b", 5, in: brain.judged[1]) == 5 && Self.titles("a", 30, in: brain.judged[1]) == 0)
-        #expect(try await w.rows().isEmpty)
+        let after3 = try await w.rows()
+        #expect(after3.count == 35 && !after3.contains(where: \.awaitsJudge), "every row is evidence now, none is owed to the judge")
     }
 
     @Test func finishMeasuresTheVaultAndPrunesTheStoreEvenOnAQuietNight() async throws {
@@ -151,7 +152,8 @@ import Support
         brain.failJudge = false
         #expect(await Self.night(w, brain) == .ran(cards: 0))
         #expect(brain.judged.count == 1 && Self.titles("a", 6, in: brain.judged[0]) == 6)
-        #expect(try await w.rows().isEmpty, "judged, then deleted at FINISH")
+        let stamped = try await w.rows()
+        #expect(stamped.count == 6 && !stamped.contains(where: \.awaitsJudge), "judged, then stamped at FINISH — kept as evidence, owed to nobody")
         #expect(try await w.kb.note(at: "Notes/part2.md") == nil, "nothing was fed to the notes twice")
 
         // Another quiet night: nothing to sync, nothing to judge.

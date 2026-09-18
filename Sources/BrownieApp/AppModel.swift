@@ -84,6 +84,8 @@ final class AppModel: ObservableObject {
     @Published var instructions = ""
     /// Every thumbs-down, newest last. Folded into the night's instructions by FeedbackDigest.
     @Published var feedback: [CardFeedback] = []
+    /// The user's word on the notes — good, or not right and why. The note builder reads the digest before it writes (AppModel+NoteFeedback).
+    @Published var noteFeedback = NoteFeedbackList()
     /// The household, when there is one: members, the shared folder, the chats shared.
     @Published var household: Household?
     @Published var householdLastSync: SyncReport?
@@ -244,6 +246,7 @@ final class AppModel: ObservableObject {
         signMessages = (await v(SettingKey.signature)) == "true"
         staleDays = Int(await v(SettingKey.staleDays) ?? "") ?? QuietCheck.defaultStaleDays
         feedback = RunCoordinator.loadFeedback(await v(SettingKey.feedback))
+        noteFeedback = NoteFeedbackList.decode(await v(SettingKey.noteFeedback))
         household = RunCoordinator.loadHousehold(await v(SettingKey.household))
         if let j = await v(SettingKey.householdLastSync), let d = j.data(using: .utf8) { householdLastSync = try? JSONDecoder().decode(SyncReport.self, from: d) }
         handsHotkey = await v(SettingKey.handsHotkey) ?? "rightCommand"

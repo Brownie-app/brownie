@@ -160,30 +160,46 @@ import Platform
         #expect(orphans.isEmpty, "the snapshot was folded back, not left behind")
     }
 
-    // MARK: (c) merged rows are marked; deleteMerged removes only them
+    // MARK: (c) merged rows are marked; retireMerged stamps them judged, keeps them thirty days, then lets only them go
 
-    @Test func mergedRowsAreMarkedAndOnlyTheyAreDeleted() async throws {
+    @Test func mergedRowsAreMarkedThenRetiredAndOnlyTheyAreEverDeleted() async throws {
         let w = try Self.world()
         let rows = try await w.seed(5, from: 0)
         let brain = ScriptedBrain { _, tools in try await Self.write(tools, "README.md", "# Portrait") }
         _ = try await w.builder(brain).sync(summaries: rows, progress: { _ in }, onEvent: { _ in })
         let all = try await w.store.summaries(since: nil)
-        #expect(all.count == 5 && all.allSatisfy { $0.mergedAt == Self.today }, "the builder marks, it does not delete")
+        #expect(all.count == 5 && all.allSatisfy { $0.mergedAt == Self.today && $0.judgedAt == nil }, "the builder marks, it does not delete or judge")
         let later = try await w.seed(2, from: 10, tag: "c")
-        try await w.store.deleteMerged()
-        #expect(Set(try await w.store.summaries(since: nil).map(\.id)) == Set(later.map(\.id)))
-        #expect(try await w.store.unmergedSummaries().map(\.id) == later.map(\.id))
+        let keep = 30 * 86400.0
+        try await w.store.retireMerged(now: Self.today, keepFor: keep)
+        let tonight = try await w.store.summaries(since: nil)
+        #expect(tonight.count == 7, "nothing goes on the night: the merged rows stay as evidence")
+        #expect(tonight.filter { $0.judgedAt == Self.today }.map(\.id).sorted() == rows.map(\.id).sorted(), "the merged rows are stamped judged")
+        let waiting = try await w.store.unmergedSummaries().map(\.id)
+        #expect(tonight.filter { $0.awaitsJudge }.isEmpty && waiting == later.map(\.id), "the two that arrived since wait for the next sync, and no row is owed to the judge")
+        try await w.store.retireMerged(now: Self.today.addingTimeInterval(keep - 1), keepFor: keep)
+        #expect(try await w.store.summaries(since: nil).count == 7, "a day short of thirty, still there")
+        try await w.store.retireMerged(now: Self.today.addingTimeInterval(keep + 1), keepFor: keep)
+        #expect(Set(try await w.store.summaries(since: nil).map(\.id)) == Set(later.map(\.id)), "past thirty days the judged rows go; the unmerged two are untouched")
     }
 
-    @Test func storeMarksAndDeletesExactlyTheGivenIds() async throws {
+    @Test func storeMarksExactlyTheGivenIdsAndRetiresOnlyJudgedRows() async throws {
         let w = try Self.world()
         let rows = try await w.seed(3, from: 0)
         try await w.store.markMerged(ids: [rows[0].id, rows[2].id], at: Self.today)
         #expect(try await w.store.unmergedSummaries().map(\.id) == [rows[1].id])
-        try await w.store.deleteMerged()
-        #expect(try await w.store.summaries(since: nil).map(\.id) == [rows[1].id])
+        try await w.store.retireMerged(now: Self.today, keepFor: 0)
+        #expect(try await w.store.summaries(since: nil).count == 3, "keepFor 0 still keeps what merged this very second (strictly older goes)")
+        try await w.store.retireMerged(now: Self.today.addingTimeInterval(1), keepFor: 0)
+        #expect(try await w.store.summaries(since: nil).map(\.id) == [rows[1].id], "judged and older than the window: gone; the unmerged row stays")
         try await w.store.markMerged(ids: [], at: Self.today)
         #expect(try await w.store.summaries(since: nil).count == 1, "an empty list is a no-op")
+        // A row merged on a night whose judge failed is never evidence that can age out: it is still owed a judgement.
+        try await w.store.markMerged(ids: [rows[1].id], at: Self.today.addingTimeInterval(-40 * 86400))
+        try await w.store.prune(now: Self.today)
+        #expect(try await w.store.summaries(since: nil).map(\.id) == [rows[1].id], "prune lets go of judged rows only")
+        try await w.store.retireMerged(now: Self.today, keepFor: 30 * 86400)
+        #expect(try await w.store.summaries(since: nil).isEmpty, "once judged, a row merged forty days ago is past the window and goes")
     }
 
     @Test func unmergedSummariesComeOldestFirstByItemDateThenId() async throws {
@@ -386,6 +402,29 @@ import Platform
         _ = try await w.builder(brain, budget: 2000).sync(summaries: try await w.store.unmergedSummaries(), progress: { _ in }, onEvent: { _ in })
         #expect(brain.recorded.dropFirst(3).allSatisfy { $0.system.hasPrefix("You are updating") && $0.effort == .medium })
         #expect(brain.recorded.count == 6)
+    }
+
+    /// What the user's ratings of the notes taught goes to the brain at the prompt's `{{instructions}}` — the build and
+    /// the update alike, at the very end — and with nothing taught the placeholder is simply gone.
+    @Test func whatTheRatingsTaughtEndsBothPromptsAndThePlaceholderNeverShows() async throws {
+        let w = try Self.world()
+        try await w.seed(2, from: 0)
+        let lessons = "WHAT YOU CORRECTED IN THE NOTES (standing instructions, newest first):\n- too much hedging (about Meera, 12 Sep)"
+        let brain = ScriptedBrain { n, tools in try await Self.write(tools, "Notes/p\(n).md", "# \(n)") }
+        let taught = try KnowledgeBuilder(brain: brain, store: w.kb, runStore: w.store, now: { Self.today }, timeZone: Self.utc, instructions: lessons)
+        _ = try await taught.sync(summaries: try await w.store.unmergedSummaries(), progress: { _ in }, onEvent: { _ in })
+        let build = try #require(brain.recorded.first)
+        #expect(build.system.hasPrefix("You are building") && build.system.trimmingCharacters(in: .whitespacesAndNewlines).hasSuffix(lessons), "the build prompt ends with the lessons")
+        #expect(!build.system.contains("{{instructions}}"))
+        try await w.seed(2, from: 10, tag: "u")
+        _ = try await taught.sync(summaries: try await w.store.unmergedSummaries(), progress: { _ in }, onEvent: { _ in })
+        let update = try #require(brain.recorded.last)
+        #expect(update.system.hasPrefix("You are updating") && update.system.trimmingCharacters(in: .whitespacesAndNewlines).hasSuffix(lessons), "and so does the update prompt")
+        try await w.seed(2, from: 20, tag: "v")
+        _ = try await w.builder(brain).sync(summaries: try await w.store.unmergedSummaries(), progress: { _ in }, onEvent: { _ in })
+        let silent = try #require(brain.recorded.last)
+        #expect(!silent.system.contains("{{instructions}}") && !silent.system.contains("WHAT YOU CORRECTED"), "nothing taught: nothing said, no placeholder left behind")
+        #expect(brain.recorded.count == 3)
     }
 
     // MARK: a user's edit during the sync is kept, file by file
