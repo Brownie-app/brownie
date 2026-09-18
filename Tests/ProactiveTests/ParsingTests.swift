@@ -38,6 +38,19 @@ import Domain
         let json = #"{"action_items":[],"loops":[{"person":"Karan","direction":"theirs","what":"villa share","quote":"tonight","source":"WhatsApp · Fri","due":null}],"loop_updates":[{"id":"ABCD1234","status":"closed","how":"paid"}]}"#
         let w = try JSONDecoder().decode(Judge.Wrapper.self, from: Data(json.utf8))
         #expect(w.loops?.first?.person == "Karan"); #expect(w.loop_updates?.first?.status == "closed")
+        #expect(w.ask_updates == nil, "a judge that says nothing about asks is fine")
+    }
+    @Test func testJudgeWrapperReadsAskUpdatesTolerantly() throws {
+        let json = #"{"action_items":[],"loops":[],"loop_updates":[],"ask_updates":[{"askID":"ask-a1b2c3d4","status":"answered","how":"on Slack"},{"id":"ask-ffff0000","how":"by mail"},{"ask_id":"ask-eeee0000","status":"open"},{"status":"answered","how":"nowhere"},{"askID":"ask-dddd0000","status":null,"how":null}]}"#
+        let w = try JSONDecoder().decode(Judge.Wrapper.self, from: Data(json.utf8))
+        let u = try #require(w.ask_updates)
+        #expect(u.count == 5)
+        #expect(u[0].askID == "ask-a1b2c3d4" && u[0].status == "answered" && u[0].how == "on Slack")
+        #expect(u[1].askID == "ask-ffff0000" && u[1].status == nil, "the id under another name, no status")
+        #expect(u[2].askID == "ask-eeee0000" && u[2].status == "open")
+        #expect(u[3].askID == nil, "no id: nothing to apply")
+        #expect(u[4].askID == "ask-dddd0000" && u[4].status == nil && u[4].how == nil)
+        #expect(Judge.schema.contains(#""ask_updates":{"type":"array""#) && Judge.schema.contains(#""required":["askID","status","how"]"#))
     }
     @Test func testJudgeTrimKeepsNewestFirst() {
         let long = String(repeating: "x", count: 100)

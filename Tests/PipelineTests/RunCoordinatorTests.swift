@@ -224,6 +224,48 @@ import Support
         #expect(kanika.contains("- 2026-09 — they asked: “lunch?” — you replied 2 Sep 00:00"), "routed by handle under another chat name: the trace lands where the block was")
     }
 
+    /// Asked on WhatsApp, answered on Slack: the judge is handed the open ask by id, says in `ask_updates` that the summaries
+    /// show it answered elsewhere, and the ask closes tonight — the note says so, the loop it came from goes with it, and
+    /// the judge's word the night after changes nothing, nor can it reopen one.
+    @Test func anAskTheJudgeSeesAnsweredElsewhereClosesWithItsLoop() async throws {
+        let w = try Self.world()
+        try await w.seed(1, tag: "a")
+        try Self.putNote("People/Nitesh.md", body: "# Nitesh\n\n## About\n- x\n", updated: "2026-09-01", in: w)
+        let registry = PersonRegistry(vault: w.kb.rootURL, now: { Self.today })
+        let id = await registry.register(label: "Nitesh", handle: "whatsapp:+919540752593"); await registry.setNotePath("People/Nitesh.md", for: id)
+        try await registry.save()
+        let day = 86400.0
+        let ask = Ask(id: "ask-a1b2c3d4e5f6", person: "Nitesh", bucket: BucketID("whatsapp:507"), askedAt: Self.today.addingTimeInterval(-2 * day), question: "postgres ka url kaise milega?", handle: "whatsapp:+919540752593",
+                      window: [AskLine(at: Self.today.addingTimeInterval(-2 * day + 60), mine: false, text: "urgent hai")])
+        let settled = Ask(id: "ask-ffff000011112222", person: "Nitesh", bucket: BucketID("whatsapp:507"), askedAt: Self.today.addingTimeInterval(-3 * day), question: "beer?", answeredAt: Self.today.addingTimeInterval(-3 * day + 600), reply: "sure", addressed: true, handle: "whatsapp:+919540752593", outcome: .answered, outcomeAt: Self.today.addingTimeInterval(-3 * day + 600), outcomeBy: "rules")
+        try await w.store.setValue(SettingKey.asks, String(data: try JSONEncoder().encode([ask, settled]), encoding: .utf8))
+        let loop = Loop(id: "URL00001-x", direction: .mine, person: "Nitesh", what: "Send Nitesh the postgres url", quote: "q", sourceLabel: "WhatsApp · Mon", due: nil, openedAt: Self.today.addingTimeInterval(-day))
+        let other = Loop(id: "DECK0001-x", direction: .mine, person: "Nitesh", what: "Send Nitesh the deck", quote: "q", sourceLabel: "WhatsApp · Mon", due: nil, openedAt: Self.today.addingTimeInterval(-day))
+        try await w.store.setValue(SettingKey.loops, String(data: try JSONEncoder().encode([loop, other]), encoding: .utf8))
+        let brain = Fake()
+        brain.judgeReply = #"{"action_items":[],"loops":[],"loop_updates":[],"ask_updates":[{"askID":"ask-a1b2c3d4e5f6","status":"answered","how":"on Slack"},{"askID":"ask-ffff000011112222","status":"open","how":"never mind"}]}"#
+        #expect(await Self.night(w, brain) == .ran(cards: 0))
+        let input = try #require(brain.judged.first)
+        #expect(input.contains("- ask ask-a1b2c3d4e5f6 · Nitesh asked the user something on") && input.contains("NO REPLY YET (2 days ago)"), "the open ask is handed over by id")
+        #expect(!input.contains("- ask ask-ffff") && input.contains("the user replied") && !input.contains("kaise milega") && !input.contains("beer"), "the settled one without, and never the words")
+        #expect(input.contains("ask_updates"), "and the judge is told what to do with it")
+        let asks = RunCoordinator.loadAsks(try await w.store.value(SettingKey.asks))
+        let closed = try #require(asks.first { $0.id == ask.id })
+        #expect(closed.outcome == .answered && closed.outcomeBy == "judge" && closed.outcomeHow == "on Slack" && closed.outcomeAt == Self.today && closed.answeredAt == Self.today && closed.addressed == true && !closed.isOpen, "closed tonight, by the judge's word")
+        #expect(asks.first { $0.id == settled.id } == settled, "the judge's 'open' touches nothing")
+        let note = try Self.body("People/Nitesh.md", in: w)
+        #expect(note.contains("- ✅ 14 Sep — they asked: “postgres ka url kaise milega?” — answered on Slack, 16 Sep (the judge)"), "the note says where")
+        let ledger = try JSONDecoder().decode([Loop].self, from: Data((try await w.store.value(SettingKey.loops) ?? "").utf8))
+        let followed = try #require(ledger.first { $0.id == loop.id })
+        #expect(followed.status == .closed && followed.closedBy == "ask" && followed.closedHow == "the ask it came from was answered" && followed.closedAt == Self.today, "the loop about the very thing asked for goes with it")
+        #expect(ledger.first { $0.id == other.id }?.status == .open, "the other deliverable stays")
+        #expect(note.contains("- ✅ you promised (15 Sep): Send Nitesh the postgres url — done 16 Sep (the ask it came from was answered)"))
+
+        // the night after: the judge repeats itself, and nothing moves
+        #expect(await Self.night(w, brain) == .ran(cards: 0))
+        #expect(RunCoordinator.loadAsks(try await w.store.value(SettingKey.asks)).first { $0.id == ask.id } == closed)
+    }
+
     /// Tonight's mentions carry the chat's handle: a summary has none of its own, but the ask ledger knows the chat's.
     @Test func mentionsCarryTheChatsHandleFromTheAskLedger() {
         let bucket = BucketID("w:9")

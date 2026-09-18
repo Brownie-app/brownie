@@ -24,6 +24,18 @@ import Domain
         #expect(StatusRules.lapse(asks: out, now: now.addingTimeInterval(5 * day))[1].lapsedAt == now, "the date it was let go does not move")
     }
 
+    @Test func aPromiseToGetToItLapsesLikeNoReplyFromTheAsking() {
+        var young = ask("young", askedDaysAgo: 44.9, answeredDaysAgo: 1); young.settle(.promised, at: young.answeredAt!, by: "rules")
+        var old = ask("old", askedDaysAgo: 45, answeredDaysAgo: 1); old.settle(.promised, at: old.answeredAt!, by: "rules")
+        var theirs = ask("theirs", askedDaysAgo: 60); theirs.settle(.confirmedByThem, at: now.addingTimeInterval(-59 * day), by: "rules")
+        var no = ask("no", askedDaysAgo: 60, answeredDaysAgo: 59); no.settle(.declined, at: no.answeredAt!, by: "rules")
+        let out = StatusRules.lapse(asks: [young, old, theirs, no], now: now)
+        #expect(out[0].isOpen && out[0].lapsedAt == nil, "a promise made yesterday on a question asked 44 days ago is still open")
+        #expect(out[1].lapsedAt == now && out[1].isLapsed && !out[1].isOpen, "45 days from the asking, a promise counts for nothing")
+        #expect(out[2].lapsedAt == nil && out[2].isAnswered && out[3].lapsedAt == nil && out[3].isAnswered, "their word and the user's no are settled, never let go")
+        #expect(StatusRules.settledAt(out[1]) == now && StatusRules.settledAt(young) == nil && StatusRules.settledAt(theirs) == now.addingTimeInterval(-59 * day))
+    }
+
     @Test func anUntouchedLoopIsLetGoAfterNinetyDays() {
         let out = StatusRules.lapse(loops: [loop("young", openedDaysAgo: 89.9), loop("old", openedDaysAgo: 90), loop("done", openedDaysAgo: 200, status: .closed)], now: now)
         #expect(out[0].status == .open && out[0].lapsedAt == nil)

@@ -171,12 +171,20 @@ public actor RunCoordinator {
                 let household = Self.loadHousehold(try await store.value(SettingKey.household))
                 // Asks were scanned (and judged on-device) in the read phase; without a reader they are scanned here, unjudged.
                 if deps.reader == nil { await Self.scanAsks(deps: deps, store: store, reader: nil, log: log) }
-                let asks = Self.loadAsks(try await store.value(SettingKey.asks))
-                let settled = AskLedger.closures(loops: openLoops, asks: asks, now: deps.clock.now())
-                if settled != openLoops { var all = await LoopLedger.load(store); for l in settled where l.status == .closed { if let i = all.firstIndex(where: { $0.id == l.id }) { all[i] = l } }; await LoopLedger.save(all, store); log.info("\(settled.filter { $0.status == .closed }.count) loop(s) closed by the user's own replies") }
+                var asks = Self.loadAsks(try await store.value(SettingKey.asks))
+                // The user's own replies close the loops about answering; an ask settled any way closes the loop it came from.
+                let settled = await Self.closeLoops(by: asks, among: openLoops, store: store, now: deps.clock.now(), log: log)
                 let openNow = settled.filter { $0.status == .open }
                 let (findings, u1) = try await Judge(brain: brain, clock: deps.clock).judge(summaries: recent, calendar: cal, instructions: instructions, openLoops: openNow, max: 8, household: household, asks: AskLedger.judgeLines(asks, loops: ledger, now: deps.clock.now()), selfNames: deps.selfNames)
                 usage = usage + u1
+                // An ask the judge saw answered in another channel closes tonight, and the loop it came from with it. Never reopened.
+                let elsewhere = AskLedger.apply(updates: findings.askUpdates, to: asks, now: deps.clock.now())
+                if elsewhere != asks {
+                    for (a, b) in zip(asks, elsewhere) where a.isOpen && !b.isOpen { log.info("ask from \(b.person) answered \(b.outcomeHow ?? "elsewhere") — closed by the judge") }
+                    asks = elsewhere
+                    try? await store.setValue(SettingKey.asks, String(data: JSONEncoder().encode(asks), encoding: .utf8))
+                    _ = await Self.closeLoops(by: asks, among: openNow, store: store, now: deps.clock.now(), log: log)
+                }
                 // Promises said out loud: parsed from transcript summaries, deterministically, so none is missed.
                 let spoken = recent.filter { $0.kind == .transcript }.flatMap { TranscriptPromises.parse(summary: $0.text, recording: $0.title.isEmpty ? $0.bucketName : $0.title, date: $0.itemDate ?? $0.createdAt, now: deps.clock.now()) }
                 if !spoken.isEmpty { deps.stage("Promises said out loud", "\(spoken.count) from \(recent.filter { $0.kind == .transcript }.count) recording(s)"); log.info("\(spoken.count) spoken promise(s) found") }
@@ -367,6 +375,20 @@ public actor RunCoordinator {
         return Set(ids.map(BucketID.init))
     }
 
+    /// The loops the asks settle, written to the ledger: a `mine` loop about answering someone whose reply came, and a loop
+    /// about the very thing an ask asked for once that ask is settled — by the user's reply, their word, or the judge's.
+    static func closeLoops(by asks: [Ask], among open: [Loop], store: any RunStore, now: Date, log: Log) async -> [Loop] {
+        let settled = AskLedger.followers(loops: AskLedger.closures(loops: open, asks: asks, now: now), asks: asks, now: now)
+        guard settled != open else { return open }
+        var all = await LoopLedger.load(store)
+        for l in settled where l.status == .closed { if let i = all.firstIndex(where: { $0.id == l.id }) { all[i] = l } }
+        await LoopLedger.save(all, store)
+        let byReply = settled.filter { $0.status == .closed && $0.closedBy == "reply" }.count
+        if byReply > 0 { log.info("\(byReply) loop(s) closed by the user's own replies") }
+        for l in settled where l.status == .closed && l.closedBy == "ask" { log.info("loop closed by the ask it came from: \(l.direction == .mine ? "the user → \(l.person)" : "\(l.person) → the user") · \(l.what)") }
+        return settled
+    }
+
     /// Direct chats → asks and the user's replies → judged (rules, then the on-device reader) → the local ledger.
     static func scanAsks(deps: Dependencies, store: any RunStore, reader: (any LocalModel)?, log: Log) async {
         let now = deps.clock.now()
@@ -382,8 +404,8 @@ public actor RunCoordinator {
         }
         let merged = AskLedger.merge(existing: existing, found: found, now: now)
         let judged = await AskAnswering.judge(merged, reader: reader)
-        let unsure = judged.filter { $0.answeredAt != nil && $0.addressed == nil }.count
-        log.info("asks: \(judged.count) tracked · \(judged.filter(\.isOpen).count) open · \(judged.filter { $0.addressed == false }.count) replied-but-not-answered · \(unsure) not judged")
+        let unsure = judged.filter { $0.awaitsVerdict && !($0.window ?? $0.legacyWindow).isEmpty }.count
+        log.info("asks: \(judged.count) tracked · \(judged.filter(\.isOpen).count) open · \(judged.filter { $0.outcome == .promised }.count) promised · \(judged.filter { $0.addressed == false }.count) replied-but-not-answered · \(judged.filter { $0.outcome == .confirmedByThem }.count) confirmed by them · \(unsure) not judged")
         try? await store.setValue(SettingKey.asks, String(data: JSONEncoder().encode(judged), encoding: .utf8))
     }
     static func enabledBucketsStatic(for source: any Source, store: any RunStore) async throws -> Set<BucketID>? {

@@ -4,13 +4,14 @@ import Support
 
 /// Part 1: hermetic, no tools. Summaries (+ calendar text + clock + standing instructions) → ranked candidates.
 public struct Judge: Sendable {
-    public static let schema = #"{"type":"object","properties":{"action_items":{"type":"array","items":{"type":"object","properties":{"title":{"type":"string"},"action":{"type":"string"},"importance":{"type":"string"},"dueDate":{"type":["string","null"]},"sources":{"type":"array","items":{"type":"string"}},"urgency":{"type":"string","enum":["high","medium","low"]},"loopID":{"type":["string","null"]},"cameBack":{"type":"boolean"},"owner":{"type":["string","null"]}},"required":["title","action","importance","dueDate","sources","urgency","loopID","cameBack","owner"]}},"loops":{"type":"array","items":{"type":"object","properties":{"person":{"type":"string"},"direction":{"type":"string","enum":["mine","theirs"]},"what":{"type":"string"},"quote":{"type":"string"},"source":{"type":"string"},"due":{"type":["string","null"]},"dueISO":{"type":["string","null"]},"owner":{"type":["string","null"]}},"required":["person","direction","what","quote","source","due","dueISO","owner"]}},"loop_updates":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},"status":{"type":"string","enum":["open","closed"]},"how":{"type":"string"}},"required":["id","status","how"]}}},"required":["action_items","loops","loop_updates"]}"#
+    public static let schema = #"{"type":"object","properties":{"action_items":{"type":"array","items":{"type":"object","properties":{"title":{"type":"string"},"action":{"type":"string"},"importance":{"type":"string"},"dueDate":{"type":["string","null"]},"sources":{"type":"array","items":{"type":"string"}},"urgency":{"type":"string","enum":["high","medium","low"]},"loopID":{"type":["string","null"]},"cameBack":{"type":"boolean"},"owner":{"type":["string","null"]}},"required":["title","action","importance","dueDate","sources","urgency","loopID","cameBack","owner"]}},"loops":{"type":"array","items":{"type":"object","properties":{"person":{"type":"string"},"direction":{"type":"string","enum":["mine","theirs"]},"what":{"type":"string"},"quote":{"type":"string"},"source":{"type":"string"},"due":{"type":["string","null"]},"dueISO":{"type":["string","null"]},"owner":{"type":["string","null"]}},"required":["person","direction","what","quote","source","due","dueISO","owner"]}},"loop_updates":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},"status":{"type":"string","enum":["open","closed"]},"how":{"type":"string"}},"required":["id","status","how"]}},"ask_updates":{"type":"array","items":{"type":"object","properties":{"askID":{"type":"string"},"status":{"type":"string","enum":["answered"]},"how":{"type":"string"}},"required":["askID","status","how"]}}},"required":["action_items","loops","loop_updates","ask_updates"]}"#
 
-    /// What the judge found besides the items: new loops and closures of tracked ones.
+    /// What the judge found besides the items: new loops, closures of tracked ones, and asks it saw answered somewhere else.
     public struct Findings: Sendable {
         public var items: [ActionItem]
         public var newLoops: [Loop]
         public var updates: [(idPrefix: String, closed: Bool, how: String)]
+        public var askUpdates: [(idPrefix: String, how: String)] = []
     }
 
     private let brain: any Brain
@@ -55,17 +56,34 @@ public struct Judge: Sendable {
             return loop
         }
         let updates = (obj.loop_updates ?? []).map { (idPrefix: $0.id, closed: $0.status == "closed", how: $0.how) }
-        log.info("judge: \(obj.action_items.count) candidates, \(loops.count) new loops, \(updates.count) loop updates from \(summaries.count) summaries")
+        // An ask answered elsewhere: only "answered" (or a word for it) counts, and only with an id; the judge cannot reopen one.
+        let askUpdates = (obj.ask_updates ?? []).compactMap { u -> (idPrefix: String, how: String)? in
+            guard let id = u.askID, !id.isEmpty, ["answered", "closed", "done", ""].contains((u.status ?? "").lowercased()) else { return nil }
+            return (idPrefix: id, how: u.how ?? "")
+        }
+        log.info("judge: \(obj.action_items.count) candidates, \(loops.count) new loops, \(updates.count) loop updates, \(askUpdates.count) ask updates from \(summaries.count) summaries")
         let items = obj.action_items.prefix(max).map { i -> ActionItem in var i = i; i.owner = Self.cleanOwner(i.owner); return i }
-        return (Findings(items: Array(items), newLoops: loops, updates: updates), r.usage)
+        return (Findings(items: Array(items), newLoops: loops, updates: updates, askUpdates: askUpdates), r.usage)
     }
 
     struct Wrapper: Decodable {
         let action_items: [ActionItem]
         let loops: [RawLoop]?
         let loop_updates: [RawUpdate]?
+        let ask_updates: [RawAskUpdate]?
         struct RawLoop: Decodable { let person: String; let direction: String; let what: String; let quote: String; let source: String; let due: String?; let dueISO: String?; let owner: String? }
         struct RawUpdate: Decodable { let id: String; let status: String; let how: String }
+        /// Read tolerantly: the id under `askID`, `ask_id` or `id`; a missing status or `how` is not a reason to lose the update.
+        struct RawAskUpdate: Decodable {
+            let askID: String?; let status: String?; let how: String?
+            enum Keys: String, CodingKey { case askID, ask_id, id, status, how }
+            init(from decoder: any Decoder) throws {
+                let c = try decoder.container(keyedBy: Keys.self)
+                askID = (try? c.decodeIfPresent(String.self, forKey: .askID)) ?? (try? c.decodeIfPresent(String.self, forKey: .ask_id)) ?? (try? c.decodeIfPresent(String.self, forKey: .id))
+                status = try? c.decodeIfPresent(String.self, forKey: .status)
+                how = try? c.decodeIfPresent(String.self, forKey: .how)
+            }
+        }
     }
 
     static func line(_ s: SummaryRecord, _ i: Int, shared: Bool = false) -> String {
