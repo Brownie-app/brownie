@@ -390,6 +390,6 @@ public extension Loop {
 }
 public extension Ask {
     func renamed(to person: String) -> Ask {
-        Ask(id: id, person: person, bucket: bucket, askedAt: askedAt, question: question, answeredAt: answeredAt, reply: reply, addressed: addressed, handle: handle, lapsedAt: lapsedAt)
+        var a = self; a.person = person; return a
     }
 }
