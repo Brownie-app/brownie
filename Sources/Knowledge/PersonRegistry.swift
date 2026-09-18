@@ -84,6 +84,14 @@ public actor PersonRegistry {
 
     /// A record that should never have existed — the user's own, found by the migration — is gone, from every
     /// `notSame` list too. Nothing else removes a person: a merge folds, an archive keeps.
+    /// Records whose name is nobody in particular ("another contact", "someone"), opened by a loop written around a
+    /// missing name: gone, with their note path released. Returns how many went.
+    @discardableResult
+    public func removeNobodies(_ isNobody: (String) -> Bool) -> Int {
+        let gone = records.filter { isNobody($0.name) }
+        for g in gone { remove(g.id) }
+        return gone.count
+    }
     public func remove(_ id: String) {
         guard let i = index(id) else { return }
         records.remove(at: i); removedSinceLoad.append(id)

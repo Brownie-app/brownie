@@ -79,7 +79,7 @@ import Platform
     @Test func aPeopleNoteAboutTheUserMovesToLifeAndTheirRecordAndLoopsGo() async throws {
         let root = try fresh()
         let title = "Vivek Upreti — Career Materials (Jul–Aug 2026)"
-        try put("People/\(title).md", "# \(title)\n\n## About\n- Placeholder\n\n## Now\n- CV sent to SBI (2026-08-20)\n", in: root)
+        try put("People/\(title).md", "# \(title)\n\n<!-- brownie:status -->\n## Between you\n- ⏳ you promised (18 Sep): Close one more deal after SBI\n<!-- /brownie:status -->\n\n## About\n- Placeholder\n\n## Now\n- CV sent to SBI (2026-08-20)\n", in: root)
         try put("People/Vivek.md", "---\naliases:\n  - VU\n  - Vivek Upreti\n---\n# Vivek\nThe user, by mistake.\n", in: root)
         try put("People/Kanika Pandey.md", "# Kanika Pandey\nfriend\n", in: root)
         try put("Life/Career Materials (Jul–Aug 2026).md", "# Career Materials (Jul–Aug 2026)\nthe user's own note\n", in: root)
@@ -105,7 +105,8 @@ import Platform
         let life = try #require(raw("Life/Career Materials (Jul–Aug 2026) 2.md", in: root), "never over the note already there: ' 2' is added")
         let meta = try #require(NoteMeta.parse(life, path: "Life/Career Materials (Jul–Aug 2026) 2.md").meta)
         #expect(meta.brownie == "topic" && meta.id == nil && meta.aliases.isEmpty, "a topic's block now, with no person id")
-        #expect(life.hasSuffix("# Career Materials (Jul–Aug 2026)\n\n## About\n- Placeholder\n\n## Now\n- CV sent to SBI (2026-08-20)\n"), "the title loses the name; the body is kept")
+        #expect(life.hasSuffix("# Career Materials (Jul–Aug 2026)\n\n## About\n- Placeholder\n\n## Now\n- CV sent to SBI (2026-08-20)\n"), "the title loses the name and the status block goes; the body is kept")
+        #expect(!life.contains("brownie:status"), "a topic note carries no ledger")
         #expect(meta.contentHash == NoteMeta.hash("# Career Materials (Jul–Aug 2026)\n\n## About\n- Placeholder\n\n## Now\n- CV sent to SBI (2026-08-20)\n") && !meta.userEdited, "the hash follows the retitle, so the move is not an edit")
         #expect(raw("Life/Career Materials (Jul–Aug 2026).md", in: root)!.hasSuffix("the user's own note\n"), "the user's own note is untouched")
         let bare = try #require(raw("Life/Vivek.md", in: root), "a note that is only the name keeps it as its title")

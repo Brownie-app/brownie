@@ -72,8 +72,8 @@ public enum VaultMigration {
             let userEdited = m.bodyDiffers(body)
             m.brownie = NoteMeta.Kind.topic.rawValue; m.id = nil; m.aliases = m.aliases.filter { !SelfNames.isSelf($0, among: names) }
             if m.created.isEmpty { m.created = NoteMeta.day(now, timeZone) }
-            var newBody = body
-            if let heading, heading != newTitle, let r = body.range(of: "# \(heading)") { newBody.replaceSubrange(r, with: "# \(newTitle)") }
+            var newBody = NoteStatus.strip(body)   // a topic note carries no ledger of asks and promises
+            if let heading, heading != newTitle, let r = newBody.range(of: "# \(heading)") { newBody.replaceSubrange(r, with: "# \(newTitle)") }
             if !userEdited { m.contentHash = NoteMeta.hash(newBody) }
             do {
                 try fm.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)

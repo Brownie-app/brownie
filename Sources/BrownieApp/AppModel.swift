@@ -192,6 +192,7 @@ final class AppModel: ObservableObject {
         await VaultMigration.addFrontMatter(root: knowledge.rootURL, registry: registry, now: Date())
         // The user is never a person in their own vault: a People note titled after them moves to Life/, and a loop with them as the other party goes.
         await VaultMigration.moveSelfNotes(root: knowledge.rootURL, registry: registry, store: store, selfNames: selfNames, now: Date())
+        await sweepLoops(registry: registry)
         // People and Groups notes in shape and aged; a tidy vault is untouched. Nothing is archived here (the night does that after its
         // swap), and nothing is touched while a sync is mid-way — its staging copy of every note would take a rewrite for the user's edit.
         let syncPending = ((try? await store.value(SettingKey.kbResume)) ?? nil) != nil
@@ -468,6 +469,19 @@ final class AppModel: ObservableObject {
         SelfNames.clean([userName, NSFullUserName(), (try? FileManager.default.attributesOfItem(atPath: NSHomeDirectory()))?[.ownerAccountName] as? String, household?.me?.name])
     }
 
+    /// A ledger written before the loop bar existed is held to it once: sentiments, promises to nobody and loops with the
+    /// user as the other party go, and registry records that name nobody go with them. A clean ledger is untouched.
+    func sweepLoops(registry: PersonRegistry) async {
+        let loops = await LoopLedger.load(store)
+        let (kept, dropped) = LoopQuality.sweep(loops, selfNames: selfNames)
+        if !dropped.isEmpty {
+            for d in dropped { log.info("loop let go at launch: “\(d.loop.what)” — \(d.reason)") }
+            await LoopLedger.save(kept, store)
+        }
+        let nobodies = await registry.removeNobodies { !LoopQuality.isPersonLabel($0) }
+        if nobodies > 0 { try? await registry.save() }
+        if !dropped.isEmpty || nobodies > 0 { log.info("launch sweep: \(dropped.count) loops let go, \(nobodies) records that named nobody removed") }
+    }
     /// The name changed in Settings: the coordinator takes the new self names, and a People note in that name moves out tonight's way now.
     func rebuildCoordinatorForSelf() {
         rebuildCoordinator()

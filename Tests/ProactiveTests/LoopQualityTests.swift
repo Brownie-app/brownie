@@ -74,3 +74,22 @@ import Domain
         #expect(LoopQuality.admit([loops[3]], existing: [closed]).kept.count == 1, "a closed loop mirrors nothing")
     }
 }
+
+@Suite struct LoopSweepTests {
+    func loop(_ person: String, _ what: String, _ status: LoopStatus = .open) -> Loop {
+        var l = Loop(id: UUID().uuidString, direction: .mine, person: person, what: what, quote: "q", sourceLabel: "WhatsApp", due: nil, openedAt: Date(timeIntervalSince1970: 1_789_000_000))
+        l.status = status; return l
+    }
+    @Test func nobodyIsNoOtherParty() {
+        for bad in ["another contact", "someone", "the team", "a colleague", "them", "Unknown", "N/A", "123", ""] { #expect(!LoopQuality.isPersonLabel(bad), "\(bad)") }
+        for good in ["Tom", "Kanika Pandey Loadmill", "Mr. Taragi", "Amma", "Nitesh", "Priya's team lead"] { #expect(LoopQuality.isPersonLabel(good), "\(good)") }
+    }
+    @Test func theSweepHoldsAnOldLedgerToTheBar() {
+        let loops = [loop("Kanika Pandey Loadmill", "Build something big"), loop("Kanika Pandey Loadmill", "Build a company with Kanika", .closed), loop("another contact", "Call them to discuss something else", .closed),
+                     loop("Vivek Upreti", "Close one more deal after SBI"), loop("Kanika Pandey Loadmill", "Call Mr. Taragi"), loop("Nitesh", "Provide rough estimates for the three requested tasks"), loop("Tom", "Send Tom an update")]
+        let (kept, dropped) = LoopQuality.sweep(loops, selfNames: ["Vivek Upreti"])
+        #expect(kept.map(\.what) == ["Call Mr. Taragi", "Provide rough estimates for the three requested tasks", "Send Tom an update"])
+        #expect(dropped.count == 4 && dropped.contains { $0.reason.contains("nobody") } && dropped.contains { $0.reason.contains("the user") })
+        #expect(LoopQuality.sweep(kept, selfNames: ["Vivek Upreti"]).dropped.isEmpty, "a clean ledger is untouched")
+    }
+}

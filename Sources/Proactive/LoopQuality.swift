@@ -101,14 +101,38 @@ public enum LoopQuality {
         return out
     }
 
+    /// A label that names nobody in particular — "another contact", "someone", "the team" — is no other party for a
+    /// loop: the judge wrote around a name it did not have, and a promise to nobody cannot be kept or chased.
+    static let nobody = try! NSRegularExpression(pattern: #"^\s*(?:(?:an?|the|another|some|one|other)\s+)?(?:contacts?|someone|somebody|anyone|people|person|colleagues?|friends?|team|group|members?|others?|them|they|him|her|unknown|n/?a|tbd|user|recipient|sender|caller|client|vendor|company|number)\s*$"#, options: .caseInsensitive)
+    public static func isPersonLabel(_ person: String) -> Bool {
+        let t = person.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard t.contains(where: \.isLetter) else { return false }
+        return nobody.firstMatch(in: t, range: NSRange(location: 0, length: (t as NSString).length)) == nil
+    }
+
+    /// The ledger as the bar would have kept it: loops that are no commitment, or whose other party is nobody or the
+    /// user, leave whatever their status — a settled sentiment is not history worth a ✅ line either. Run once at
+    /// bootstrap for a ledger written before the bar existed; on a clean ledger it changes nothing.
+    public static func sweep(_ loops: [Loop], selfNames: [String]) -> (kept: [Loop], dropped: [(loop: Loop, reason: String)]) {
+        var kept: [Loop] = [], dropped: [(Loop, String)] = []
+        for l in loops {
+            if let why = reason(l.what) { dropped.append((l, why)) }
+            else if !isPersonLabel(l.person) { dropped.append((l, "the other party is nobody in particular (\(l.person))")) }
+            else if SelfNames.isSelf(l.person, among: selfNames) { dropped.append((l, "the other party is the user (\(l.person))")) }
+            else { kept.append(l) }
+        }
+        return (kept, dropped)
+    }
+
     /// The gate the coordinator runs new loops through, in order: nothing that is not a commitment, nothing whose
-    /// other party is the user, and no mirror of a loop already admitted tonight or still open from an earlier night
-    /// (`existing`). `rejected` carries the reason for each loop turned away, for the log.
+    /// other party is nobody or the user, and no mirror of a loop already admitted tonight or still open from an
+    /// earlier night (`existing`). `rejected` carries the reason for each loop turned away, for the log.
     public static func admit(_ loops: [Loop], selfNames: [String] = [], existing: [Loop] = []) -> (kept: [Loop], rejected: [(loop: Loop, reason: String)]) {
         var kept: [Loop] = [], rejected: [(Loop, String)] = []
         let open = existing.filter { $0.status == .open }
         for l in loops {
             if let why = reason(l.what) { rejected.append((l, why)); continue }
+            if !isPersonLabel(l.person) { rejected.append((l, "the other party is nobody in particular (\(l.person))")); continue }
             if SelfNames.isSelf(l.person, among: selfNames) { rejected.append((l, "the other party is the user (\(l.person))")); continue }
             if let twin = (kept + open).first(where: { mirrors($0, l) }) { rejected.append((l, "mirrors “\(twin.what)” (\(twin.direction.rawValue))")); continue }
             kept.append(l)
