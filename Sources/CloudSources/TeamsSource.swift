@@ -63,27 +63,37 @@ public actor MicrosoftAuth {
 // MARK: - Parsing (pure)
 
 public enum TeamsParsing {
-    public struct Conversation: Sendable, Equatable { public let id: BucketID; public let name: String; public let isGroup: Bool; public let members: Int; public let detail: String; public var handle: String? = nil }
+    public struct Conversation: Sendable, Equatable { public let id: BucketID; public let name: String; public let isGroup: Bool; public let members: Int; public let detail: String; public var handle: String? = nil; public var proofs: [String] = [] }
 
     static let iso: ISO8601DateFormatter = { let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return f }()
     static let isoPlain = ISO8601DateFormatter()
     static func date(_ s: String?) -> Date? { s.flatMap { iso.date(from: $0) ?? isoPlain.date(from: $0) } }
 
-    /// `/me/chats?$expand=members` → one-to-one chats named after the other person, group chats after their topic or members.
+    /// `/me/chats?$expand=members` → one-to-one chats named after the other person, carrying what the member record
+    /// proves (its `email`); group chats after their topic or members.
     public static func chats(_ obj: [String: Any], me: String) -> [Conversation] {
         (obj["value"] as? [[String: Any]] ?? []).compactMap { c in
             guard let id = c["id"] as? String else { return nil }
-            let members = (c["members"] as? [[String: Any]] ?? []).compactMap { m -> (id: String, name: String)? in
+            let members = (c["members"] as? [[String: Any]] ?? []).compactMap { m -> (id: String, name: String, email: String)? in
                 guard let n = m["displayName"] as? String else { return nil }
-                return (m["userId"] as? String ?? "", n)
+                return (m["userId"] as? String ?? "", n, m["email"] as? String ?? "")
             }
             let others = members.filter { $0.id != me }
             let type = c["chatType"] as? String ?? "group"
-            if type == "oneOnOne" { return Conversation(id: BucketID("teams:chat:\(id)"), name: others.first?.name ?? "Chat", isGroup: false, members: 2, detail: "Direct", handle: others.first.flatMap { $0.id.isEmpty ? nil : PersonHandle.teams(userID: $0.id) }) }
+            if type == "oneOnOne" {
+                return Conversation(id: BucketID("teams:chat:\(id)"), name: others.first?.name ?? "Chat", isGroup: false, members: 2, detail: "Direct",
+                                    handle: others.first.flatMap { $0.id.isEmpty ? nil : PersonHandle.teams(userID: $0.id) }, proofs: PersonProof.all(phones: [], emails: [others.first?.email ?? ""]))
+            }
             let topic = (c["topic"] as? String).flatMap { $0.isEmpty ? nil : $0 }
             let name = topic ?? (type == "meeting" ? "Meeting chat" : "Group · " + others.prefix(3).map(\.name).joined(separator: ", "))
             return Conversation(id: BucketID("teams:chat:\(id)"), name: name, isGroup: true, members: members.count, detail: type == "meeting" ? "Meeting chat" : "Group chat · \(members.count) people")
         }
+    }
+
+    /// `/users/{id}?$select=mail,mobilePhone,businessPhones` → what the directory proves about one person: their mail
+    /// and every phone on the record. The fallback for a member record that came without an email.
+    public static func proofs(_ user: [String: Any]) -> [String] {
+        PersonProof.all(phones: [user["mobilePhone"] as? String ?? ""] + (user["businessPhones"] as? [String] ?? []), emails: [user["mail"] as? String ?? ""])
     }
 
     /// `/teams/{id}/channels` → channels, prefixed with the team's name.
@@ -138,6 +148,9 @@ public struct TeamsSource: Source {
     let token: @Sendable () async throws -> String
     let now: @Sendable () -> Date
     let policy: @Sendable () -> FirstRead
+    /// What `/users/{id}` proved about each person a direct chat's member record left unproven, kept for the life of
+    /// this source so a run that discovers twice asks the directory once.
+    private let looked = ProofCache()
     private let log = Log("source.teams")
 
     public init(transport: any JSONTransport = URLSessionTransport(), token: @escaping @Sendable () async throws -> String = { try await MicrosoftAuth.shared.accessToken() },
@@ -154,7 +167,14 @@ public struct TeamsSource: Source {
     public func discoverBuckets() async throws -> [BucketInfo] {
         let myID = try await me()
         var out: [BucketInfo] = []
-        for c in TeamsParsing.chats(try await get("/me/chats?$expand=members&$top=50"), me: myID) { out.append(BucketInfo(id: c.id, name: c.name, detail: c.detail, isGroup: c.isGroup, count: c.members, handle: c.handle)) }
+        for c in TeamsParsing.chats(try await get("/me/chats?$expand=members&$top=50"), me: myID) {
+            // A direct chat whose member record carried no email: the directory record may hold a mail or a phone.
+            var proofs = c.proofs
+            if proofs.isEmpty, !c.isGroup, let uid = c.handle.map({ String($0.dropFirst("teams:".count)) }), !uid.isEmpty {
+                proofs = await looked.proofs(for: uid) { TeamsParsing.proofs((try? await get("/users/\(uid)?$select=mail,mobilePhone,businessPhones")) ?? [:]) }
+            }
+            out.append(BucketInfo(id: c.id, name: c.name, detail: c.detail, isGroup: c.isGroup, count: c.members, handle: c.handle, proofs: proofs))
+        }
         for team in (try await get("/me/joinedTeams"))["value"] as? [[String: Any]] ?? [] {
             guard let tid = team["id"] as? String else { continue }
             let tname = team["displayName"] as? String ?? "Team"
@@ -236,6 +256,15 @@ public struct TeamsSource: Source {
     func get(_ path: String) async throws -> [String: Any] {
         let t = try await token()
         return try await transport.json(URL(string: Self.graph + path.replacingOccurrences(of: "$", with: "%24"))!, headers: ["Authorization": "Bearer \(t)"])
+    }
+}
+
+/// User id → what the directory proved, fetched at most once per id.
+actor ProofCache {
+    private var found: [String: [String]] = [:]
+    func proofs(for id: String, fetch: @Sendable () async -> [String]) async -> [String] {
+        if let p = found[id] { return p }
+        let p = await fetch(); found[id] = p; return p
     }
 }
 
