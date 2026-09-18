@@ -5,7 +5,8 @@
 | Class | Examples | On disk | To the brain | To a Brownie server |
 |---|---|---|---|---|
 | Raw | files, messages, mail bodies, screenshots | read from source, WAL-safe copies deleted immediately | **never** | never |
-| Summary | reader output, PII-scrubbed | store (ephemeral, wiped after a good run) | yes | never |
+| Summary | reader output, PII-scrubbed | store (fed to the notes once, judged once, then kept thirty days as the evidence behind a rated note and deleted) | yes | never |
+| Eval corpus | a note the user rated, its verdict and the summaries that name it | `Application Support/Brownie/Evals/notes`, one JSON file per rating, written only when the user rates a note | — | never |
 | Knowledge base | Markdown notes | `~/Brownie Knowledge Base` | yes (for judge/verify/Hands grounding) | only the sealed mirror, opt-in (v1.1) |
 | Cards, letters | prepared actions | store | — | never |
 | Sensitive | anything the reader or backstop flags | **nothing** (count + time + source only) | never | never |

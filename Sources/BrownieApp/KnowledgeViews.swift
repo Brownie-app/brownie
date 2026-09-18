@@ -290,6 +290,7 @@ struct KnowledgeView: View {
         if isPerson(n) { PersonHeader(note: n, person: m.people.first { $0.notePath == n.relativePath }, exchange: exchange, obsidian: obsidian) }
         // `updated` is the day the note's substance last changed (its front-matter), never the file's mtime: the nightly block rewrite and iCloud do not move it.
         Text(NoteFacts.metaLine(n)).font(.system(size: 12)).foregroundStyle(t.ink2)
+        NoteRatingRow(note: n).id(n.relativePath)
         if editing {
             Text("What you see is the prose. Brownie keeps the front-matter and the “Between you” block on the file; both go back on save.").font(.system(size: 11)).foregroundStyle(t.ink2)
             if let s = session, case .changedOnDisk = s.check(onDisk: NoteEdit.forEditing(n.body)) {
@@ -438,6 +439,50 @@ struct PersonHeader: View {
                 }
             }.frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+}
+
+/// "Was this note right?" under a note's header — People, Groups and topic notes alike; Today is the morning's cards,
+/// not a note Brownie wrote, and has no row. Good goes straight in; Not right… asks for a line first. Once a word is
+/// given the row says it back, with Change to say another. The state is the row's own, reset by the note's id.
+struct NoteRatingRow: View {
+    @EnvironmentObject var m: AppModel
+    @Environment(\.theme) var t
+    let note: Note
+    @State private var asking = false
+    @State private var changing = false
+    func day(_ d: Date) -> String { let f = DateFormatter(); f.dateFormat = "d MMM"; return f.string(from: d) }
+    var body: some View {
+        HStack(spacing: 8) {
+            if let fb = m.feedback(for: note.relativePath), !changing {
+                Text("You said: \(fb.verdict.label)\(fb.reason.map { " — \($0)" } ?? "") · \(day(fb.at))").font(.system(size: 12)).foregroundStyle(t.ink2).lineLimit(1)
+                BButton(title: "Change", kind: .quiet) { changing = true }
+            } else {
+                Text("Was this note right?").font(.system(size: 12)).foregroundStyle(t.ink2)
+                BButton(title: "Good", kind: .quiet, systemImage: "hand.thumbsup") { m.rateNote(path: note.relativePath, verdict: .good); changing = false }
+                BButton(title: "Not right…", kind: .quiet, systemImage: "hand.thumbsdown") { asking = true }
+            }
+        }
+        .sheet(isPresented: $asking) { NoteFeedbackSheet(title: note.title) { reason in m.rateNote(path: note.relativePath, verdict: .notRight, reason: reason); changing = false } }
+    }
+}
+
+/// Not right…: one line on what was wrong, in the user's words. Send with nothing typed still counts as not right.
+struct NoteFeedbackSheet: View {
+    @Environment(\.theme) var t
+    @Environment(\.dismiss) var dismiss
+    let title: String
+    let send: (String) -> Void
+    @State private var reason = ""
+    @FocusState private var focused: Bool
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("What's not right about “\(title)”?").font(.system(size: 15, weight: .semibold))
+            TextField("What's wrong? e.g. too much hedging, this promise is not real, wrong person", text: $reason).textFieldStyle(.plain).font(.system(size: 13)).focused($focused).onSubmit { send(reason); dismiss() }
+                .padding(8).background(RoundedRectangle(cornerRadius: 6).fill(t.ctl)).overlay(RoundedRectangle(cornerRadius: 6).stroke(t.cardBorder, lineWidth: 1))
+            Text("Brownie reads this before it writes the notes tonight and keeps it as a standing instruction for ninety days.").font(.system(size: 11)).foregroundStyle(t.ink2).fixedSize(horizontal: false, vertical: true)
+            HStack { Spacer(); BButton(title: "Cancel", kind: .quiet) { dismiss() }; BButton(title: "Send", kind: .primary) { send(reason); dismiss() } }
+        }.padding(20).frame(width: 460).onAppear { focused = true }
     }
 }
 

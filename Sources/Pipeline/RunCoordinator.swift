@@ -107,9 +107,9 @@ public actor RunCoordinator {
             // Only summaries the notes have not absorbed yet, oldest first; a resumed sync feeds the ids it froze.
             let summaries = try await store.unmergedSummaries()
             let weekAgo = deps.clock.now().addingTimeInterval(-7 * 86400)
-            // Rows the notes already hold are kept until FINISH, so a night whose chain broke after the sync
-            // still has them judged the next night — even one on which nothing new was read.
-            let unjudged = try await store.summaries(since: weekAgo).contains { $0.mergedAt != nil }
+            // Rows the notes already hold wait unjudged until FINISH stamps them, so a night whose chain broke after the
+            // sync still has them judged the next night — even one on which nothing new was read.
+            let unjudged = try await store.summaries(since: weekAgo).contains(where: \.awaitsJudge)
             if let brain = deps.brain, !summaries.isEmpty || unjudged {
                 // Who exists, from the People notes and every earlier run: the brain is told, so it writes each person in one file.
                 let registry = PersonRegistry(vault: deps.knowledge.rootURL, now: { [clock = deps.clock] in clock.now() })
@@ -124,9 +124,11 @@ public actor RunCoordinator {
                 if !summaries.isEmpty {
                     onEvent(.progress(RunProgress(stage: .synthesising, stats: stats)))
                     deps.stage("Update your notes", "\(summaries.count) summaries and the notes they touch")
+                    // What the user said about the notes — "too much hedging", "this promise is not real" — goes to the writer as standing instructions.
+                    let noteLessons = NoteFeedbackDigest.instructions(NoteFeedbackList.decode(try await store.value(SettingKey.noteFeedback)).entries, now: deps.clock.now())
                     let builder = try KnowledgeBuilder(brain: brain, store: deps.knowledge, runStore: store, now: { [clock = deps.clock] in clock.now() }, timeZone: deps.clock.timeZone,
                                                        coverage: { [tz = deps.clock.timeZone] in let all = SourceCoverage.decode(try? await store.value(SettingKey.coverage)); return all.isEmpty ? nil : CoverageLine.render(all, timeZone: tz) },
-                                                       people: { await registry.people() })
+                                                       people: { await registry.people() }, instructions: noteLessons)
                     let readStats = stats
                     // The notes a brain without file tools lost to a refusal are counted whether or not the sync went through.
                     do { usage = try await builder.sync(summaries: summaries, progress: { p in var p = p; p.stats = readStats; onEvent(.progress(p)) }, onEvent: { e in if case .message(let m) = e { onEvent(.thought(m)) } }) }
@@ -135,8 +137,8 @@ public actor RunCoordinator {
                 }
                 // The judge and the preparer see only what the notes hold: the rows merged tonight, or on an
                 // earlier night whose chain broke before the judge. A row that arrived since and waits for the
-                // next sync is not judged before the notes know it — and never twice, as merged rows go at FINISH.
-                let recent = try await store.summaries(since: weekAgo).filter { $0.mergedAt != nil }
+                // next sync is not judged before the notes know it — and never twice, as FINISH stamps judged rows.
+                let recent = try await store.summaries(since: weekAgo).filter(\.awaitsJudge)
 
                 // welcome letter, once
                 if (try await store.value(SettingKey.letter) ?? "").isEmpty, let readme = try await deps.knowledge.note(at: "README.md") {
@@ -231,8 +233,10 @@ public actor RunCoordinator {
                 // Sunday: the week in a letter, once per week
                 if let u = try await writeWeeklyIfDue(brain: brain, store: store, cards: cards, loops: allLoops, calendar: cal) { usage = usage + u }
 
-                // 5. FINISH — the judge has seen the merged summaries, so they go now; what is unmerged waits for the next sync
-                try await store.deleteMerged()
+                // 5. FINISH — the judge has seen the merged summaries: stamped, kept thirty days as evidence, then let go; what is unmerged waits for the next sync.
+                try await store.retireMerged(now: deps.clock.now(), keepFor: SummaryRecord.evidenceWindow)
+                // Every note rated in the last thirty days goes out with tonight's evidence beside it, for the prompt evals. Real paths only: tests turn it off with the disk housekeeping.
+                if deps.diskHousekeeping { _ = await NoteEvalExport.exportAll(NoteFeedbackList.decode(try await store.value(SettingKey.noteFeedback)), knowledge: deps.knowledge, store: store, people: await registry.people(), folder: NoteEvalExport.folder, now: deps.clock.now(), timeZone: deps.clock.timeZone) }
                 let legacyMirror = try await store.value(SettingKey.icloudMirror) ?? "false"
                 let mode = try await store.value(SettingKey.icloudMode) ?? (legacyMirror == "true" ? "mirror" : "off")
                 // The household: shared notes go to the shared folder; what the others closed comes back.
@@ -318,7 +322,8 @@ public actor RunCoordinator {
         let f = DateFormatter(); f.dateFormat = "d MMM"
         deps.stage("Write the Sunday letter", "this week's numbers, \(weekCards.count) cards, \(weekLoops.count) loops, your README")
         let corrections = FeedbackDigest.weekLine(Self.loadFeedback(try await store.value(SettingKey.feedback)), since: weekStart)
-        let (text, u) = try await WeeklyWriter(brain: brain).write(range: "\(f.string(from: weekStart))–\(f.string(from: now))", corrections: corrections,
+        let noteCorrections = NoteFeedbackDigest.weekLine(NoteFeedbackList.decode(try await store.value(SettingKey.noteFeedback)).entries, since: weekStart)
+        let (text, u) = try await WeeklyWriter(brain: brain).write(range: "\(f.string(from: weekStart))–\(f.string(from: now))", corrections: [corrections, noteCorrections].filter { !$0.isEmpty }.joined(separator: "\n"),
             numbers: "\(runs.count) of 7 nights ran · \(read) read · \(kept) kept · \(erased) sensitive erased · \(weekCards.filter { $0.state == .fired }.count) cards fired by the user · \(weekLoops.filter { $0.status == .closed }.count) loops closed, \(weekLoops.filter { $0.status == .open && $0.openedAt >= weekStart }.count) opened",
             bytes: bytes < 1024 ? "\(bytes) bytes" : String(format: "%.0f KB", Double(bytes) / 1024), cards: weekCards, loops: weekLoops, readme: readme, calendar: calendar)
         try await store.setValue(SettingKey.weekly(week), text)

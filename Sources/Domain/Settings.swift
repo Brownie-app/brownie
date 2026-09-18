@@ -21,6 +21,7 @@ public enum SettingKey {
     public static let asks = "proactive.asks"                     // JSON [Ask], local only
     public static let duplicatePeople = "people.duplicates"       // JSON [[idA, idB]] — registry people who look like one person, for the app's merge banner
     public static let feedback = "proactive.feedback"             // JSON [CardFeedback], newest last
+    public static let noteFeedback = "knowledge.noteFeedback"     // JSON [NoteFeedback], newest last — what the user said about the notes
     public static let signature = "hands.signature"              // "true" → drafts end with the Brownie sign-off
     public static let handsHotkey = "hands.hotkey"                // rightCommand | rightOption | off
     public static let handsSpeed = "hands.speed"                  // fast | balanced | careful

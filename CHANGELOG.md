@@ -13,6 +13,7 @@ The first public build.
 - Ask from ⌘⇧Space: a question is answered inline with citations; anything else is a goal for Hands.
 - Due-aware nudges the morning before a deadline; recipes that run when a file arrives in a folder.
 - Cards that learn: “Not right…” with a reason becomes a standing instruction; the Sunday letter owns the week's corrections.
+- Notes that learn: “Was this note right?” under every note — Good, or Not right… with a line — and the brain reads what you said before it writes the notes at night; the summaries behind a rated note stay thirty days and go out with it as a JSON corpus under Application Support/Evals for judging the prompts.
 - The evidence viewer: the original chat window or the recording behind any card line or citation, read on demand and never stored.
 - The quiet check before cards show: closed loops, fired twins, missing files and old notes (Settings: how old is too old).
 - Meeting follow-ups: promises said out loud become loops with a timestamp and “Hear it”. Today.md carries the cards to your phone; a tick there marks the card done.
