@@ -391,6 +391,13 @@ struct ProactivePane: View {
                 }
             }
         }
+        H2(text: "You").padding(.top, 10)
+        CardBox(padding: 0) {
+            SettingRow(title: "Your name", detail: "As people write it in chats. Brownie never makes a person of you: a loop or a note in your name is caught, and what is about you goes to the README.") {
+                TextField("Vivek Upreti", text: Binding(get: { m.userName }, set: { m.userName = $0 })).textFieldStyle(.roundedBorder).frame(width: 220)
+                    .onSubmit { m.set(SettingKey.userName, m.userName.trimmingCharacters(in: .whitespaces)); m.rebuildCoordinatorForSelf() }
+            }.padding(.horizontal, 16)
+        }
         H2(text: "Sign-off").padding(.top, 10)
         CardBox(padding: 0) {
             VStack(spacing: 0) {

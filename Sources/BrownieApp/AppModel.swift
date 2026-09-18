@@ -98,6 +98,8 @@ final class AppModel: ObservableObject {
     @Published var journey: HandsJourney?
     /// Sign what Brownie drafts with "Sent via Brownie · usebrownie.com" under a rule.
     @Published var signMessages = false
+    /// The user's own name as people write it in chats (Settings), so the judge, the registry and the file tools never make a person of them.
+    @Published var userName = ""
     /// The evidence being shown in its own sheet: the chat window, or the clip.
     @Published var evidenceShown: EvidenceShown?
     @Published var handsHotkey = "rightCommand"
@@ -246,6 +248,7 @@ final class AppModel: ObservableObject {
         notify = (await v(SettingKey.notifyOnReady) ?? "true") == "true"
         instructions = await v(SettingKey.standingInstructions) ?? ""
         signMessages = (await v(SettingKey.signature)) == "true"
+        userName = await v(SettingKey.userName) ?? NSFullUserName()
         staleDays = Int(await v(SettingKey.staleDays) ?? "") ?? QuietCheck.defaultStaleDays
         feedback = RunCoordinator.loadFeedback(await v(SettingKey.feedback))
         noteFeedback = NoteFeedbackList.decode(await v(SettingKey.noteFeedback))
@@ -462,9 +465,18 @@ final class AppModel: ObservableObject {
     /// The user's own names — the Mac's full name, the account name, the household member marked `isMe` — so no stage
     /// of a run, and no note, ever takes the user for a person.
     var selfNames: [String] {
-        SelfNames.clean([NSFullUserName(), (try? FileManager.default.attributesOfItem(atPath: NSHomeDirectory()))?[.ownerAccountName] as? String, household?.me?.name])
+        SelfNames.clean([userName, NSFullUserName(), (try? FileManager.default.attributesOfItem(atPath: NSHomeDirectory()))?[.ownerAccountName] as? String, household?.me?.name])
     }
 
+    /// The name changed in Settings: the coordinator takes the new self names, and a People note in that name moves out tonight's way now.
+    func rebuildCoordinatorForSelf() {
+        rebuildCoordinator()
+        Task {
+            let registry = PersonRegistry(vault: knowledge.rootURL, selfNames: selfNames); await registry.load()
+            await VaultMigration.moveSelfNotes(root: knowledge.rootURL, registry: registry, store: store, selfNames: selfNames, now: Date())
+            await reload()
+        }
+    }
     private func rebuildCoordinator() {
         let logger = sendLogger
         coordinator = RunCoordinator(.init(store: store, knowledge: knowledge, sources: sourcesForRun, reader: reader, brain: brain, policy: policy,

@@ -23,6 +23,7 @@ public enum SettingKey {
     public static let feedback = "proactive.feedback"             // JSON [CardFeedback], newest last
     public static let noteFeedback = "knowledge.noteFeedback"     // JSON [NoteFeedback], newest last — what the user said about the notes
     public static let signature = "hands.signature"              // "true" → drafts end with the Brownie sign-off
+    public static let userName = "user.name"                      // the user's name as people write it in chats; never a person in the vault
     public static let handsHotkey = "hands.hotkey"                // rightCommand | rightOption | off
     public static let handsSpeed = "hands.speed"                  // fast | balanced | careful
     public static let overnightEnabled = "overnight.enabled"
