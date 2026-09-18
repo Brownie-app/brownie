@@ -27,7 +27,9 @@ public enum LoopQuality {
                                             "enable", "unblock", "approve", "sync", "decide", "choose", "nominate", "recommend", "refer", "brief",
                                             "remind", "notify", "inform", "escalate", "raise", "file", "lodge", "process", "issue", "refund",
                                             "reimburse", "invoice", "bill", "quote", "estimate", "measure", "count", "verify", "validate",
-                                            "resubmit", "reupload"]
+                                            "resubmit", "reupload", "implement", "document", "comment", "present", "represent", "position", "mention",
+                                            "question", "function", "commission", "reference", "influence", "experience", "witness", "address",
+                                            "progress", "access", "express", "assess", "stress", "dress", "compress", "guess", "bless", "press"]
     /// First words that are not verbs at all: a `what` opening with one of these names no deliverable.
     static let notVerbs: Set<String> = ["the", "a", "an", "his", "her", "their", "my", "our", "your", "its", "this", "that", "these", "those", "some", "any",
                                         "it", "he", "she", "they", "we", "i", "you", "of", "for", "with", "about", "on", "in", "at", "from", "by", "and", "or",
@@ -36,7 +38,8 @@ public enum LoopQuality {
                                         "where", "whether", "something", "anything", "nothing", "everything", "future", "goal", "idea", "hope", "wish"]
     /// Prefixes the judge sometimes leaves on a `what` that otherwise starts with a verb.
     static let modals = ["to ", "will ", "would ", "i'll ", "i’ll ", "i will ", "we'll ", "we’ll ", "we will ", "she'll ", "she’ll ", "he'll ", "he’ll ",
-                         "they'll ", "they’ll ", "she will ", "he will ", "they will ", "going to ", "gonna "]
+                         "they'll ", "they’ll ", "she will ", "he will ", "they will ", "going to ", "gonna ", "try to ", "try and ", "will try to ",
+                         "attempt to ", "promise to ", "promised to ", "agreed to ", "agree to ", "plan to ", "planning to ", "intend to ", "need to ", "needs to ", "has to ", "have to "]
 
     /// Whether `what` names a deliverable. Deterministic; the reason for a no is in `reason(_:)`.
     public static func isCommitment(_ what: String) -> Bool { reason(what) == nil }
@@ -45,7 +48,9 @@ public enum LoopQuality {
     public static func reason(_ what: String) -> String? {
         var s = what.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !s.isEmpty else { return "empty" }
-        for m in modals where s.hasPrefix(m) { s = String(s.dropFirst(m.count)); break }
+        // "will try to send" — every leading modal is forgiven, one after another, and "try" alone is a hedge on a deliverable, not a wish
+        var stripped = true
+        while stripped { stripped = false; for m in modals where s.hasPrefix(m) { s = String(s.dropFirst(m.count)); stripped = true; break } }
         for a in aspirations where s == a || s.hasPrefix(a + " ") || s.hasPrefix(a + ",") {
             return "“\(a)” opens an intention, not a deliverable"
         }
