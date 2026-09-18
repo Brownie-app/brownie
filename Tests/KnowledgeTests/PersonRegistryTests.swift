@@ -406,12 +406,13 @@ import Platform
         #expect(a == "" && b == "", "the empty id names nobody")
         let learned = await r.people()
         #expect(learned.count == 1 && learned[0].handles.isEmpty, "nothing was learned")
-        #expect(await r.register(label: "Vivek Sharma", handle: nil) == "", "a first name the user shares is the user too — PersonKey.same, the ledgers' rule")
+        #expect(await r.register(label: "Vivek Sharma", handle: nil) != "", "another Vivek with his own surname is somebody else")
+        #expect(await r.register(label: "Vivek", handle: nil) == "", "the bare first name is still the user")
         let arjun = await r.register(label: "Arjun Mehta", handle: nil)
         await r.remove(arjun)
-        #expect(await r.people().map(\.name) == ["Kanika Pandey"])
+        #expect(await r.people().map(\.name) == ["Kanika Pandey", "Vivek Sharma"])
         try await r.save()
         let again = v.registry(); await again.load()
-        #expect(await again.people().map(\.name) == ["Kanika Pandey"], "a removed record stays removed on disk")
+        #expect(await again.people().map(\.name) == ["Kanika Pandey", "Vivek Sharma"], "a removed record stays removed on disk")
     }
 }

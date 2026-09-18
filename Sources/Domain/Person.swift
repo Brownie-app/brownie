@@ -63,11 +63,16 @@ public enum SelfNames {
         for n in names.compactMap({ $0?.trimmingCharacters(in: .whitespacesAndNewlines) }) where !n.isEmpty && !PersonKey.normalise(n).isEmpty && !out.contains(where: { $0.caseInsensitiveCompare(n) == .orderedSame }) { out.append(n) }
         return out
     }
-    /// True when the label is the user under any spelling (`PersonKey.same`, so "Vivek" alone is the user when the
-    /// user is Vivek Upreti) or is a title that opens with a self name and a dash ("Vivek Upreti — Career Materials").
+    /// True when the label is the user under any spelling — `PersonKey.same` against a full self name, so "Vivek"
+    /// alone is the user when the user is Vivek Upreti — or is a title that opens with a self name and a dash
+    /// ("Vivek Upreti — Career Materials"). A self name that is one word (the account name, "vivek") claims only
+    /// that one word: another Vivek with a surname of his own is somebody else.
     public static func isSelf(_ label: String, among names: [String]) -> Bool {
         guard !names.isEmpty else { return false }
-        return names.contains { PersonKey.same(label, $0) || prefixed(label, by: $0) != nil }
+        return names.contains { n in
+            let oneWord = !PersonKey.normalise(n).contains(" ")
+            return (oneWord ? PersonKey.sameKey(label, n) : PersonKey.same(label, n)) || prefixed(label, by: n) != nil
+        }
     }
     /// The title without the self name and its " — ": "Vivek Upreti — Career Materials (Jul–Aug 2026)" → "Career
     /// Materials (Jul–Aug 2026)". Nil when the title does not open that way, or when nothing would be left.
