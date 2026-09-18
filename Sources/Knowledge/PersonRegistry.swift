@@ -508,6 +508,31 @@ public actor PersonRegistry {
         return merged
     }
 
+    /// What a source's profile proves about a chat the registry already knows: the record holding `handle` learns the
+    /// proofs, and if another record now shares one, the two are one person — merged, or put to the user through the
+    /// banner when both already have a note. A handle nobody holds teaches nothing; `register` does that when an ask
+    /// or a loop first names the chat.
+    @discardableResult
+    public func learn(proofs: [String], forHandle handle: String) -> Bool {
+        guard !proofs.isEmpty, let i = records.firstIndex(where: { $0.handles.contains(handle) }) else { return false }
+        var changed = false
+        for p in proofs where !records[i].proofs.contains(p) { records[i].proofs.append(p); changed = true }
+        guard changed else { return false }
+        let me = records[i]
+        for other in records where other.id != me.id && !other.notSame.contains(me.id) && other.allProofs.contains(where: { me.allProofs.contains($0) }) {
+            let (kept, dropped) = Self.keepFirst(me, other)
+            if kept.notePath != nil, dropped.notePath != nil {
+                if let k = index(kept.id), !records[k].pending.contains(dropped.id) { records[k].pending.append(dropped.id) }
+                if let d = index(dropped.id), !records[d].pending.contains(kept.id) { records[d].pending.append(kept.id) }
+                log.info("\(dropped.name) and \(kept.name) share a phone or an email with a note each: the banner asks, and folds them")
+            } else {
+                log.info("\(dropped.name) and \(kept.name) share a phone or an email: merged")
+                merge(keep: kept.id, drop: dropped.id)
+            }
+        }
+        return true
+    }
+
     /// After a merge, whether a ledger row under `label` (and `handle`) was the dropped person's — by the roster as it
     /// stood before the merge, so the row is renamed only when it resolved to them: never merely because it shares
     /// their key, which a third person the user keeps apart ("Kanika Pandey Loadmill" beside "Kanika Pandey") does too.

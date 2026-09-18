@@ -698,3 +698,45 @@ import Platform
         #expect(await me.person(x)?.aliases.contains("Vivek Upreti") == false)
     }
 }
+
+@Suite struct PersonRegistryProfileProofTests {
+    static let t0 = Date(timeIntervalSince1970: 1_789_560_000)
+    func fresh() throws -> URL {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("people-\(UUID().uuidString)/KB", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true); return root
+    }
+    /// The Slack "Nitesh Kumar" was kept apart from the WhatsApp one because a name proves nothing; then Slack's profile
+    /// shows the number the WhatsApp handle is — proof — and the two become one without a question.
+    @Test func aProfileThatProvesTheNumberJoinsTheNamesakes() async throws {
+        let r = PersonRegistry(vault: try fresh(), now: { Self.t0 })
+        let wa = await r.register(label: "Nitesh Kumar", handle: "whatsapp:+919540752593")
+        let sl = await r.register(label: "Nitesh Kumar", handle: "slack:U1")
+        let pendingBefore = await r.person(wa)?.pending
+        #expect(wa != sl && pendingBefore == [sl], "a name alone opens a second record and a question")
+        let learned = await r.learn(proofs: ["phone:919540752593"], forHandle: "slack:U1")
+        #expect(learned)
+        let people = await r.people()
+        #expect(people.count == 1 && Set(people[0].handles) == ["whatsapp:+919540752593", "slack:U1"] && people[0].pending.isEmpty, "one person, the question gone")
+        let again = await r.learn(proofs: ["phone:919540752593"], forHandle: "slack:U1")
+        let nobody = await r.learn(proofs: ["email:x@y.in"], forHandle: "teams:nobody")
+        #expect(!again && !nobody, "nothing new the second time; a handle nobody holds teaches nothing")
+    }
+    /// Both namesakes already have a note: the proof does not fold two files behind the user's back — it marks the pair
+    /// pending so the banner folds them with the notes. Kept apart by the user, they stay apart.
+    @Test func aProofBetweenTwoNotesAsksRatherThanFolds() async throws {
+        let r = PersonRegistry(vault: try fresh(), now: { Self.t0 })
+        let wa = await r.register(label: "Nitesh Kumar", handle: "whatsapp:+919540752593")
+        let sl = await r.register(label: "Nitesh Kumar", handle: "slack:U1")
+        await r.setNotePath("People/Nitesh Kumar.md", for: wa); await r.setNotePath("People/Nitesh Kumar (Slack).md", for: sl)
+        await r.keepSeparate(wa, sl)
+        _ = await r.learn(proofs: ["phone:919540752593"], forHandle: "slack:U1")
+        let apart = await r.people()
+        #expect(apart.count == 2, "kept apart by the user stays apart even with a shared number")
+        let r2 = PersonRegistry(vault: try fresh(), now: { Self.t0 })
+        let a = await r2.register(label: "Nitesh Kumar", handle: "whatsapp:+919540752593"), b = await r2.register(label: "Nitesh Kumar", handle: "slack:U1")
+        await r2.setNotePath("People/Nitesh Kumar.md", for: a); await r2.setNotePath("People/Nitesh Kumar (Slack).md", for: b)
+        let learned = await r2.learn(proofs: ["phone:919540752593"], forHandle: "slack:U1")
+        let count = await r2.people().count, pending = await r2.person(a)?.pending
+        #expect(learned && count == 2 && pending == [b], "two notes: the banner's job")
+    }
+}

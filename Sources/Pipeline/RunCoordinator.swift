@@ -29,11 +29,16 @@ public actor RunCoordinator {
         /// The Mac's Contacts, as cards of phones and emails: what proves two chats are one person before the night
         /// registers anyone. Empty when Contacts is not allowed, or not asked.
         public var contacts: @Sendable () async -> [ContactCard] = { [] }
+        /// What the sources' profiles prove about each direct chat, by handle: a Slack email, a Teams phone. The app
+        /// keeps what discovery found, so the night asks nothing of the network for it.
+        public var bucketProofs: @Sendable () async -> [String: [String]] = { [:] }
         public init(store: any RunStore, knowledge: any KnowledgeStore, sources: [any Source], reader: (any LocalModel)?, brain: (any Brain)?,
                     policy: any SensitivityPolicy, clock: Clock = SystemClock(), calendarText: @escaping @Sendable () async -> String? = { nil },
-                    stage: @escaping @Sendable (String, String) -> Void = { _, _ in }, selfNames: [String] = [], contacts: @escaping @Sendable () async -> [ContactCard] = { [] }) {
+                    stage: @escaping @Sendable (String, String) -> Void = { _, _ in }, selfNames: [String] = [], contacts: @escaping @Sendable () async -> [ContactCard] = { [] },
+                    bucketProofs: @escaping @Sendable () async -> [String: [String]] = { [:] }) {
             self.store = store; self.knowledge = knowledge; self.sources = sources; self.reader = reader; self.brain = brain
             self.policy = policy; self.clock = clock; self.calendarText = calendarText; self.stage = stage; self.selfNames = SelfNames.clean(selfNames); self.contacts = contacts
+            self.bucketProofs = bucketProofs
         }
     }
 
@@ -123,6 +128,8 @@ public actor RunCoordinator {
                 await registry.load()
                 // What the address book proves comes first: two chats on one card are one person before anyone is written about tonight.
                 await registry.link(contacts: await deps.contacts())
+                let proofsByHandle = await deps.bucketProofs()
+                for (handle, proofs) in proofsByHandle { await registry.learn(proofs: proofs, forHandle: handle) }
                 // Anyone tonight's summaries, open asks or open loops name comes back from Archive/ before the brain writes, so it finds
                 // their one file where it expects it — by the chat's handle where one is known, so a contact saved under a bare number,
                 // or a chat renamed since, is found through the registry and not only by a name.
@@ -207,7 +214,7 @@ public actor RunCoordinator {
                 // Every ask and loop names someone: the registry learns each spelling and handle (the sync may have added
                 // People notes, so it is seeded again first), and the app is told who looks like one person twice.
                 await registry.seed(from: (try? await deps.knowledge.folders()) ?? [])
-                for a in asks { await registry.register(label: a.person, handle: a.handle) }
+                for a in asks { await registry.register(label: a.person, handle: a.handle, proofs: a.handle.flatMap { proofsByHandle[$0] } ?? []) }
                 for l in allLoops { await registry.register(label: l.person, handle: nil) }
                 do { try await registry.save() } catch { log.warn("people registry not saved: \(error)") }
                 let suspects = await registry.suspects().map { [$0.0.id, $0.1.id] }

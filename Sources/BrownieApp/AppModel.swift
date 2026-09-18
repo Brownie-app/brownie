@@ -497,10 +497,15 @@ final class AppModel: ObservableObject {
     private func rebuildCoordinator() {
         let logger = sendLogger
         coordinator = RunCoordinator(.init(store: store, knowledge: knowledge, sources: sourcesForRun, reader: reader, brain: brain, policy: policy,
-                                            calendarText: { CalendarSource.judgeContext() }, stage: { p, d in logger.setPurpose(p, detail: d) }, selfNames: selfNames, contacts: Self.contactCards))
+                                            calendarText: { CalendarSource.judgeContext() }, stage: { p, d in logger.setPurpose(p, detail: d) }, selfNames: selfNames, contacts: Self.contactCards,
+                                            bucketProofs: { [weak self] in await self?.bucketProofs() ?? [:] }))
     }
-    /// The address book's cards for the registry; cards come from Contacts once allowed.
-    static let contactCards: @Sendable () async -> [ContactCard] = { [] }
+    /// The address book's cards for the registry, once Contacts is allowed (never a prompt from here).
+    static let contactCards: @Sendable () async -> [ContactCard] = { ContactLookup.cards() }
+    /// What discovery found each direct chat's profile proves, by handle, for the night's registry work.
+    func bucketProofs() -> [String: [String]] {
+        Dictionary(discovered.values.flatMap { $0 }.compactMap { b in b.handle.map { ($0, b.proofs) } }, uniquingKeysWith: { a, b in a + b.filter { !a.contains($0) } })
+    }
     var runCoordinator: RunCoordinator? { rebuildCoordinator(); return coordinator }
 
     // MARK: runs
