@@ -7,8 +7,11 @@ public enum AskDetector {
     static let askStarts = ["can you", "could you", "would you", "will you", "please", "pls", "plz", "send me", "share", "let me know", "tell me", "any update", "did you", "have you", "when can", "what's the", "whats the", "where is", "how do",
                             "bata do", "batao", "bhej do", "bhejo", "kaise", "kab", "kya", "kahan", "chahiye", "kar do", "karo", "dena", "de do", "kar sakte", "ho gaya", "hua kya"]
     /// True when the line reads as a question or request.
+    static let link = try! NSRegularExpression(pattern: #"https?://\S+|www\.\S+"#, options: .caseInsensitive)
     public static func isAsk(_ text: String) -> Bool {
-        let t = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        // a link is a thing shared, not a thing asked — its "?" is a query string; what is left around it decides
+        let stripped = link.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: " ")
+        let t = stripped.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard t.count >= 4 else { return false }
         if t.hasSuffix("?") || t.hasSuffix("??") || t.contains("?") && t.count < 200 { return true }
         // a request starts like one; a request word buried in the user's own kind of sentence ("I'll share…") does not count

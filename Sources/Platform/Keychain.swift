@@ -4,12 +4,32 @@ import Security
 /// Secrets live here and nowhere else. Service is fixed; account is the key name.
 public enum Keychain {
     private static let service = "app.brownie"
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var quietMode = false
+    nonisolated(unsafe) private static var blockedKeys: [String] = []
+
+    /// Whether a read may put a permission prompt on the screen. At 3 AM nobody is there to answer one, and a
+    /// modal prompt would hold the whole night — as it once did, for four and a half hours over a Gmail token — so
+    /// the overnight run reads quietly: an item this build is not yet allowed to read comes back as missing, the key
+    /// is remembered in `blocked`, and the morning says what to click.
+    public static var quiet: Bool {
+        get { lock.lock(); defer { lock.unlock() }; return quietMode }
+        set { lock.lock(); quietMode = newValue; if newValue { blockedKeys = [] }; lock.unlock() }
+    }
+    /// The keys a quiet read could not have without asking, in the order they were wanted.
+    public static var blocked: [String] { lock.lock(); defer { lock.unlock() }; return blockedKeys }
 
     public static func get(_ key: String) -> String? {
-        let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
+        var q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
                                 kSecAttrAccount as String: key, kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
+        if quiet { q[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail }
         var out: AnyObject?
-        guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess, let d = out as? Data else { return nil }
+        let status = SecItemCopyMatching(q as CFDictionary, &out)
+        if status == errSecInteractionNotAllowed || status == errSecAuthFailed {
+            lock.lock(); if !blockedKeys.contains(key) { blockedKeys.append(key) }; lock.unlock()
+            return nil
+        }
+        guard status == errSecSuccess, let d = out as? Data else { return nil }
         return String(data: d, encoding: .utf8)
     }
 

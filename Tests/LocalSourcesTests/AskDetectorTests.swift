@@ -135,3 +135,12 @@ import Domain
         #expect(asks.count == 2 && asks.first { $0.bucket == a }?.isAnswered == true && asks.first { $0.bucket == b }?.isOpen == true)
     }
 }
+
+@Suite struct AskDetectorLinkTests {
+    @Test func aBareLinkIsNotAnAskAndAQuestionAroundOneStillIs() {
+        #expect(!AskDetector.isAsk("https://x.com/rafalwilinski/status/2100882207879434359?s=20"))
+        #expect(!AskDetector.isAsk("www.example.com/page?id=3 https://t.co/abc?x=1"))
+        #expect(AskDetector.isAsk("have you seen this? https://x.com/some/status?s=20"))
+        #expect(AskDetector.isAsk("can you check https://example.com/doc?id=9 today"))
+    }
+}

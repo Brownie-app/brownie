@@ -121,3 +121,11 @@ import Domain
         #expect(StatusBlock.upsert(into: old, block: "") == "# Nitesh\n\nRecurring contact.\n", "an empty block takes the old-style one out too")
     }
 }
+
+@Suite struct StatusBlockVoiceTests {
+    @Test func theJudgesThirdPersonBecomesYouInTheBlock() {
+        #expect(StatusBlock.voiced("The user said on 16 Sep that the licensing update was done.") == "You said on 16 Sep that the licensing update was done.")
+        #expect(StatusBlock.voiced("the user's sister replied") == "your sister replied")
+        #expect(StatusBlock.voiced("you marked it done") == "you marked it done")
+    }
+}

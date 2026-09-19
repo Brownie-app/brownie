@@ -526,7 +526,11 @@ final class AppModel: ObservableObject {
         rebuildCoordinator()
         guard let coordinator else { return }
         isRunning = true; overlay = .processing; thoughts = []; progress = RunProgress()
+        // Nobody is at the Mac for an overnight or catch-up run: the Keychain is read quietly, so a permission prompt
+        // never holds the night. A manual run is the user's, and a prompt then is answered.
+        Keychain.quiet = trigger == .overnight || trigger == .catchUp || trigger == .daytime
         Task {
+            defer { Keychain.quiet = false }
             let outcome = await coordinator.run(trigger: trigger) { [weak self] e in
                 Task { @MainActor in
                     guard let self else { return }

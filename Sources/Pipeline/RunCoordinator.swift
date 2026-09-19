@@ -1,6 +1,7 @@
 import Foundation
 import Domain
 import Ingest
+import Platform
 import Knowledge
 import Proactive
 import Support
@@ -32,6 +33,9 @@ public actor RunCoordinator {
         /// What the sources' profiles prove about each direct chat, by handle: a Slack email, a Teams phone. The app
         /// keeps what discovery found, so the night asks nothing of the network for it.
         public var bucketProofs: @Sendable () async -> [String: [String]] = { [:] }
+        /// How long one source may take before the night moves on without it. Long enough for a first read of a big
+        /// mailbox, short enough that a hung request or a prompt nobody answers costs a fraction of the night.
+        public var sourceDeadline: TimeInterval = 30 * 60
         public init(store: any RunStore, knowledge: any KnowledgeStore, sources: [any Source], reader: (any LocalModel)?, brain: (any Brain)?,
                     policy: any SensitivityPolicy, clock: Clock = SystemClock(), calendarText: @escaping @Sendable () async -> String? = { nil },
                     stage: @escaping @Sendable (String, String) -> Void = { _, _ in }, selfNames: [String] = [], contacts: @escaping @Sendable () async -> [ContactCard] = { [] },
@@ -96,12 +100,20 @@ public actor RunCoordinator {
                     let base = stats
                     readable += 1
                     do {
-                        let s = try await ingest.read(source, enabledBuckets: enabled, runID: runID) { p in
-                            var p = p; p.stats = base + p.stats
-                            onEvent(.progress(p))
-                        }
+                        // No source holds the night: a read that has not finished by its deadline is left behind (still
+                        // running, its cursor untouched until it does) and the next source takes its turn.
+                        let s = try await Deadline.run(seconds: deps.sourceDeadline, work: {
+                            try await ingest.read(source, enabledBuckets: enabled, runID: runID) { p in
+                                var p = p; p.stats = base + p.stats
+                                onEvent(.progress(p))
+                            }
+                        })
                         stats = stats + s
                         if let c = await ingest.coverage(of: source.id) { coverage = SourceCoverage.merge(coverage, with: c); try? await store.setValue(SettingKey.coverage, SourceCoverage.encode(coverage)) }
+                    } catch is Deadline.Passed {
+                        let minutes = Int(deps.sourceDeadline / 60)
+                        log.warn("\(source.descriptor.name): gave up after \(minutes) min — the read never came back")
+                        skipped.append("\(source.descriptor.name): gave up after \(minutes) min — something waited on an answer nobody was there to give" + (Keychain.blocked.isEmpty ? "" : " (the Keychain)"))
                     } catch is CancellationError { throw CancellationError() }
                     catch IngestRun.Failure.cancelled { throw IngestRun.Failure.cancelled }
                     catch IngestRun.Failure.readerStuck { throw IngestRun.Failure.readerStuck }
@@ -175,6 +187,10 @@ public actor RunCoordinator {
                 // A loop that has waited its full term is let go now, before the judge sees the ledger: handed over as
                 // open, it would come back with an item, be let go in the merge, and still get a card in the morning.
                 var ledger = await LoopLedger.load(store)
+                // A due the judge wrote in words before the words were understood ("September6") gets its date now.
+                for i in ledger.indices where ledger[i].status == .open && ledger[i].dueDate == nil {
+                    if let d = DueWords.date(ledger[i].due, now: ledger[i].openedAt, timeZone: deps.clock.timeZone) { ledger[i].dueDate = d }
+                }
                 let letGo = StatusRules.lapse(loops: ledger, now: deps.clock.now())
                 if letGo != ledger { log.info("\(zip(ledger, letGo).filter { $0.status != $1.status }.count) loop(s) let go for want of news"); ledger = letGo; await LoopLedger.save(ledger, store) }
                 let openLoops = ledger.filter { $0.status == .open }
@@ -309,6 +325,7 @@ public actor RunCoordinator {
             // FINISH, every run: the vault measured and the night's record kept, and what has aged out let go —
             // the store's rows and dated settings, the transcript cache, the log files. None of it can fail the run.
             await Self.housekeep(deps: deps, store: store, log: log)
+            if !Keychain.blocked.isEmpty { skipped.append("Keychain: Brownie couldn't read its keys (\(Keychain.blocked.joined(separator: ", "))) without asking you — open Brownie, click Always Allow once, then Analyse now") }
             try? await store.setValue("run.lastSkipped", skipped.isEmpty ? nil : skipped.joined(separator: "; "))
             if !skipped.isEmpty { log.warn("skipped: \(skipped.joined(separator: "; "))") }
             if deps.reader == nil { outcome = .failedReader("the reader isn't downloaded yet") }

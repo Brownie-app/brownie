@@ -206,6 +206,11 @@ public enum StatusRules {
 /// not the brain. Every date is absolute, so the block reads the same on any day and the note is only rewritten when
 /// something actually changed.
 public enum StatusBlock {
+    /// The judge writes how a loop closed in the third person ("The user said on 16 Sep…"); the block speaks to the user.
+    static func voiced(_ how: String) -> String {
+        how.replacingOccurrences(of: "The user's", with: "Your").replacingOccurrences(of: "the user's", with: "your")
+           .replacingOccurrences(of: "The user", with: "You").replacingOccurrences(of: "the user", with: "you")
+    }
     public static let open = "<!-- brownie:status -->", close = "<!-- /brownie:status -->"
     /// The markers the block carried before it was renamed; a note still holding them is migrated on its next write.
     public static let legacyOpen = "<!-- brownie:between-you -->", legacyClose = "<!-- /brownie:between-you -->"
@@ -272,7 +277,7 @@ public enum StatusBlock {
             switch l.status {
             case .open: line = head("⏳") + (l.due.map { " · due \($0)" } ?? "")
             case .lapsed: line = head("⌛") + " — no news in \(StatusRules.loopLapseDays) days; no longer tracked (lapsed \(day.string(from: StatusRules.settledAt(l)!)))"
-            case .closed, .dismissed: line = head("✅") + " — done \(day.string(from: StatusRules.settledAt(l)!))" + (l.closedHow.map { " (\($0))" } ?? "")
+            case .closed, .dismissed: line = head("✅") + " — done \(day.string(from: StatusRules.settledAt(l)!))" + (l.closedHow.map { " (\(StatusBlock.voiced($0)))" } ?? "")
             }
             out.append(Entry(line: line, settledAt: StatusRules.settledAt(l)))
         }
