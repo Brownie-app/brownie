@@ -1,0 +1,51 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: -apple-system, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #1d1d1f; background: #d8d8dc; }
+    a { color: #b3762a; } a:hover { color: #8f5c1f; }
+    .menu { width: 300px; background: rgba(246,246,248,0.96); border-radius: 10px; box-shadow: 0 12px 34px rgba(0,0,0,0.25), 0 0 0 0.5px rgba(0,0,0,0.2); padding: 6px; display: flex; flex-direction: column; gap: 1px; font-size: 13px; }
+    .mi { display: flex; align-items: center; gap: 8px; height: 26px; padding: 0 10px; border-radius: 6px; }
+    .mi.on { background: #d8983a; color: #1a1205; }
+    .mi .k { margin-left: auto; font-size: 11px; color: #8e8e93; }
+    .mi.on .k { color: #5a3d10; }
+    .mi.d { color: #d94f45; }
+    .mi.dim { color: #8e8e93; font-size: 12px; }
+    .msep { height: 1px; background: rgba(0,0,0,0.1); margin: 4px 8px; }
+    .mi svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    .bar { height: 26px; background: rgba(240,240,242,0.9); display: flex; align-items: center; justify-content: flex-end; gap: 16px; padding: 0 14px; font-size: 12.5px; }
+  </style>
+</helmet>
+<div style="width: 560px; height: 420px; display: flex; flex-direction: column; background: linear-gradient(160deg, #cfd6e2, #b9c1cf);">
+  <div class="bar">
+    <svg viewBox="0 0 24 24" style="width: 16px; height: 16px; stroke: #1d1d1f; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round;"><path d="M7 4h5c2.6 0 4.4 1.4 4.4 3.6 0 1.2-.6 2.2-1.6 2.8 1.6.5 2.6 1.8 2.6 3.6 0 2.6-2 4.2-5 4.2H7z"></path><path d="M7 4v14"></path><path d="M5 16h13"></path><path d="M9 16a3 3 0 0 1 6 0" fill="#1d1d1f"></path></svg>
+    <span>Sun 20 Sep · 11:42</span>
+  </div>
+  <div style="padding: 4px 0 0 210px;">
+    <div class="menu">
+      <div class="mi dim"><span>Last night 3:00 – 3:41 · 4 cards · 14 KB left</span></div>
+      <div class="msep"></div>
+      <div class="mi on"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"></path></svg><span>Ask Brownie…</span><span class="k">⌘⇧Space</span></div>
+      <div class="mi"><svg viewBox="0 0 24 24"><path d="M7 11V6a2 2 0 0 1 4 0v5M11 10V4a2 2 0 0 1 4 0v6M15 10V6a2 2 0 0 1 4 0v8a6 6 0 0 1-6 6h-2a6 6 0 0 1-5.6-3.8L4 13a1.8 1.8 0 0 1 3-1.8"></path></svg><span>Run a recipe</span><span class="k">▸</span></div>
+      <div class="mi"><svg viewBox="0 0 24 24"><path d="M17 3l4 4-4 4M3 11V9a2 2 0 0 1 2-2h16M7 21l-4-4 4-4M21 13v2a2 2 0 0 1-2 2H3"></path></svg><span>Loops</span><span class="k">7 open</span></div>
+      <div class="msep"></div>
+      <div class="mi"><svg viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"></path><circle cx="12" cy="12" r="4"></circle></svg><span>Open Brownie</span></div>
+      <div class="mi"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6"></path></svg><span>Analyze now</span></div>
+      <div class="mi"><svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"></path><path d="M9 12l2 2 4-4"></path></svg><span>What left my Mac last night</span></div>
+      <div class="msep"></div>
+      <div class="mi d"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"></path></svg><span>Erase everything…</span></div>
+      <div class="msep"></div>
+      <div class="mi"><span>Settings…</span><span class="k">⌘,</span></div>
+      <div class="mi"><span>Quit Brownie</span><span class="k">⌘Q</span></div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

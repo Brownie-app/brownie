@@ -1,0 +1,19 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Brownie — Privacy</title>
+<style>:root{--ink:#1d1d1f;--ink2:#6e6e73;--bg:#f7f5f1;--sep:rgba(0,0,0,.1);--a:#8f5c1f}@media(prefers-color-scheme:dark){:root{--ink:#f2f2f4;--ink2:#a1a1a8;--bg:#1e1e21;--sep:rgba(255,255,255,.1);--a:#f0c47c}}
+body{margin:0;font-family:-apple-system,"SF Pro Text","Helvetica Neue",Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.55}.wrap{max-width:760px;margin:0 auto;padding:48px 24px}h1{letter-spacing:-.02em}h2{margin-top:36px}table{border-collapse:collapse;width:100%;font-size:14px}td,th{text-align:left;padding:8px 6px;border-bottom:1px solid var(--sep);vertical-align:top}th{color:var(--ink2);font-weight:600}a{color:var(--a)}p{color:var(--ink2)}</style></head><body><div class="wrap">
+<h1>Privacy, in plain words</h1>
+<p>Brownie reads a lot of your life, so this page is precise about where each kind of data can and cannot go.</p>
+<h2>Where things go</h2>
+<table><tr><th>What</th><th>Stays on your Mac</th><th>Goes to the brain you chose</th><th>Goes to us</th></tr>
+<tr><td>Raw files, messages, mail, screenshots</td><td>Yes — read by the local model, never stored twice</td><td>Never</td><td>Never</td></tr>
+<tr><td>Summaries (short, with private specifics left out)</td><td>Yes, until the next successful run</td><td>Yes, to build your notes and cards</td><td>Never</td></tr>
+<tr><td>Your knowledge base (Markdown notes)</td><td>Yes, in a folder you own</td><td>Yes, when deciding what needs you</td><td>Never</td></tr>
+<tr><td>Anything flagged sensitive (IDs, cards, passwords, medical records)</td><td>Nothing — not a title, not a log line</td><td>Never</td><td>Never</td></tr>
+<tr><td>API keys, sign-in tokens</td><td>Your Keychain</td><td>Only to the service they belong to</td><td>Never</td></tr>
+<tr><td>Crash reports, usage counts</td><td>—</td><td>—</td><td>Off by default; opt in in Settings</td></tr></table>
+<h2>There is no Brownie server</h2><p>Version 1 has no server of ours at all. Your Mac talks to the model provider you chose, using your own key, and to the services you sign into. We cannot see your data because it never passes through anything we run.</p>
+<h2>Nothing is sent without your tap</h2><p>Hands prepares messages, emails and events, and stops before Send, Pay, Submit or Delete. There is no setting that changes this.</p>
+<h2>Leaving</h2><p>Settings → About → Uninstall removes the app, the model, the knowledge base, the helper, the login item and your keys. There was never an account to close.</p>
+<h2>Third parties</h2><p>Your chosen model provider (OpenAI, Anthropic, OpenRouter, or a local server) processes the summaries under its own terms and your own account. Google, Slack, Linear and other sources are read through your own sign-in under their terms.</p>
+<p>Questions: [CONTACT_EMAIL]</p>
+</div></body></html>

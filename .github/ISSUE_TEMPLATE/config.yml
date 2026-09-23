@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security issue
+    url: https://github.com/Brownie-app/brownie/blob/main/SECURITY.md
+    about: Please do not file security issues publicly — see SECURITY.md.
+  - name: Question, or thinking out loud
+    url: https://github.com/Brownie-app/brownie/discussions
+    about: Discussions is the place for questions, setup help and half-formed ideas.

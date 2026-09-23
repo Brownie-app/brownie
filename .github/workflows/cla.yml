@@ -1,0 +1,39 @@
+name: CLA
+on:
+  issue_comment: { types: [created] }
+  pull_request_target: { types: [opened, synchronize, closed] }
+
+# The action writes the record of who has signed, and the check that says so; it reads nothing else.
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+  statuses: write
+
+jobs:
+  cla:
+    runs-on: ubuntu-latest
+    # A comment on an issue is not a signature; only the sentence, and only on a pull request.
+    if: (github.event.comment.body == 'I have read the CLA in CLA.md and I agree to it.') || github.event_name == 'pull_request_target'
+    steps:
+      # Runs in this repository's own CI: no outside service is given access to the pull requests.
+      # Pinned to a commit, because the action is no longer maintained and a moved tag would run here unread.
+      - uses: contributor-assistant/github-action@ca4a40a7d1004f18d9960b404b97e5f30a505a08 # v2.6.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          path-to-signatures: signatures/version1/cla.json
+          path-to-document: https://github.com/Brownie-app/brownie/blob/main/CLA.md
+          branch: cla-signatures
+          # The words the contributor comments, and what Brownie says back.
+          custom-pr-sign-comment: I have read the CLA in CLA.md and I agree to it.
+          custom-notsigned-prcomment: |
+            Thank you for this. Before it can be merged, the contributor licence agreement has to be on the record — it is what lets Brownie stay open source and still be offered under a commercial licence later. Read [CLA.md](https://github.com/Brownie-app/brownie/blob/main/CLA.md); it is four short paragraphs.
+
+            Then comment exactly this, on this pull request:
+          custom-allsigned-prcomment: Everyone who wrote a commit here has agreed to the CLA. Thank you.
+          # The maintainer has already agreed, and a bot bumping a dependency is nobody to ask. Written with a
+          # wildcard on purpose: the action turns each entry into a regular expression, where "dependabot[bot]"
+          # reads as "dependabot" followed by one of b, o or t — and so never matches the bot it names.
+          allowlist: vivek-brownie,dependabot*
+          lock-pullrequest-aftermerge: false

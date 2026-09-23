@@ -1,0 +1,35 @@
+name: CI
+on:
+  pull_request:
+  push: { branches: [main] }
+
+# Nothing here writes to the repository: a workflow that only builds and tests needs to read it and no more.
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
+        with: { xcode-version: latest-stable }
+      - name: Homebrew deps
+        run: brew install cmake gperf openssl@3
+      - name: Cache TDLib
+        id: tdlib
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: Vendor/tdlib/lib
+          key: tdlib-d1085f9-${{ runner.os }}-${{ runner.arch }}
+      - name: Build TDLib
+        if: steps.tdlib.outputs.cache-hit != 'true'
+        run: ./Scripts/build-tdlib.sh
+      - name: Build
+        run: swift build
+      - name: Test
+        run: swift test --skip EvalTests --enable-code-coverage
+      - name: Coverage summary
+        run: |
+          PROF=$(find .build -name "*.profdata" | head -1); BIN=$(find .build -name "*.xctest" -maxdepth 4 | head -1)
+          [ -n "$PROF" ] && xcrun llvm-cov report -instr-profile "$PROF" "$BIN/Contents/MacOS/$(basename "$BIN" .xctest)" -ignore-filename-regex="Tests|Vendor|\.build" 2>/dev/null | tail -3 || echo "no coverage data"

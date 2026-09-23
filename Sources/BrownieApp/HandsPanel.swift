@@ -1,0 +1,240 @@
+import SwiftUI
+import Proactive
+import AppKit
+import Speech
+import AVFoundation
+import Domain
+import Agent
+
+/// Hold-to-talk hotkey (right ⌘ / right ⌥), on-device speech, and the floating overlay under the
+/// notch. Runs only while the user is present; never in the overnight pipeline.
+@MainActor
+final class HandsController: ObservableObject {
+    private let m: AppModel
+    private var monitor: Any?
+    private var localMonitor: Any?
+    private var holding = false
+    private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-IN")) ?? SFSpeechRecognizer()
+    private var request: SFSpeechAudioBufferRecognitionRequest?
+    private var recognitionTask: SFSpeechRecognitionTask?
+    private let audio = AVAudioEngine()
+    private var panel: NSPanel?
+    @Published var transcript = ""
+    @Published var commandText = ""
+    @Published var showCommandBar = false
+
+    init(model: AppModel) { self.m = model }
+
+    private var keyMonitor: Any?
+    @Published var recentGoals: [String] = UserDefaults.standard.stringArray(forKey: "hands.recentGoals") ?? []
+
+    func start() {
+        SFSpeechRecognizer.requestAuthorization { _ in }
+        let mask: NSEvent.EventTypeMask = .flagsChanged
+        monitor = NSEvent.addGlobalMonitorForEvents(matching: mask) { [weak self] e in Task { @MainActor in self?.flags(e) } }
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: mask) { [weak self] e in Task { @MainActor in self?.flags(e) }; return e }
+        // ⌘⇧Space anywhere → command bar (global key monitors need Accessibility)
+        keyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] e in
+            guard e.keyCode == 49, e.modifierFlags.contains([.command, .shift]) else { return }
+            Task { @MainActor in NSApp.activate(ignoringOtherApps: true); self?.showCommandBar = true }
+        }
+        // A running recipe shows in the same floating panel as Hands, with the same Stop.
+        NotificationCenter.default.addObserver(forName: .brownieRecipeRunning, object: nil, queue: .main) { [weak self] _ in Task { @MainActor in self?.showPanel() } }
+        NotificationCenter.default.addObserver(forName: .brownieRecipeDone, object: nil, queue: .main) { [weak self] _ in Task { @MainActor in self?.hidePanel(after: 6) } }
+    }
+
+    private func remember(_ goal: String) {
+        recentGoals.removeAll { $0 == goal }; recentGoals.insert(goal, at: 0); recentGoals = Array(recentGoals.prefix(5))
+        UserDefaults.standard.set(recentGoals, forKey: "hands.recentGoals")
+    }
+
+    private func flags(_ e: NSEvent) {
+        guard m.handsHotkey != "off" else { return }
+        // Right ⌘ keycode 54, right ⌥ 61
+        let code = m.handsHotkey == "rightOption" ? 61 : 54
+        guard Int(e.keyCode) == code else { return }
+        let down = m.handsHotkey == "rightOption" ? e.modifierFlags.contains(.option) : e.modifierFlags.contains(.command)
+        if down, !holding { holding = true; beginListening() }
+        else if !down, holding { holding = false; endListening() }
+    }
+
+    private func beginListening() {
+        transcript = ""; m.handsState = .listening("")
+        showPanel()
+        guard SFSpeechRecognizer.authorizationStatus() == .authorized, let recognizer, recognizer.isAvailable else { transcript = "(speech not available — use the command bar)"; return }
+        let req = SFSpeechAudioBufferRecognitionRequest(); req.shouldReportPartialResults = true
+        if recognizer.supportsOnDeviceRecognition { req.requiresOnDeviceRecognition = true }   // never the server
+        request = req
+        let input = audio.inputNode
+        input.removeTap(onBus: 0)
+        input.installTap(onBus: 0, bufferSize: 1024, format: input.outputFormat(forBus: 0)) { buf, _ in req.append(buf) }
+        audio.prepare(); try? audio.start()
+        recognitionTask = recognizer.recognitionTask(with: req) { [weak self] r, _ in
+            guard let self, let r else { return }
+            Task { @MainActor in self.transcript = r.bestTranscription.formattedString; self.m.handsState = .listening(self.transcript) }
+        }
+    }
+
+    private func endListening() {
+        audio.stop(); audio.inputNode.removeTap(onBus: 0); request?.endAudio(); recognitionTask?.cancel()
+        let goal = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        if goal.isEmpty { m.handsState = .idle; hidePanel(after: 1.5); return }
+        run(goal)
+    }
+
+    func run(_ goal: String) {
+        if let r = m.recipe(named: goal) { m.overlay = .none; m.screen = .recipes; NSApp.activate(ignoringOtherApps: true); m.runRecipe(r.id); return }
+        showPanel()
+        remember(goal)
+        m.markWalkthrough("hands")
+        guard let hands = m.hands else { m.handsState = .finished("Hands needs a brain with tools — set one in Settings → Brain"); hidePanel(after: 4); return }
+        guard Hands.hasAccessibility else { m.handsState = .finished("Hands needs Accessibility — Settings → Privacy"); hidePanel(after: 4); return }
+        m.handsState = .running(["Starting: \(goal)"]); m.journey = HandsJourney()
+        Task {
+            let o = await hands.perform(goal) { [weak self] e in
+                Task { @MainActor in
+                    guard let self else { return }
+                    switch e {
+                    case .step(let s):
+                        if case .running(var steps) = self.m.handsState { steps.append(s); if steps.count > 6 { steps.removeFirst() }; self.m.handsState = .running(steps) }
+                        self.m.journey?.add(s)
+                    case .plan(let p): self.m.journey?.setPlan(p)
+                    case .stepDone(let n, let note): self.m.journey?.stepDone(n, note: note)
+                    default: break
+                    }
+                }
+            }
+            await MainActor.run {
+                switch o {
+                case .done(let s): m.handsState = .finished("Done — \(s)"); hidePanel(after: 4)
+                case .pausedForUser(let w): m.handsState = .paused(w); Notifier.paused("Hands paused", body: w); hidePanel(after: 8)
+                case .stopped: m.handsState = .finished("Stopped"); hidePanel(after: 2)
+                case .couldNot(let r): m.handsState = .finished("Couldn't — \(r)"); hidePanel(after: 6)
+                }
+            }
+        }
+    }
+
+    func stop() { m.stopRecipe(); Task { await m.hands?.stop() } }
+
+    // MARK: panel
+
+    private func showPanel() {
+        if panel == nil {
+            let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 560, height: 160), styleMask: [.nonactivatingPanel, .borderless, .fullSizeContentView], backing: .buffered, defer: false)
+            p.isFloatingPanel = true; p.level = .statusBar; p.isOpaque = false; p.backgroundColor = .clear; p.hasShadow = true
+            p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            p.contentView = NSHostingView(rootView: HandsOverlay(controller: self).environmentObject(m))
+            panel = p
+        }
+        if let screen = NSScreen.main, let p = panel {
+            p.setFrameOrigin(NSPoint(x: screen.frame.midX - 280, y: screen.frame.maxY - 160))
+            p.orderFrontRegardless()
+        }
+    }
+
+    private func hidePanel(after s: TimeInterval) {
+        Task { try? await Task.sleep(nanoseconds: UInt64(s * 1e9)); if case .running = m.handsState { return }; if case .listening = m.handsState { return }; panel?.orderOut(nil); m.handsState = .idle }
+    }
+}
+
+struct HandsOverlay: View {
+    @EnvironmentObject var m: AppModel
+    @ObservedObject var controller: HandsController
+    let accent = Color(hex: 0xD8983A)
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            switch m.handsState {
+            case .idle: Text("hold right ⌘ to talk").font(.system(size: 11)).foregroundStyle(.white.opacity(0.7))
+            case .listening(let t):
+                HStack(spacing: 12) { Image(systemName: "waveform").foregroundStyle(accent); Text(t.isEmpty ? "Listening…" : "“\(t)”").font(.system(size: 15, weight: .medium)) }
+                Text("Transcribed on this Mac · let go to start").font(.system(size: 11)).foregroundStyle(.white.opacity(0.6))
+            case .running(let steps):
+                HStack { Text(m.runningRecipeName.map { "Running “\($0)”" } ?? (m.journey?.progressLine ?? "Hands is working")).font(.system(size: 15, weight: .semibold)).lineLimit(1); Spacer(); Button("Stop") { controller.stop() }.buttonStyle(.plain).padding(.horizontal, 10).frame(height: 26).background(RoundedRectangle(cornerRadius: 6).fill(Color(hex: 0xD94F45))) }
+                if let j = m.journey, j.hasPlan {
+                    ForEach(j.steps) { st in
+                        HStack(alignment: .top, spacing: 8) {
+                            Group {
+                                if st.state == .done || st.state == .skipped { Image(systemName: "checkmark").font(.system(size: 9, weight: .bold)).foregroundStyle(.black).frame(width: 14, height: 14).background(Circle().fill(Color(hex: 0x6FCF8A))) }
+                                else if st.state == .current { Image(systemName: "arrow.right").font(.system(size: 9, weight: .bold)).foregroundStyle(.black).frame(width: 14, height: 14).background(Circle().fill(accent)) }
+                                else { Circle().stroke(.white.opacity(0.35), lineWidth: 1).frame(width: 14, height: 14) }
+                            }.padding(.top, 1)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(st.title).font(.system(size: 12.5, weight: st.state == .current ? .semibold : .regular)).foregroundStyle(st.state == .pending ? .white.opacity(0.55) : .white).lineLimit(1)
+                                if st.state == .current, let a = st.actions.last { Text(a).font(.system(size: 11)).foregroundStyle(.white.opacity(0.7)).lineLimit(1) }
+                                if st.state == .done, let n = st.note, !n.isEmpty { Text(n).font(.system(size: 10.5)).foregroundStyle(.white.opacity(0.55)).lineLimit(1) }
+                            }
+                        }
+                    }
+                } else {
+                    if let now = steps.last { HStack(alignment: .top, spacing: 8) { Image(systemName: "arrow.right").font(.system(size: 11, weight: .bold)).foregroundStyle(accent).padding(.top, 2); Text(now).font(.system(size: 13, weight: .medium)).lineLimit(2) } }
+                    ForEach(Array(steps.dropLast().suffix(3).enumerated()), id: \.offset) { _, s in HStack(spacing: 8) { Circle().fill(.white.opacity(0.35)).frame(width: 5, height: 5); Text(s).font(.system(size: 11)).foregroundStyle(.white.opacity(0.6)).lineLimit(1) } }
+                }
+                Text("Hands never presses Send, Pay or Delete. Those stay yours.").font(.system(size: 11)).foregroundStyle(.white.opacity(0.6))
+            case .paused(let w): HStack(spacing: 10) { Circle().fill(accent).frame(width: 10, height: 10); Text(w).font(.system(size: 14, weight: .medium)) }
+            case .finished(let s): Text(s).font(.system(size: 14, weight: .medium))
+            }
+        }
+        .foregroundStyle(.white).padding(EdgeInsets(top: 42, leading: 22, bottom: 16, trailing: 22)).frame(width: 560, alignment: .leading)
+        .background(UnevenRoundedRectangle(bottomLeadingRadius: 22, bottomTrailingRadius: 22).fill(.black))
+    }
+}
+
+struct CommandBar: View {
+    @EnvironmentObject var m: AppModel
+    @ObservedObject var controller: HandsController
+    @Environment(\.theme) var t
+    /// The question being answered inline, if the last submitted line was one.
+    @State private var asked: String?
+    @FocusState private var focused: Bool
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Image(systemName: "sun.max").foregroundStyle(t.accent)
+                TextField("Ask a question, or tell Hands what to do…", text: $controller.commandText).textFieldStyle(.plain).font(.system(size: 14)).focused($focused).onSubmit { go() }
+                BButton(title: isQuestion ? "Ask" : "Do it", kind: .primary) { go() }.disabled(m.asking)
+            }
+            if let asked { answerBlock(for: asked) }
+            else {
+                let suggestions = Array((controller.recentGoals + m.cards.prefix(3).map { $0.actionLabel + ": " + $0.title }).prefix(5))
+                if !suggestions.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 8) { ForEach(suggestions, id: \.self) { g in Button(g) { controller.commandText = g }.buttonStyle(.plain).font(.system(size: 12)).lineLimit(1).padding(.horizontal, 10).frame(height: 24).background(Capsule().fill(t.chip)) } } }
+                }
+            }
+            Text(isQuestion ? "A question — ends with ? or starts with what / who / when / did — is answered here from your notes" : "⌘⇧Space · a question is answered from your notes · anything else is a goal for Hands or a recipe's name · esc to close").font(.system(size: 11)).foregroundStyle(t.ink2)
+        }.padding(16).frame(width: 620).onAppear { focused = true }
+    }
+    var isQuestion: Bool { CommandIntent.isQuestion(controller.commandText) }
+
+    @ViewBuilder func answerBlock(for q: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Text("Question · answered from your notes").font(.system(size: 11, weight: .semibold)).foregroundStyle(t.accentInk)
+                Spacer()
+                Text(q).font(.system(size: 11)).foregroundStyle(t.ink2).lineLimit(1)
+            }
+            if m.asking {
+                HStack(spacing: 10) { DawnMark(size: 22); ProgressView().controlSize(.small); Text(m.askStatus).font(.system(size: 12)).foregroundStyle(t.ink2) }
+            } else if let a = m.asks.last, a.question == q {
+                AnswerText(answer: a).frame(maxWidth: .infinity, alignment: .leading)
+                if !a.citations.isEmpty { ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 6) { ForEach(a.citations) { c in CiteChip(c: c) { close(); m.open(c) } } } } }
+                HStack(spacing: 6) {
+                    ForEach(Array(a.actions.enumerated()), id: \.offset) { _, x in BButton(title: x.label) { close(); m.run(x) } }
+                    BButton(title: "Open in Brownie", kind: .quiet) { close(); m.overlay = .none; m.screen = .ask }
+                }
+            } else {
+                Text(m.announcement ?? "No answer came back.").font(.system(size: 12)).foregroundStyle(t.ink2)
+            }
+        }
+        .padding(12).background(RoundedRectangle(cornerRadius: 12).fill(t.card)).overlay(RoundedRectangle(cornerRadius: 12).stroke(t.cardBorder))
+    }
+
+    func go() {
+        let line = controller.commandText.trimmingCharacters(in: .whitespaces); guard !line.isEmpty else { return }
+        switch CommandIntent.classify(line) {
+        case .question(let q): asked = q; controller.commandText = ""; m.ask(q)
+        case .goal(let g): close(); controller.run(g)
+        }
+    }
+    func close() { controller.showCommandBar = false; asked = nil }
+}

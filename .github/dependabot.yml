@@ -1,0 +1,13 @@
+# Dependabot proposes version bumps; nothing merges without a pull request and a green build.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 3
+    commit-message: { prefix: "ci" }
+  - package-ecosystem: swift
+    directory: /
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 3
+    commit-message: { prefix: "deps" }
