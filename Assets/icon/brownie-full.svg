@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <clipPath id="sq"><path d="M512 0C104 0 0 104 0 512s104 512 512 512 512-104 512-512S920 0 512 0z"/></clipPath>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1B2033"/><stop offset="1" stop-color="#2E2A3F"/></linearGradient>
+    <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F6C46A"/><stop offset="1" stop-color="#D8983A"/></linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.62" r="0.5"><stop offset="0" stop-color="#E2A54A" stop-opacity="0.55"/><stop offset="1" stop-color="#E2A54A" stop-opacity="0"/></radialGradient>
+  </defs>
+  <g clip-path="url(#sq)">
+    <rect width="1024" height="1024" fill="url(#bg)"/>
+    <rect width="1024" height="1024" fill="url(#glow)"/>
+    <circle cx="288" cy="216" r="6.4" fill="#fff" opacity="0.7"/>
+    <circle cx="784" cy="160" r="4.8" fill="#fff" opacity="0.6"/>
+    <circle cx="856" cy="360" r="6" fill="#fff" opacity="0.5"/>
+    <circle cx="184" cy="440" r="4.4" fill="#fff" opacity="0.5"/>
+    <path d="M312 176h224c104 0 176 56 176 144 0 48-24 88-64 112 64 20 104 72 104 144 0 104-80 168-200 168H312z" fill="none" stroke="#F3E4C6" stroke-width="72" stroke-linejoin="round"/>
+    <path d="M312 176v568" stroke="#F3E4C6" stroke-width="72" stroke-linecap="round"/>
+    <path d="M384 664a136 136 0 0 1 272 0" fill="url(#sun)"/>
+    <path d="M240 664h600" stroke="#F3E4C6" stroke-width="40" stroke-linecap="round"/>
+    <rect x="0" y="684" width="1024" height="340" fill="#1B2033" opacity="0.55"/>
+  </g>
+</svg>

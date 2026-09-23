@@ -1,0 +1,11 @@
+{"artboards":[
+ {"file":"Main.dc.html","x":0,"y":0,"w":600,"h":600,"title":"A · Dawn B"},
+ {"file":"LogoLantern.dc.html","x":700,"y":0,"w":600,"h":600,"title":"B · Lit window"},
+ {"file":"LogoDisc.dc.html","x":1400,"y":0,"w":600,"h":600,"title":"C · Night to dawn"},
+ {"file":"LogoSleepingEye.dc.html","x":0,"y":740,"w":600,"h":600,"title":"D · Sleeping eye"},
+ {"file":"LogoEmber.dc.html","x":700,"y":740,"w":600,"h":600,"title":"E · Ember"},
+ {"file":"LogoWordmark.dc.html","x":1400,"y":740,"w":600,"h":600,"title":"F · Wordmark"},
+ {"file":"LogoScale.dc.html","x":0,"y":1480,"w":1180,"h":420,"title":"Scale test"}
+],
+"annotations":[{"id":"brief","x":0,"y":-220,"w":560,"text":"Six directions for the Brownie icon, all built from the app's own tokens (night #1B2033, dawn #D8983A). Pick one and I'll refine it into the full macOS icon set (16→1024) and the menu-bar template glyph."}],
+"launch":{"view":"canvas"}}

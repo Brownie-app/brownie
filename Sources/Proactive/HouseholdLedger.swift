@@ -1,0 +1,127 @@
+import Foundation
+import Domain
+
+/// `ledger.json` in the shared folder: every household loop each Mac knows, and who closed what.
+/// Both Macs write their own entries; the file is the union, latest word per loop wins, closed beats open.
+public struct HouseholdEntry: Codable, Sendable, Equatable, Identifiable {
+    public var id: String { loopID }
+    public let loopID: String
+    public let memberID: String        // whose Brownie wrote this line
+    public let person: String
+    public let what: String
+    public let direction: LoopDirection
+    public var owner: String?
+    public var status: LoopStatus
+    public var closedBy: String?       // member id
+    public var closedHow: String?
+    public var updatedAt: Date
+    /// The members whose Mac has merged this line since it settled — how the file knows a closure has reached
+    /// everyone before it is dropped. Absent in files written before the field existed, and by builds without it.
+    public var seenBy: [String]?
+    public init(loopID: String, memberID: String, person: String, what: String, direction: LoopDirection, owner: String?, status: LoopStatus, closedBy: String? = nil, closedHow: String? = nil, updatedAt: Date, seenBy: [String]? = nil) {
+        self.loopID = loopID; self.memberID = memberID; self.person = person; self.what = what; self.direction = direction; self.owner = owner; self.status = status; self.closedBy = closedBy; self.closedHow = closedHow; self.updatedAt = updatedAt; self.seenBy = seenBy
+    }
+}
+
+public enum HouseholdLedger {
+    public static let file = "ledger.json"
+
+    /// My household loops as ledger lines. A loop let go is written as closed, "let go", with nobody's name on it: the
+    /// shared file keeps to the words every build reads (a status one Mac cannot decode empties the whole ledger there),
+    /// and letting go is nobody's doing — the other Mac neither closes its copy over it nor marks a card handled.
+    /// A closure that came from the household is written back under the member who made it, with no words of my own:
+    /// my copy closed because hers did, and a line naming me would have her own card read "done by" me on her Mac.
+    public static func entries(from loops: [Loop], me: String, now: Date) -> [HouseholdEntry] {
+        loops.filter { $0.owner != nil }.map { l in
+            let letGo = l.status == .lapsed, fromHousehold = l.closedBy?.hasPrefix(householdPrefix) == true || l.closedBy == "household"
+            let closer: String? = l.status != .closed ? nil : fromHousehold ? householdMember(l.closedBy) : me
+            return HouseholdEntry(loopID: l.id, memberID: me, person: l.person, what: l.what, direction: l.direction, owner: l.owner, status: letGo ? .closed : l.status,
+                                  closedBy: closer, closedHow: letGo ? "let go" : fromHousehold ? nil : l.closedHow, updatedAt: l.closedAt ?? l.openedAt)
+        }
+    }
+    /// `closedBy` on a loop another member closed: "household:<member id>". A bare "household" is what older builds wrote.
+    public static let householdPrefix = "household:"
+    static func householdMember(_ closedBy: String?) -> String? {
+        guard let c = closedBy, c.hasPrefix(householdPrefix) else { return nil }
+        let id = String(c.dropFirst(householdPrefix.count)); return id.isEmpty ? nil : id
+    }
+
+    /// Union by loop id; the newer line wins, except that a closure is never undone by an older open line.
+    /// Loops the two Macs found separately (same person, same words) are folded onto the earlier id.
+    /// Every settled line (closed, dismissed) is stamped as seen by the merging member, and leaves the file only when
+    /// it settled more than `closedKeepDays` before `now` AND every member's Mac has merged it since — a Mac shut for
+    /// a season still finds the closure waiting, so its open copy closes and its card is marked handled rather than
+    /// staying open for good. Without a household the age alone decides, as before the stamp existed.
+    public static let closedKeepDays = 90
+    public static func merge(_ a: [HouseholdEntry], _ b: [HouseholdEntry], now: Date = Date(), household: Household? = nil) -> [HouseholdEntry] {
+        var out: [String: HouseholdEntry] = [:]
+        for e in (a + b).sorted(by: { $0.updatedAt < $1.updatedAt }) {
+            let key = out.values.first(where: { $0.loopID == e.loopID || sameLoop($0, e) })?.loopID ?? e.loopID
+            if var cur = out[key] {
+                if e.status == .closed { cur.status = .closed; cur.closedBy = e.closedBy ?? cur.closedBy; cur.closedHow = e.closedHow ?? cur.closedHow }
+                if e.updatedAt >= cur.updatedAt { cur.owner = e.owner ?? cur.owner; cur.updatedAt = e.updatedAt }
+                if let s = e.seenBy { cur.seenBy = (cur.seenBy ?? []) + s.filter { !(cur.seenBy ?? []).contains($0) } }
+                out[key] = cur
+            } else { out[key] = e }
+        }
+        let me = household?.me?.id, members = household?.members.map(\.id) ?? []
+        let floor = now.addingTimeInterval(-Double(closedKeepDays) * 86400)
+        // Pruned by the stamps the file already carried, then stamped: a line this Mac meets for the first time
+        // tonight survives tonight's merge, so the closure is applied to its loops and cards before the line goes.
+        return out.values.filter { e in !(e.status != .open && e.updatedAt < floor && members.allSatisfy { (e.seenBy ?? []).contains($0) }) }.map { e in
+            var e = e
+            if e.status != .open, let me, !(e.seenBy ?? []).contains(me) { e.seenBy = (e.seenBy ?? []) + [me] }
+            return e
+        }.sorted { $0.updatedAt > $1.updatedAt }
+    }
+
+    static func sameLoop(_ a: HouseholdEntry, _ b: HouseholdEntry) -> Bool {
+        guard a.direction == b.direction, PersonKey.same(a.person, b.person) else { return false }
+        let wa = LoopLedger.words(a.what), wb = LoopLedger.words(b.what)
+        guard !wa.isEmpty, !wb.isEmpty else { return a.what == b.what }
+        return Double(wa.intersection(wb).count) / Double(min(wa.count, wb.count)) >= 0.5
+    }
+
+    /// Cards whose loop another member closed get `handledBy` (their first name); the rest are untouched.
+    public static func markHandled(_ cards: [Card], ledger: [HouseholdEntry], household: Household) -> [Card] {
+        guard let me = household.me?.id else { return cards }
+        return cards.map { c in
+            var c = c; c.handledBy = nil
+            guard c.owner != nil else { return c }
+            let hit = ledger.first { e in
+                e.status == .closed && e.closedBy != nil && e.closedBy != me &&
+                (e.loopID == c.loopID || sameCard(c, e))
+            }
+            if let hit, let who = household.members.first(where: { $0.id == hit.closedBy }) { c.handledBy = who.firstName }
+            return c
+        }
+    }
+    /// The card's title against the loop's promise — not the chat name, which every card in a group would share.
+    static func sameCard(_ c: Card, _ e: HouseholdEntry) -> Bool {
+        let wc = LoopLedger.words(c.title), we = LoopLedger.words(e.what)
+        guard !wc.isEmpty, !we.isEmpty else { return false }
+        return Double(wc.intersection(we).count) / Double(min(wc.count, we.count)) >= 0.5
+    }
+
+    /// Loops the other Macs closed that I still hold open → close them here too, saying who: `closedBy` keeps the
+    /// closing member's id, so the closure goes back to the file under their name and never under mine.
+    public static func closures(for loops: [Loop], ledger: [HouseholdEntry], household: Household, now: Date) -> [Loop] {
+        guard let me = household.me?.id else { return loops }
+        return loops.map { l in
+            guard l.status == .open, l.owner != nil, let e = ledger.first(where: { $0.status == .closed && $0.closedBy != nil && $0.closedBy != me && ($0.loopID == l.id || sameLoop($0, HouseholdEntry(loopID: l.id, memberID: me, person: l.person, what: l.what, direction: l.direction, owner: l.owner, status: .open, updatedAt: now))) }) else { return l }
+            var l = l; l.status = .closed; l.closedAt = now; l.closedBy = householdPrefix + e.closedBy!
+            l.closedHow = "\(household.members.first { $0.id == e.closedBy }?.firstName ?? "someone at home") did it\(e.closedHow.map { " — \($0)" } ?? "")"
+            return l
+        }
+    }
+
+    public static func read(_ url: URL) -> [HouseholdEntry] {
+        guard let d = try? Data(contentsOf: url) else { return [] }
+        return (try? JSONDecoder().decode([HouseholdEntry].self, from: d)) ?? []
+    }
+    public static func write(_ entries: [HouseholdEntry], to url: URL) throws {
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try enc.encode(entries).write(to: url, options: .atomic)
+    }
+}

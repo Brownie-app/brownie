@@ -1,0 +1,40 @@
+name: CodeQL
+# On what lands and once a week, not on every pull request: CodeQL builds the whole project, macOS runners are few,
+# and a second full build behind every change left six pull requests queueing behind each other for an hour.
+on:
+  push: { branches: [main] }
+  schedule:
+    - cron: "17 4 * * 1"   # Monday, early, so a finding is waiting on Monday morning
+  workflow_dispatch:       # and on demand, for a change worth looking at before it lands
+
+permissions:
+  contents: read
+  security-events: write   # the only thing it writes: findings, to the Security tab
+
+jobs:
+  analyse:
+    runs-on: macos-26
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
+        with: { xcode-version: latest-stable }
+      - name: Homebrew deps
+        run: brew install cmake gperf openssl@3
+      - name: Cache TDLib
+        id: tdlib
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: Vendor/tdlib/lib
+          key: tdlib-d1085f9-${{ runner.os }}-${{ runner.arch }}
+      - name: Build TDLib
+        if: steps.tdlib.outputs.cache-hit != 'true'
+        run: ./Scripts/build-tdlib.sh
+      - uses: github/codeql-action/init@3ea06614dafe36dec890db3446326e0d40ce53d4 # v3
+        with: { languages: swift }
+      - name: Build
+        # CodeQL traces the build from a tool that runs under Rosetta, so the build it watches goes looking for x86_64
+        # and the vendored TDLib — built for this machine, arm64 — is passed over, leaving every td_ symbol undefined.
+        # Naming the architecture keeps the traced build on the one the runner and the library actually are.
+        run: swift build --arch arm64
+      - uses: github/codeql-action/analyze@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1

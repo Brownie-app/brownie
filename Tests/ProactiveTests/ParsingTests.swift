@@ -1,0 +1,72 @@
+import Testing
+import Foundation
+@testable import Proactive
+import Domain
+
+/// The brain's JSON is untrusted input: every parser fails closed.
+@Suite struct ParsingTests {
+    @Test func testPreparerCardCarriesLoopAndCameBack() {
+        let d: [String: Any] = ["title": "Nudge Priya", "why": "w", "actionLabel": "Send", "dueLine": "3 days", "urgency": "high", "draftLabel": "Draft", "draft": "hi",
+                                "recipe": ["kind": "whatsapp", "chat": "Priya", "phone": "919999", "body": "hi"], "evidence": [["source": "WhatsApp", "when": "Thu", "text": "asked"]],
+                                "verification": "verified", "verifiedLine": "ok", "loopID": "ABC", "cameBack": true]
+        let c = Preparer.card(from: d, now: Date())
+        #expect(c != nil); #expect(c?.loopID == "ABC"); #expect(c?.isComeBack == true)
+        if case .whatsapp(let chat, let body, let phone) = c!.recipe { #expect(chat == "Priya"); #expect(body == "hi"); #expect(phone == "919999") } else { Issue.record("failed") }
+    }
+    @Test func testPreparerCardWithoutRecipeIsDropped() {
+        #expect(Preparer.card(from: ["title": "x"], now: Date()) == nil)
+        #expect(Preparer.card(from: ["title": "x", "recipe": ["kind": "teleport"]], now: Date()) == nil)
+    }
+    @Test func testNullLoopIDBecomesNil() {
+        let d: [String: Any] = ["title": "t", "recipe": ["kind": "browser", "url": "https://a"], "loopID": "null"]
+        #expect(Preparer.card(from: d, now: Date())?.loopID == nil)
+    }
+    @Test func testRecipeShapes() {
+        #expect(Preparer.recipe(from: ["kind": "imessage", "to": "Amma", "body": "b"]) != nil)
+        #expect(Preparer.recipe(from: ["kind": "mail", "to": "a@b", "subject": "s", "body": "b"]) != nil)
+        #expect(Preparer.recipe(from: ["kind": "calendar", "title": "t", "startISO": "x", "endISO": "y", "notes": ""]) != nil)
+        #expect(Preparer.recipe(from: ["kind": "note", "relativePath": "Work/B.md", "body": "b"]) != nil)
+        #expect(Preparer.recipe(from: ["kind": "computerUse", "goal": "g"]) != nil)
+        #expect(Preparer.recipe(from: [:]) == nil)
+    }
+    @Test func testJudgeWrapperToleratesMissingLoops() throws {
+        let json = ##"{"action_items":[{"title":"t","action":"a","importance":"i","dueDate":null,"sources":["#1"],"urgency":"high"}]}"##
+        let w = try JSONDecoder().decode(Judge.Wrapper.self, from: Data(json.utf8))
+        #expect(w.action_items.count == 1); #expect(w.loops == nil); #expect(w.action_items[0].cameBack == nil)
+    }
+    @Test func testJudgeWrapperDecodesLoopsAndUpdates() throws {
+        let json = #"{"action_items":[],"loops":[{"person":"Karan","direction":"theirs","what":"villa share","quote":"tonight","source":"WhatsApp · Fri","due":null}],"loop_updates":[{"id":"ABCD1234","status":"closed","how":"paid"}]}"#
+        let w = try JSONDecoder().decode(Judge.Wrapper.self, from: Data(json.utf8))
+        #expect(w.loops?.first?.person == "Karan"); #expect(w.loop_updates?.first?.status == "closed")
+        #expect(w.ask_updates == nil, "a judge that says nothing about asks is fine")
+    }
+    @Test func testJudgeWrapperReadsAskUpdatesTolerantly() throws {
+        let json = #"{"action_items":[],"loops":[],"loop_updates":[],"ask_updates":[{"askID":"ask-a1b2c3d4","status":"answered","how":"on Slack"},{"id":"ask-ffff0000","how":"by mail"},{"ask_id":"ask-eeee0000","status":"open"},{"status":"answered","how":"nowhere"},{"askID":"ask-dddd0000","status":null,"how":null}]}"#
+        let w = try JSONDecoder().decode(Judge.Wrapper.self, from: Data(json.utf8))
+        let u = try #require(w.ask_updates)
+        #expect(u.count == 5)
+        #expect(u[0].askID == "ask-a1b2c3d4" && u[0].status == "answered" && u[0].how == "on Slack")
+        #expect(u[1].askID == "ask-ffff0000" && u[1].status == nil, "the id under another name, no status")
+        #expect(u[2].askID == "ask-eeee0000" && u[2].status == "open")
+        #expect(u[3].askID == nil, "no id: nothing to apply")
+        #expect(u[4].askID == "ask-dddd0000" && u[4].status == nil && u[4].how == nil)
+        #expect(Judge.schema.contains(#""ask_updates":{"type":"array""#) && Judge.schema.contains(#""required":["askID","status","how"]"#))
+    }
+    @Test func testJudgeTrimKeepsNewestFirst() {
+        let long = String(repeating: "x", count: 100)
+        let t = Judge.trim(long, to: 10)
+        #expect(t.hasPrefix("xxxxxxxxxx")); #expect(t.contains("omitted"))
+    }
+    @Test func testIsoWeekKey() {
+        var c = DateComponents(); c.year = 2026; c.month = 9; c.day = 14   // a Monday
+        let d = Calendar(identifier: .iso8601).date(from: c)!
+        #expect(WeeklyWriter.isoWeek(d) == "2026-W38")
+        c.day = 20; #expect(WeeklyWriter.isoWeek(Calendar(identifier: .iso8601).date(from: c)!) == "2026-W38", "Sunday belongs to the same ISO week")
+        c.day = 21; #expect(WeeklyWriter.isoWeek(Calendar(identifier: .iso8601).date(from: c)!) == "2026-W39")
+    }
+    @Test func testAskerAnswerRoundTrips() throws {
+        let a = Asker.Answer(question: "q", answer: "A [1] B", citations: [.init(n: 1, kind: "note", label: "People/Karan", ref: "People/Karan.md")], actions: [.init(label: "Open", kind: "loops", ref: "")], at: Date())
+        let back = try JSONDecoder().decode(Asker.Answer.self, from: JSONEncoder().encode(a))
+        #expect(back == a)
+    }
+}

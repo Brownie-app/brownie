@@ -1,0 +1,162 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: -apple-system, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #1d1d1f; background: #f5f5f7; }
+    a { color: #b3762a; } a:hover { color: #8f5c1f; }
+    .sheet { width: 1440px; min-height: 1320px; padding: 48px 56px; box-sizing: border-box; display: flex; flex-direction: column; gap: 40px; font-size: 13px; line-height: 1.4; }
+    .h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.015em; }
+    .h2 { font-size: 17px; font-weight: 600; margin-bottom: 14px; }
+    .sub { color: #6e6e73; }
+    .tiny { font-size: 11px; color: #6e6e73; }
+    .sw { display: flex; flex-direction: column; gap: 6px; width: 132px; }
+    .swc { height: 64px; border-radius: 10px; border: 1px solid rgba(0,0,0,0.08); }
+    .mono { font-family: "SF Mono", Menlo, monospace; font-size: 11px; color: #6e6e73; }
+    .btn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; border-radius: 6px; font-size: 13px; font-weight: 500; border: 1px solid rgba(0,0,0,0.08); background: #fff; color: #1d1d1f; box-shadow: 0 1px 1px rgba(0,0,0,0.04); }
+    .btn.p { background: #d8983a; border-color: transparent; color: #1a1205; }
+    .btn.q { background: transparent; border-color: transparent; box-shadow: none; color: #6e6e73; }
+    .btn.d { color: #d94f45; }
+    .card { background: #fff; border: 1px solid rgba(0,0,0,0.08); border-radius: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    .chip { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 10px; background: #f4f4f6; font-size: 11px; font-weight: 500; color: #6e6e73; }
+    .tog { width: 38px; height: 22px; border-radius: 11px; background: rgba(0,0,0,0.09); position: relative; }
+    .tog::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.25); }
+    .tog.on { background: #d8983a; } .tog.on::after { left: 18px; }
+    .tabs { display: flex; gap: 2px; padding: 3px; background: rgba(0,0,0,0.05); border-radius: 8px; width: fit-content; }
+    .tab { height: 24px; padding: 0 12px; border-radius: 6px; display: flex; align-items: center; font-size: 12px; font-weight: 500; color: #6e6e73; }
+    .tab.on { background: #fff; color: #1d1d1f; box-shadow: 0 1px 2px rgba(0,0,0,0.12); }
+    .urg { width: 8px; height: 8px; border-radius: 50%; }
+    .dot { width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .dot svg { width: 11px; height: 11px; stroke: #fff; fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+    .ico { width: 20px; height: 20px; stroke: #1d1d1f; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+    .rule { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 8px 20px; }
+    .prog { height: 6px; border-radius: 3px; background: rgba(0,0,0,0.09); overflow: hidden; width: 240px; }
+    .prog > div { height: 100%; background: #d8983a; border-radius: 3px; }
+    .pulse { width: 10px; height: 10px; border-radius: 50%; background: #d8983a; box-shadow: 0 0 0 4px rgba(216,152,58,0.14); }
+  </style>
+</helmet>
+<div class="sheet">
+  <div>
+    <div class="h1">Brownie · design system</div>
+    <div class="sub" style="font-size: 15px; margin-top: 6px; max-width: 760px; text-wrap: pretty;">Native macOS 15 vocabulary — system type, sidebar window, vibrancy greys — with one warm accent for the moments that matter: something is ready, something needs you. Everything else stays quiet.</div>
+  </div>
+
+  <div>
+    <div class="h2">Colour</div>
+    <div style="display: flex; gap: 14px; flex-wrap: wrap;">
+      <div class="sw"><div class="swc" style="background: #d8983a;"></div><div style="font-weight: 500;">Dawn</div><div class="mono">#D8983A · accent</div></div>
+      <div class="sw"><div class="swc" style="background: #8f5c1f;"></div><div style="font-weight: 500;">Dawn ink</div><div class="mono">#8F5C1F · accent text</div></div>
+      <div class="sw"><div class="swc" style="background: rgba(216,152,58,0.14);"></div><div style="font-weight: 500;">Dawn soft</div><div class="mono">14% · tints, banners</div></div>
+      <div class="sw"><div class="swc" style="background: #1d1d1f;"></div><div style="font-weight: 500;">Ink</div><div class="mono">#1D1D1F</div></div>
+      <div class="sw"><div class="swc" style="background: #6e6e73;"></div><div style="font-weight: 500;">Ink 2</div><div class="mono">#6E6E73 · secondary</div></div>
+      <div class="sw"><div class="swc" style="background: #aeaeb2;"></div><div style="font-weight: 500;">Ink 3</div><div class="mono">#AEAEB2 · tertiary</div></div>
+      <div class="sw"><div class="swc" style="background: #ececee;"></div><div style="font-weight: 500;">Sidebar</div><div class="mono">#ECECEE</div></div>
+      <div class="sw"><div class="swc" style="background: #ffffff;"></div><div style="font-weight: 500;">Content</div><div class="mono">#FFFFFF</div></div>
+      <div class="sw"><div class="swc" style="background: #2f9e5a;"></div><div style="font-weight: 500;">Kept</div><div class="mono">#2F9E5A</div></div>
+      <div class="sw"><div class="swc" style="background: #c9853a;"></div><div style="font-weight: 500;">Caution</div><div class="mono">#C9853A</div></div>
+      <div class="sw"><div class="swc" style="background: #d94f45;"></div><div style="font-weight: 500;">Erased / stop</div><div class="mono">#D94F45</div></div>
+      <div class="sw"><div class="swc" style="background: #1e1e21;"></div><div style="font-weight: 500;">Dark content</div><div class="mono">#1E1E21 · sidebar #2A2A2D</div></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="h2">Type · SF Pro (system), SF Mono for paths and links</div>
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; align-items: baseline; gap: 20px;"><div style="font-size: 26px; font-weight: 700; letter-spacing: -0.01em; width: 420px;">Large title 26 / 700</div><div class="mono">onboarding headlines, About</div></div>
+      <div style="display: flex; align-items: baseline; gap: 20px;"><div style="font-size: 17px; font-weight: 600; width: 420px;">Title 17 / 600</div><div class="mono">section headers</div></div>
+      <div style="display: flex; align-items: baseline; gap: 20px;"><div style="font-size: 15px; font-weight: 600; width: 420px;">Window title 15 / 600</div><div class="mono">toolbar</div></div>
+      <div style="display: flex; align-items: baseline; gap: 20px;"><div style="font-size: 14px; font-weight: 600; width: 420px;">Card title 14 / 600</div><div class="mono">morning cards</div></div>
+      <div style="display: flex; align-items: baseline; gap: 20px;"><div style="font-size: 13px; width: 420px;">Body 13 / 400 · the default everywhere</div><div class="mono">line-height 1.4</div></div>
+      <div style="display: flex; align-items: baseline; gap: 20px;"><div style="font-size: 12.5px; color: #6e6e73; width: 420px;">Card body 12.5 / 400 · secondary ink</div><div class="mono">explanations</div></div>
+      <div style="display: flex; align-items: baseline; gap: 20px;"><div style="font-size: 11px; color: #6e6e73; width: 420px;">Caption 11 / 400 · secondary ink</div><div class="mono">metadata, counts, footnotes</div></div>
+      <div style="display: flex; align-items: baseline; gap: 20px;"><div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #6e6e73; width: 420px;">Eyebrow 11 / 600 / caps</div><div class="mono">card sections: why · draft · evidence</div></div>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px;">
+    <div>
+      <div class="h2">Controls</div>
+      <div style="display: flex; flex-direction: column; gap: 14px;">
+        <div style="display: flex; gap: 8px; align-items: center;"><div class="btn p">Primary</div><div class="btn">Default</div><div class="btn q">Quiet</div><div class="btn d">Destructive</div><div class="tiny">28px tall · 6px radius · one primary per screen</div></div>
+        <div style="display: flex; gap: 14px; align-items: center;"><div class="tog on"></div><div class="tog"></div><div class="tabs"><div class="tab on">Fast</div><div class="tab">Balanced</div><div class="tab">Careful</div></div><div class="tiny">toggles 38×22 · segmented 24px</div></div>
+        <div style="display: flex; gap: 8px; align-items: center;"><div class="chip">WhatsApp</div><div class="chip" style="background: rgba(216,152,58,0.14); color: #8f5c1f;">Send a reply</div><div class="chip">in your voice</div><div class="tiny">chips 20px · source / action / trust</div></div>
+        <div style="display: flex; gap: 14px; align-items: center;"><div style="display: flex; gap: 6px; align-items: center;"><div class="urg" style="background: #d94f45;"></div><span>High</span></div><div style="display: flex; gap: 6px; align-items: center;"><div class="urg" style="background: #c9853a;"></div><span>Medium</span></div><div style="display: flex; gap: 6px; align-items: center;"><div class="urg" style="background: #8e8e93;"></div><span>Low</span></div><div class="tiny">urgency dots · never more than three levels</div></div>
+        <div style="display: flex; gap: 14px; align-items: center;"><div class="dot" style="background: #2f9e5a;"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"></path></svg></div><div class="dot" style="background: #d8983a;"></div><div class="dot" style="background: rgba(0,0,0,0.12);"></div><div class="tiny">step states · done · current · pending</div></div>
+        <div style="display: flex; gap: 14px; align-items: center;"><div class="prog"><div style="width: 62%;"></div></div><div class="pulse"></div><div class="tiny">progress 6px · the pulse means “working now”</div></div>
+      </div>
+    </div>
+    <div>
+      <div class="h2">Icons · 16 / 20 / 24 grid, 1.6 stroke, round caps, never emoji</div>
+      <div style="display: flex; gap: 18px; flex-wrap: wrap; align-items: center;">
+        <svg class="ico" viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"></path><circle cx="12" cy="12" r="4"></circle></svg>
+        <svg class="ico" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"></path><path d="M4 20.5V5.5M8 7h8M8 11h6"></path></svg>
+        <svg class="ico" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"></circle><circle cx="18" cy="8" r="2.5"></circle><circle cx="12" cy="18" r="2.5"></circle><path d="M8.2 7l7.4 0.8M7.4 8.2l3.4 7.6M16.6 10.2l-3.4 5.6"></path></svg>
+        <svg class="ico" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+        <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"></path></svg>
+        <svg class="ico" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4"></path><path d="M21 3v6h-6"></path></svg>
+        <svg class="ico" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>
+        <svg class="ico" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"></path><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>
+        <svg class="ico" viewBox="0 0 24 24"><path d="M4 6h16v12H4z"></path><path d="M4 7l8 6 8-6"></path></svg>
+        <svg class="ico" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+        <svg class="ico" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+        <svg class="ico" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"></rect><path d="M8 21h8M12 18v3"></path></svg>
+      </div>
+      <div class="tiny" style="margin-top: 10px;">sun (For You / brand) · notes · graph · excluded · settings · analyze · stop · caution · letter · fire · folder · this Mac</div>
+
+      <div class="h2" style="margin-top: 28px;">Layout</div>
+      <div class="rule">
+        <div class="sub">Window</div><div>1440×900 default, 10px radius, min 1040×680</div>
+        <div class="sub">Sidebar</div><div>220px, #ECECEE, 28px rows, 6px radius, selected 9% ink</div>
+        <div class="sub">Toolbar</div><div>52px, title left, actions right, 1px separator</div>
+        <div class="sub">Content padding</div><div>24px top · 28px sides</div>
+        <div class="sub">Cards</div><div>10px radius · 1px 8% border · 16–18px padding · 14px gap · 2-up grid</div>
+        <div class="sub">Detail split</div><div>content + 340px evidence rail, 24px gutter</div>
+        <div class="sub">Settings</div><div>760px max, segmented tabs in toolbar, grouped cards</div>
+        <div class="sub">Appearance</div><div>System / Light / Dark in Settings → About. Every colour is a token; dark swaps the token set, never individual values. Accent lifts to #E2A54A in dark for contrast.</div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="h2">First-time tip</div>
+    <div style="display: flex; gap: 40px; align-items: flex-start;">
+      <div style="position: relative; width: 300px; background: #fff; border: 1px solid rgba(0,0,0,0.08); border-radius: 10px; box-shadow: 0 14px 36px rgba(0,0,0,0.18); padding: 14px 16px 12px 16px; display: flex; flex-direction: column; gap: 6px;">
+        <div style="position: absolute; left: 24px; top: -7px; width: 12px; height: 12px; background: #fff; border-left: 1px solid rgba(0,0,0,0.08); border-top: 1px solid rgba(0,0,0,0.08); transform: rotate(45deg);"></div>
+        <div style="font-size: 11px; font-weight: 600; color: #8f5c1f; text-transform: uppercase; letter-spacing: 0.04em;">First time here · 1 of 6</div>
+        <div style="font-size: 14px; font-weight: 600;">This is your morning.</div>
+        <div style="font-size: 12.5px; color: #6e6e73;">Everything here was prepared overnight, on this Mac. Nothing has been sent.</div>
+        <div style="display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 500;"><svg viewBox="0 0 24 24" style="width: 14px; height: 14px; stroke: #8f5c1f; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"><path d="M5 12h14M13 6l6 6-6 6"></path></svg><span>Tap the first card to see why it’s here</span></div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;"><span class="tiny">Shown once. Done when you do it.</span><span style="font-size: 12px; font-weight: 500; color: #6e6e73;">Skip</span></div>
+      </div>
+      <div class="rule" style="flex: 1;">
+        <div class="sub">Anatomy</div><div>Popover with arrow · eyebrow with position in the sequence · one-line title · one-line why · the action, with an arrow · “Skip”</div>
+        <div class="sub">Spotlight</div><div>The target gets a 3px accent ring and a 9px soft halo; the rest of the content dims 38%. The sidebar stays bright.</div>
+        <div class="sub">Completion</div><div>The tip disappears the moment the action happens — opening a card, flipping a switch, picking a folder. Skip counts as done.</div>
+        <div class="sub">Keys</div><div>foryou · card · knowledge · graph · excluded · sources · hands. Onboarding is its own first-run flow, not a tip.</div>
+        <div class="sub">Storage</div><div>Per key, on disk, survives updates. Reset only from Settings → About → Replay.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="padding: 20px 24px;">
+    <div class="h2" style="margin-bottom: 10px;">Voice</div>
+    <div class="rule">
+      <div class="sub">Say what happened, not what it is</div><div>“Reply to Priya about Goa” — never “Pending action item”.</div>
+      <div class="sub">Every card explains itself</div><div>Why this is here · what will happen when you tap · which sources. No card without evidence.</div>
+      <div class="sub">Never sends on its own</div><div>The word “Send” is always the user's button. Hands stops one step short and says so.</div>
+      <div class="sub">Brain, reader, Hands</div><div>The reader (on this Mac) reads. The brain (your subscription) decides and drafts. Hands acts. Three words, used consistently, never “AI”.</div>
+      <div class="sub">Privacy in plain words</div><div>“Erased on sight”, “never left your Mac”, “scrambled bytes and no key”. No “end-to-end”, no acronyms in the UI.</div>
+      <div class="sub">Numbers are honest</div><div>Read · kept · not worth keeping · sensitive erased. Always all four; never hide the drops.</div>
+      <div class="sub">Amounts stay out</div><div>Summaries omit money, medical and ID specifics. The UI says so where it matters.</div>
+      <div class="sub">Walkthroughs play once</div><div>Every screen has one first-time tip, keyed by screen. It completes only when the user does the action it asks for — never on a “Next” button. Completion is stored on disk; only Settings → About → Replay brings it back.</div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

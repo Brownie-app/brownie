@@ -1,0 +1,102 @@
+import Testing
+import Foundation
+@testable import Proactive
+import Domain
+
+/// The check before cards show: closed loops, fired twins, missing files and old notes.
+@Suite struct QuietCheckTests {
+    let now = Date(timeIntervalSince1970: 1_758_000_000)
+    func card(_ id: String, loop: String? = nil, evidence: [Evidence] = [], recipe: Recipe = .browser(url: "u"), state: CardState = .ready, cameBack: Bool? = nil, resolvedAgo: TimeInterval? = nil) -> Card {
+        var c = Card(id: id, title: "Card \(id)", sourceLabel: "s", why: "", actionLabel: "", dueLine: "", urgency: .medium, draftLabel: "", draft: "", recipe: recipe, evidence: evidence, verification: .verified, verifiedLine: "", state: state, createdAt: now.addingTimeInterval(-3600), cameBack: cameBack, loopID: loop)
+        if let r = resolvedAgo { c.resolvedAt = now.addingTimeInterval(-r) }
+        return c
+    }
+    func loop(_ id: String, closed: Bool = false, how: String? = nil) -> Loop {
+        Loop(id: id, direction: .mine, person: "Kanika", what: "send the update", quote: "", sourceLabel: "WhatsApp", due: nil, status: closed ? .closed : .open, openedAt: now.addingTimeInterval(-86400), closedAt: closed ? now : nil, closedHow: how)
+    }
+    func run(_ cards: [Card], loops: [Loop] = [], past: [Card] = [], notes: [String: Date] = [:], files: Set<String> = [], staleDays: Int = 7) -> QuietCheck.Result {
+        QuietCheck.run(cards: cards, loops: loops, past: past, noteUpdated: { notes[$0] }, fileExists: { files.contains($0) }, now: now, staleDays: staleDays)
+    }
+
+    @Test func aClosedLoopTakesItsCardWithIt() {
+        let r = run([card("a", loop: "L1"), card("b", loop: "L2")], loops: [loop("L1", closed: true, how: "she replied"), loop("L2")])
+        #expect(r.kept.map(\.id) == ["b"])
+        #expect(r.dropped.map(\.why) == ["the loop it was about closed — she replied"])
+    }
+
+    @Test func aLoopLetGoOrDismissedTakesItsCardWithItToo() {
+        var gone = loop("L1"); gone.status = .lapsed; gone.lapsedAt = now; gone.closedAt = now; gone.closedBy = "lapsed"
+        var dismissed = loop("L2"); dismissed.status = .dismissed
+        let r = run([card("a", loop: "L1"), card("b", loop: "L2"), card("c", loop: "L3")], loops: [gone, dismissed, loop("L3")])
+        #expect(r.kept.map(\.id) == ["c"], "only the card whose loop is still open reaches the morning")
+        #expect(r.dropped.map(\.why) == ["the loop it was about was let go", "the loop it was about was dismissed"])
+    }
+
+    @Test func aLoopAlreadyFiredIsNotAskedTwiceUnlessItCameBack() {
+        let fired = card("old", loop: "L1", state: .fired, resolvedAgo: 3600)
+        #expect(run([card("a", loop: "L1")], loops: [loop("L1")], past: [fired]).dropped.map(\.why) == ["you already fired a card for this"])
+        #expect(run([card("a", loop: "L1", cameBack: true)], loops: [loop("L1")], past: [fired]).kept.count == 1, "a came-back nudge is deliberate")
+        let longAgo = card("old", loop: "L1", state: .fired, resolvedAgo: 3 * 86400)
+        #expect(run([card("a", loop: "L1")], loops: [loop("L1")], past: [longAgo]).kept.count == 1, "after the card's lifetime it may come again")
+    }
+
+    @Test func aMissingAttachmentDropsTheCard() {
+        let c = card("a", recipe: .mail(to: "arif", subject: "s", body: "b", attachments: ["/Users/v/Desktop/deck.pdf"]))
+        #expect(run([c], files: []).dropped.map(\.why) == ["the file it needs is gone: deck.pdf"])
+        #expect(run([c], files: ["/Users/v/Desktop/deck.pdf"]).kept.count == 1)
+        let named = card("b", recipe: .imessage(to: "Amma", body: "", attachments: ["photo from Sunday"]))
+        #expect(run([named]).kept.count == 1, "a described attachment isn't a path to check")
+    }
+
+    @Test func oldNotesFlagOrDropDependingOnWhatElseThereIs() {
+        let old = now.addingTimeInterval(-10 * 86400), fresh = now.addingTimeInterval(-86400)
+        let notes = ["People/Kanika.md": old, "People/Meera.md": fresh]
+        let onlyOld = card("a", evidence: [Evidence(source: "People/Kanika.md", when: "x", text: "t")])
+        #expect(run([onlyOld], notes: notes).dropped.map(\.why) == ["built only on notes last updated 10 days ago"])
+        #expect(run([onlyOld], notes: notes, staleDays: 14).kept.first?.staleLine == nil, "within the setting it is simply fine")
+        let mixed = card("b", evidence: [Evidence(source: "People/Kanika.md", when: "x", text: "t"), Evidence(source: "WhatsApp · Kanika · Fri", when: "12 Sep 2026", text: "t")])
+        let r = run([mixed], notes: notes)
+        #expect(r.kept.count == 1 && r.kept[0].staleLine == "Partly from a note last updated 10 days ago (People/Kanika.md)")
+        let freshOnly = card("c", evidence: [Evidence(source: "People/Meera.md", when: "x", text: "t")])
+        #expect(run([freshOnly], notes: notes).kept.first?.staleLine == nil)
+        let unknown = card("d", evidence: [Evidence(source: "People/Gone.md", when: "x", text: "t")])
+        #expect(run([unknown], notes: notes).kept.count == 1, "a note we can't date is left alone")
+    }
+
+    @Test func nonReadyCardsPassThroughUntouched() {
+        let s = card("s", state: .snoozed), f = card("f", state: .fired)
+        let r = run([s, f, card("a")])
+        #expect(r.kept.map(\.id) == ["a", "s", "f"] && r.dropped.isEmpty)
+    }
+
+    @Test func staleLineSurvivesWithDueLine() {
+        var c = card("a"); c.staleLine = "old"
+        #expect(c.withDueLine("Due tomorrow").staleLine == "old")
+    }
+}
+
+@Suite struct RecentReplyTests {
+    let now = Date(timeIntervalSince1970: 1_758_000_000)
+    func card(_ id: String, to person: String, state: CardState = .ready, resolvedAgo: TimeInterval? = nil, due: Date? = nil, cameBack: Bool? = nil) -> Card {
+        var c = Card(id: id, title: "Update \(person)", sourceLabel: "WhatsApp", why: "", actionLabel: "", dueLine: "", urgency: .medium, draftLabel: "", draft: "hi", recipe: .whatsapp(chat: person, body: "hi"), evidence: [], verification: .verified, verifiedLine: "", state: state, createdAt: now.addingTimeInterval(-600), cameBack: cameBack)
+        if let r = resolvedAgo { c.resolvedAt = now.addingTimeInterval(-r) }; c.dueDate = due; return c
+    }
+    func run(_ cards: [Card], past: [Card]) -> QuietCheck.Result { QuietCheck.run(cards: cards, loops: [], past: past, noteUpdated: { _ in nil }, fileExists: { _ in true }, now: now, staleDays: 7) }
+
+    @Test func aCardToSomeoneYouJustWroteToIsLetGo() {
+        let sent = card("old", to: "Nitesh (+919540752593)", state: .fired, resolvedAgo: 120)
+        let r = run([card("new", to: "Nitesh")], past: [sent])
+        #expect(r.kept.isEmpty && r.dropped.first?.why == "you wrote to Nitesh 2 minutes ago")
+        #expect(run([card("new", to: "Nitesh")], past: [card("old", to: "Nitesh", state: .fired, resolvedAgo: 7 * 3600)]).kept.count == 1, "after six hours it's fair game")
+        #expect(run([card("new", to: "Kanika Pandey")], past: [sent]).kept.count == 1, "someone else")
+        #expect(run([card("new", to: "Nitesh")], past: [card("old", to: "Nitesh", state: .dismissed, resolvedAgo: 120)]).kept.count == 1, "only a card you fired counts as writing")
+    }
+    @Test func aDueOrCameBackCardStays() {
+        let sent = card("old", to: "Nitesh", state: .fired, resolvedAgo: 60)
+        #expect(run([card("due", to: "Nitesh", due: now.addingTimeInterval(86400))], past: [sent]).kept.count == 1)
+        #expect(run([card("back", to: "Nitesh", cameBack: true)], past: [sent]).kept.count == 1)
+    }
+    @Test func agoWording() {
+        #expect(QuietCheck.ago(30) == "just now" && QuietCheck.ago(150) == "2 minutes ago" && QuietCheck.ago(3700) == "1 hour ago" && QuietCheck.ago(9000) == "2 hours ago")
+    }
+}

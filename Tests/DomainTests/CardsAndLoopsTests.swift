@@ -1,0 +1,36 @@
+import Testing
+import Foundation
+@testable import Domain
+
+@Suite struct CardsAndLoopsTests {
+    func card(_ id: String, state: CardState = .ready, cameBack: Bool? = nil, loopID: String? = nil) -> Card {
+        Card(id: id, title: "t", sourceLabel: "s", why: "", actionLabel: "", dueLine: "", urgency: .low, draftLabel: "", draft: "d", recipe: .browser(url: "https://x"), evidence: [], verification: .verified, verifiedLine: "", state: state, createdAt: Date(), cameBack: cameBack, loopID: loopID)
+    }
+    @Test func testCardDecodesWithoutNewFields() throws {
+        // Cards saved before loops existed have no cameBack/loopID; they must still load.
+        var json = String(data: try JSONEncoder().encode(card("1")), encoding: .utf8)!
+        #expect(!(json.contains("loopID")))
+        json = json.replacingOccurrences(of: "\"cameBack\":", with: "\"zz\":")
+        let c = try JSONDecoder().decode(Card.self, from: Data(json.utf8))
+        #expect(!(c.isComeBack)); #expect(c.loopID == nil)
+    }
+    @Test func testWithDraftKeepsLoopFields() {
+        let c = card("1", cameBack: true, loopID: "L").withDraft("new")
+        #expect(c.draft == "new"); #expect(c.isComeBack); #expect(c.loopID == "L")
+    }
+    @Test func testHousekeepingExpiresAndUnsnoozes() {
+        let now = Date()
+        let old = Card(id: "1", title: "t", sourceLabel: "s", why: "", actionLabel: "", dueLine: "", urgency: .low, draftLabel: "", draft: "", recipe: .browser(url: "u"), evidence: [], verification: .verified, verifiedLine: "", createdAt: now.addingTimeInterval(-3 * 86400))
+        #expect(old.housekept(now: now).state == .expired)
+        var s = card("2", state: .snoozed); s.snoozedUntil = now.addingTimeInterval(-60)
+        #expect(s.housekept(now: now).state == .ready)
+    }
+    @Test func testLoopRoundTripAndDefaults() throws {
+        let l = Loop(direction: .mine, person: "Amma", what: "call", quote: "Sunday", sourceLabel: "iMessage · Thu", due: "Sunday", openedAt: Date())
+        let back = try JSONDecoder().decode(Loop.self, from: JSONEncoder().encode(l))
+        #expect(back == l); #expect(back.status == .open); #expect(back.cameBackCount == 0)
+    }
+    @Test func testRunTriggerIncludesDaytime() throws {
+        #expect(try JSONDecoder().decode(RunTrigger.self, from: Data("\"daytime\"".utf8)) == .daytime)
+    }
+}

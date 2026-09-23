@@ -1,0 +1,776 @@
+import Foundation
+import SwiftUI
+import Combine
+import Domain
+import Platform
+import Privacy
+import LocalSources
+import CloudSources
+import TelegramSource
+import Inference
+import Brain
+import Knowledge
+import Ingest
+import Proactive
+import Pipeline
+import Agent
+import Scheduling
+import Support
+import Contacts
+import Speech
+import AVFoundation
+import ApplicationServices
+
+/// The composition root and the app's observable state. The only place concrete types meet.
+@MainActor
+final class AppModel: ObservableObject {
+    // ── wiring ─────────────────────────────────────────────────────────────────────
+    let store: SQLiteRunStore
+    let knowledge: FileKnowledgeStore
+    let policy = DefaultSensitivityPolicy()
+    let log = Log("app")
+    private(set) var brain: (any Brain)?
+    private(set) var reader: Reader?
+    private var coordinator: RunCoordinator?
+    private(set) var scheduler: OvernightScheduler?
+    private(set) var hands: Hands?
+    let download: ModelDownload
+
+    // ── state the views read ───────────────────────────────────────────────────────
+    enum Screen: Hashable { case forYou, ask, loops, recipes, sendLog, notes, graph, excluded, settings }
+    enum Overlay: Hashable { case none, card(String), firing(String), processing, letter, weekly, brief(String), teach, recipeRun(String), editRecipe(String) }
+    @Published var screen: Screen = .forYou
+    /// A note the Knowledge screen should open on arrival (set by Graph → Open note, card evidence, etc.).
+    @Published var pendingNote: String?
+    func openNote(_ relativePath: String) { pendingNote = relativePath; overlay = .none; screen = .notes }
+    @Published var overlay: Overlay = .none
+    @Published var settingsTab = 0
+    enum SettingsTab: Int { case sources = 0, knowledge, brain, hands, privacy, overnight, household, about }
+    func openSettings(_ t: SettingsTab) { overlay = .none; screen = .settings; settingsTab = t.rawValue }
+    @Published var appearance: String = "system"
+
+    @Published var cards: [Card] = []
+    @Published var lastRun: RunRecord?
+    @Published var runs: [RunRecord] = []
+    @Published var progress = RunProgress()
+    @Published var thoughts: [String] = []
+    @Published var isRunning = false
+    @Published var runOutcome: RunOutcome?
+    @Published var fireEvents: [FireEvent] = []
+    @Published var letter: String?
+    @Published var letterOpened = false
+    @Published var folders: [KnowledgeFolder] = []
+    @Published var drops: [DropRecord] = []
+    @Published var modelState: ModelDownload.State = .idle
+    @Published var modelPath: URL?
+    @Published var readerChoice: String = "E4B"      // E4B | E2B
+    @Published var brainConfig = BrainConfig(engine: .openai, model: BrainEngine.openai.defaultModel)
+    @Published var brainStatus: String = "Not checked"
+    @Published var lastUsage: Usage?
+    @Published var enabledSources: Set<SourceID> = ["files"]
+    @Published var enabledBuckets: [SourceID: Set<BucketID>] = [:]
+    @Published var discovered: [SourceID: [BucketInfo]] = [:]
+    @Published var availability: [SourceID: Availability] = [:]
+    @Published var fileRoots: [URL] = FilesSource.defaultRoots
+    @Published var recordingsFolder: URL = RecordingsSource.defaultFolder
+    /// What the two audio rows would read tonight: count and seconds, per source id.
+    @Published var audioCost: [SourceID: (count: Int, seconds: TimeInterval)] = [:]
+    @Published var permissions: [Permission: Bool] = [:]
+    @Published var overnight = OvernightScheduler.Config()
+    @Published var helperInstalled = false
+    @Published var loginItem = false
+    @Published var cardsPerMorning = 5
+    @Published var notify = true
+    @Published var instructions = ""
+    /// Every thumbs-down, newest last. Folded into the night's instructions by FeedbackDigest.
+    @Published var feedback: [CardFeedback] = []
+    /// The user's word on the notes — good, or not right and why. The note builder reads the digest before it writes (AppModel+NoteFeedback).
+    @Published var noteFeedback = NoteFeedbackList()
+    /// The household, when there is one: members, the shared folder, the chats shared.
+    @Published var household: Household?
+    @Published var householdLastSync: SyncReport?
+    /// Group chats every other member is in — the only ones that can be shared.
+    @Published var eligibleChats: [BucketInfo] = []
+    @Published var checkingEligible = false
+    /// The card whose "Something else…" sheet is open.
+    @Published var feedbackNoteFor: String?
+    /// What Hands is doing right now, as steps a person can follow (the floating panel and the card view read it).
+    @Published var journey: HandsJourney?
+    /// Sign what Brownie drafts with "Sent via Brownie · usebrownie.com" under a rule.
+    @Published var signMessages = false
+    /// The user's own name as people write it in chats (Settings), so the judge, the registry and the file tools never make a person of them.
+    @Published var userName = ""
+    /// The evidence being shown in its own sheet: the chat window, or the clip.
+    @Published var evidenceShown: EvidenceShown?
+    @Published var handsHotkey = "rightCommand"
+    @Published var handsSpeed = "balanced"
+    @Published var onboardingDone = false
+    @Published var walkthroughDone: Set<String> = []
+    @Published var handsState: HandsPanelState = .idle
+    @Published var announcement: String?
+    @Published var lastSkipped: String?
+    /// Full Disk Access was there and is gone — macOS forgets it when the app's signature changes, as it does with an
+    /// update — while chats that need it were read within the last two weeks. The morning must say so out loud.
+    @Published var lostFullDiskAccess = false
+    /// What each source has actually read, for the line under it on the Sources screen.
+    @Published var coverage: [SourceID: SourceCoverage] = [:]
+    @Published var lastError: String?
+    /// Free space on the volume that holds the model and the store, in GB.
+    var freeGB: Double { ((try? Paths.applicationSupport.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]).volumeAvailableCapacityForImportantUsage).map { Double($0) } ?? 0) / 1e9 }
+
+    enum HandsPanelState: Equatable { case idle, listening(String), running([String]), paused(String), finished(String) }
+
+    let allSources: [any Source]
+    /// The sources as the screens iterate them: plain values, so no view ever projects an existential out of a box.
+    var sourceRows: [SourceRow] { (allSources + workSources).map(SourceRow.init) }
+    @Published var mcpManifests: [MCPManifest] = []
+
+    // ── v2: loops, what left, briefs, the Sunday letter, taught recipes ─────────────
+    @Published var loops: [Loop] = []
+    /// Registry people who look like one person twice, the better one to keep first in each pair; the Knowledge screen's banner.
+    @Published var duplicatePeople: [(Person, Person)] = []
+    /// Last night's measure of the vault, for the Settings → Knowledge card.
+    @Published var vaultHealth: VaultHealth?
+    /// The Notes screen's rail: what was opened lately and what the user pinned, kept in UserDefaults (AppModel+Notes).
+    @Published var recentNotes = RecentNotes(paths: UserDefaults.standard.stringArray(forKey: "notes.recent") ?? [])
+    @Published var pinnedNotes = PinnedNotes(paths: UserDefaults.standard.stringArray(forKey: "notes.pinned") ?? [])
+    /// The registry's people, for the header of a People note.
+    @Published var people: [Person] = []
+    /// A question waiting in the Ask box ("about Meera: ") when the user arrives there from a note.
+    @Published var askPrefill: String?
+    @Published var quickOpenShown = false
+    /// The raw editor's sitting on the Notes screen, kept here so a screen change, ⌘K or a watcher reload never blanks it (AppModel+Notes).
+    @Published var noteEditor = NoteEditor()
+    let vaultWatcher = VaultWatcher()
+    @Published var sendLog: [SendRecord] = []
+    @Published var weekly: String?
+    @Published var weeklyWeek: String?
+    @Published var weeklySeen = true
+    @Published var briefs: [Brief] = []
+    @Published var briefsEnabled = true
+    @Published var recipes: [TaughtRecipe] = []
+    @Published var teach = TeachState()
+    @Published var recipeRun = RecipeRunState()
+    @Published var showSendLine = true
+    @Published var screenForbidden: Set<String> = []
+    @Published var nudging: String?
+    @Published var icloudMirror = false
+    @Published var icloudMode = "off"
+    @Published var lastSync: SyncReport?
+    var syncTimer: Timer?
+    @Published var mcpEnabled = false
+    @Published var mcpAsks: [MCPAsk] = []
+    @Published var asks: [Asker.Answer] = []
+    @Published var asking = false
+    /// What Ask is doing right now, for the waiting line.
+    @Published var askStatus = "Reading your notes…"
+    @Published var panicAsked = false
+    @Published var nudgeDays = 1
+    /// Notes older than this many days no longer carry a card on their own.
+    @Published var staleDays = QuietCheck.defaultStaleDays
+    /// What the quiet check took away just now, for the small line under the cards.
+    @Published var quietlyDropped: [String] = []
+    let sendLogger: SendLogger
+    let recorder = Recorder()
+    var briefTimer: Timer?
+    var recipeTimer: Timer?
+    var recipeTask: Task<Void, Never>?
+    var watchers: [String: FolderWatcher] = [:]
+
+    init() {
+        store = try! SQLiteRunStore(path: Paths.store.path)
+        let st = store
+        sendLogger = SendLogger(sink: { p, model, bytes, detail, payload in try? await st.logSend(purpose: p, model: model, bytes: bytes, detail: detail, cameBack: "…", payload: payload, at: Date()) },
+                                result: { id, back in try? await st.setSendResult(id, cameBack: back) })
+        knowledge = try! FileKnowledgeStore(root: Paths.knowledgeBase, indexPath: Paths.applicationSupport.appendingPathComponent("knowledge-index.sqlite").path)
+        allSources = [FilesSource(roots: FilesSource.defaultRoots), NotesSource(), iMessageSource(), WhatsAppSource(), CalendarSource(), GmailSource(), TelegramSource(), VoiceMemosSource(), RecordingsSource(), SlackSource(), TeamsSource()]
+        download = ModelDownload(info: ModelCatalog.info(for: UserDefaults.standard.string(forKey: "reader.model")))
+        Task { await bootstrap() }
+    }
+
+    // MARK: bootstrap
+
+    func bootstrap() async {
+        try? await store.prune()
+        await loadSettings()
+        await refreshPermissions()
+        // Every note gets Brownie's front-matter once; a note that has it already is not touched, so this is cheap on every start.
+        let registry = PersonRegistry(vault: knowledge.rootURL, selfNames: selfNames); await registry.load()
+        // What the address book proves: two chats on one card are one person, and a pair Brownie was unsure about is answered.
+        let cards = await Self.contactCards()
+        if !cards.isEmpty { await registry.link(contacts: cards); try? await registry.save() }
+        await VaultMigration.addFrontMatter(root: knowledge.rootURL, registry: registry, now: Date())
+        // The user is never a person in their own vault: a People note titled after them moves to Life/, and a loop with them as the other party goes.
+        await VaultMigration.moveSelfNotes(root: knowledge.rootURL, registry: registry, store: store, selfNames: selfNames, now: Date())
+        await sweepLoops(registry: registry)
+        // People and Groups notes in shape and aged; a tidy vault is untouched. Nothing is archived here (the night does that after its
+        // swap), and nothing is touched while a sync is mid-way — its staging copy of every note would take a rewrite for the user's edit.
+        let syncPending = ((try? await store.value(SettingKey.kbResume)) ?? nil) != nil
+        await VaultGardener.atLaunch(root: knowledge.rootURL, registry: registry, now: Date(), syncPending: syncPending)
+        await reload()
+        rebuildBrain()
+        rebuildReader()
+        Task { await refreshSources() }   // discovery can be slow (Telegram, 300+ chats); the UI must not wait for it
+        let mp = modelPath
+        _ = await download.observe { [weak self] s in Task { @MainActor in self?.modelState = s; if case .done(let u) = s { self?.modelPath = u; self?.rebuildReader() } } }
+        if mp == nil, case .idle = modelState { /* onboarding prompts the download */ }
+        helperInstalled = WakeHelper.Client().isInstalled
+        loginItem = OvernightScheduler.isLoginItem
+        startScheduler()
+        startBriefs(); startRecipeSchedule(); startTriggers(); startSyncTimer(); startVaultWatcher()
+        if TelegramSource.isConfigured { watchTelegram() }
+        if CommandLine.arguments.contains("--request-permissions") { await requestAllPermissions() }
+    }
+
+    /// Asks macOS for every grant Brownie uses, in order. Prompts that macOS can show are shown;
+    /// the two it can't (Full Disk Access, the root helper) open their pane / admin dialog.
+    func requestAllPermissions() async {
+        // 1. Calendar, Contacts, Speech, Microphone — real prompts
+        _ = await CalendarSource.requestAccess()
+        _ = try? await CNContactStore().requestAccess(for: .contacts)
+        await withCheckedContinuation { c in SFSpeechRecognizer.requestAuthorization { _ in c.resume() } }
+        _ = await AVCaptureDevice.requestAccess(for: .audio)
+        // 2. Accessibility — the system prompt with an "Open System Settings" button
+        let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+        _ = AXIsProcessTrustedWithOptions(opts)
+        // 3. Screen Recording — system prompt
+        _ = CGRequestScreenCaptureAccess()
+        // 4. Full Disk Access — no prompt exists; the floating guide follows the user into the pane
+        if !PermissionProbe.status(.fullDiskAccess) { PermissionGuide.shared.show(for: .fullDiskAccess) { [weak self] in Task { await self?.refreshPermissions(); await self?.refreshSources() } } }
+        // 5. The wake helper — one admin prompt
+        if !helperInstalled { installHelper() }
+        setLoginItem(true)
+        await refreshPermissions(); await refreshSources()
+    }
+
+    func loadSettings() async {
+        func v(_ k: String) async -> String? { try? await store.value(k) }
+        if let s = await v(SettingKey.enabledSources), let d = s.data(using: .utf8), let ids = try? JSONDecoder().decode([String].self, from: d) { enabledSources = Set(ids.map { SourceID($0) }) }
+        for s in allSources where s.descriptor.supportsPerBucketOptIn {
+            if let j = await v(SettingKey.enabledBuckets(s.id)), let d = j.data(using: .utf8), let ids = try? JSONDecoder().decode([String].self, from: d) { enabledBuckets[s.id] = Set(ids.map { BucketID($0) }) }
+        }
+        if let r = await v(SettingKey.fileRoots), let d = r.data(using: .utf8), let ps = try? JSONDecoder().decode([String].self, from: d) { fileRoots = ps.map { URL(fileURLWithPath: $0) } }
+        if let r = await v(SettingKey.recordingsFolder), !r.isEmpty { recordingsFolder = URL(fileURLWithPath: r, isDirectory: true) }
+        brainConfig = BrainConfig(engine: BrainEngine(rawValue: await v(SettingKey.brainEngine) ?? "openai") ?? .openai,
+                                  model: await v(SettingKey.brainModel) ?? BrainEngine.openai.defaultModel,
+                                  customBaseURL: await v(SettingKey.customBaseURL) ?? "http://127.0.0.1:1234/v1")
+        if brainConfig.model.isEmpty { brainConfig.model = brainConfig.engine.defaultModel }
+        cardsPerMorning = Int(await v(SettingKey.cardsPerMorning) ?? "5") ?? 5
+        notify = (await v(SettingKey.notifyOnReady) ?? "true") == "true"
+        instructions = await v(SettingKey.standingInstructions) ?? ""
+        signMessages = (await v(SettingKey.signature)) == "true"
+        userName = await v(SettingKey.userName) ?? NSFullUserName()
+        staleDays = Int(await v(SettingKey.staleDays) ?? "") ?? QuietCheck.defaultStaleDays
+        feedback = RunCoordinator.loadFeedback(await v(SettingKey.feedback))
+        noteFeedback = NoteFeedbackList.decode(await v(SettingKey.noteFeedback))
+        household = RunCoordinator.loadHousehold(await v(SettingKey.household))
+        if let j = await v(SettingKey.householdLastSync), let d = j.data(using: .utf8) { householdLastSync = try? JSONDecoder().decode(SyncReport.self, from: d) }
+        handsHotkey = await v(SettingKey.handsHotkey) ?? "rightCommand"
+        handsSpeed = await v(SettingKey.handsSpeed) ?? "balanced"
+        let (h, m) = OvernightScheduler.Config.parse(await v(SettingKey.overnightTime))
+        overnight = OvernightScheduler.Config(enabled: (await v(SettingKey.overnightEnabled) ?? "true") == "true", hour: h, minute: m, catchUp: (await v(SettingKey.catchUp) ?? "true") == "true", daytime: await v(SettingKey.daytime) ?? "h1")
+        appearance = await v(SettingKey.appearance) ?? "system"
+        onboardingDone = (await v(SettingKey.onboardingDone) ?? "false") == "true"
+        letter = await v(SettingKey.letter); letterOpened = (await v(SettingKey.letterOpened) ?? "false") == "true"
+        if let u = await v("brain.lastUsage"), let d = u.data(using: .utf8) { lastUsage = try? JSONDecoder().decode(Usage.self, from: d) }
+        var done = Set<String>()
+        for k in ["foryou", "card", "knowledge", "graph", "excluded", "sources", "hands"] where (await v(SettingKey.walkthrough(k))) == "true" { done.insert(k) }
+        walkthroughDone = done
+        readerChoice = await v(SettingKey.localModel) ?? (ModelCatalog.physicalMemoryGB < 12 ? "E2B" : "E4B")
+        modelPath = ModelCatalog.locate(ModelCatalog.info(for: readerChoice))
+        if let j = await v("sources.mcp"), let d = j.data(using: .utf8), let ms = try? JSONDecoder().decode([MCPManifest].self, from: d) { mcpManifests = ms }
+        showSendLine = (await v(SettingKey.showSendLine) ?? "true") == "true"
+        nudgeDays = Int(await v(SettingKey.nudgeDays) ?? "1") ?? 1
+        icloudMirror = (await v(SettingKey.icloudMirror) ?? "false") == "true"
+        icloudMode = await v(SettingKey.icloudMode) ?? (icloudMirror ? "mirror" : "off")
+        if let j = await v(SettingKey.lastSync), let d = j.data(using: .utf8) { lastSync = try? JSONDecoder().decode(SyncReport.self, from: d) }
+        mcpEnabled = (await v(SettingKey.mcpEnabled) ?? "false") == "true"
+        if let j = await v(SettingKey.mcpLog), let d = j.data(using: .utf8) { mcpAsks = (try? JSONDecoder().decode([MCPAsk].self, from: d)) ?? [] }
+        briefsEnabled = (await v(SettingKey.briefsEnabled) ?? "true") == "true"
+        if let j = await v(SettingKey.screenForbidden), let d = j.data(using: .utf8), let a = try? JSONDecoder().decode([String].self, from: d) { screenForbidden = Set(a) }
+    }
+
+    func set(_ key: String, _ value: String?) { Task { try? await store.setValue(key, value) } }
+
+    // MARK: sources
+
+    var workSources: [any Source] { mcpManifests.map { MCPSource(manifest: $0) } }
+
+    var sourcesForRun: [any Source] {
+        (allSources + workSources).compactMap { s in
+            guard enabledSources.contains(s.id) else { return nil }
+            if s.id == "files" { return FilesSource(roots: fileRoots) }
+            if s.id == "recordings" { return RecordingsSource(folder: recordingsFolder) }
+            return s
+        }
+    }
+
+    func addMCP(_ m: MCPManifest, token: String) {
+        if !token.isEmpty { Keychain.set(m.tokenKey, token) }
+        mcpManifests.removeAll { $0.id == m.id }; mcpManifests.append(m)
+        set("sources.mcp", json(mcpManifests))
+        enabledSources.insert(SourceID("mcp:\(m.id)")); set(SettingKey.enabledSources, json(enabledSources.map(\.rawValue)))
+        Task { await refreshSources() }
+    }
+    func removeMCP(_ id: String) {
+        mcpManifests.removeAll { $0.id == id }; set("sources.mcp", json(mcpManifests))
+        enabledSources.remove(SourceID("mcp:\(id)")); set(SettingKey.enabledSources, json(enabledSources.map(\.rawValue)))
+        Keychain.set("mcp.\(id).token", nil)
+    }
+
+    func refreshSources() async {
+        for s in allSources + workSources {
+            let src: any Source = s.id == "recordings" ? RecordingsSource(folder: recordingsFolder) : s
+            let a = await src.availability(); availability[s.id] = a
+            if s.id == "voicememos" || s.id == "recordings" {
+                // The cost line: how much audio sits there, so the user can judge the night's work.
+                let folder = s.id == "recordings" ? recordingsFolder : VoiceMemosSource.folder
+                let files = AudioFolder.recordings(in: folder)
+                var secs = 0.0; for f in files.prefix(200) { secs += await AudioFolder.duration(of: f.url) }
+                audioCost[s.id] = (files.count, secs)
+            }
+            if s.descriptor.supportsPerBucketOptIn, a == .available, s.id != "files" {
+                do {
+                    // A source that never answers (a wedged Telegram client) must not hold the others hostage.
+                    let b = try await withThrowingTaskGroup(of: [BucketInfo].self) { g -> [BucketInfo] in
+                        g.addTask { try await s.discoverBuckets() }
+                        g.addTask { try await Task.sleep(nanoseconds: 25_000_000_000); throw SourceError.cannotRead("discovery timed out") }
+                        let r = try await g.next()!; g.cancelAll(); return r
+                    }
+                    discovered[s.id] = b; log.info("\(s.id): \(b.count) chats discovered")
+                } catch { discovered[s.id] = []; log.warn("\(s.id): discovery failed: \(error)") }
+            } else if s.descriptor.supportsPerBucketOptIn { log.info("\(s.id): \(a)") }
+        }
+        discovered["files"] = fileRoots.map { BucketInfo(id: BucketID("files:" + $0.standardizedFileURL.path), name: $0.lastPathComponent, detail: $0.path, isGroup: false, count: 0) }
+    }
+
+    func toggleSource(_ id: SourceID) {
+        if enabledSources.contains(id) { enabledSources.remove(id) } else {
+            enabledSources.insert(id)
+            if id == "calendar", !CalendarSource.isAuthorized { Task { _ = await CalendarSource.requestAccess(); await refreshPermissions(); await refreshSources() } }
+            if id == "voicememos" || id == "recordings", !SpeechTranscriber.isAuthorized { Task { _ = await SpeechTranscriber.requestAccess(); await refreshPermissions(); await refreshSources() } }
+        }
+        set(SettingKey.enabledSources, json(enabledSources.map(\.rawValue)))
+        markWalkthrough("sources")
+    }
+
+    func toggleBucket(_ source: SourceID, _ b: BucketID) {
+        var set = enabledBuckets[source] ?? []
+        if set.contains(b) { set.remove(b) } else { set.insert(b) }
+        enabledBuckets[source] = set
+        self.set(SettingKey.enabledBuckets(source), json(set.map(\.rawValue)))
+    }
+
+    func signInGoogle() {
+        Task {
+            do { try await GoogleAuth.shared.signIn(); enabledSources.insert("gmail"); set(SettingKey.enabledSources, json(enabledSources.map(\.rawValue))); await refreshSources() }
+            catch { announcement = "Google sign-in didn't complete: \(error)" }
+        }
+    }
+    @Published var telegramAuth: TDClient.AuthState = .waitingForParameters
+    func watchTelegram() {
+        guard let c = TelegramSource.shared else { return }
+        Task { await c.start(); await c.onAuth { [weak self] st in Task { @MainActor in self?.telegramAuth = st; if st == .ready { await self?.refreshSources() } } } }
+    }
+    func telegramPhone(_ phone: String) async -> String? { do { try await TelegramSource.shared?.setPhone(phone); return nil } catch { return "\(error)" } }
+    func telegramCode(_ code: String) async -> String? { do { try await TelegramSource.shared?.setCode(code); return nil } catch { return "\(error)" } }
+    func telegramPassword(_ pw: String) async -> String? { do { try await TelegramSource.shared?.setPassword(pw); return nil } catch { return "\(error)" } }
+    func telegramSignOut() { Task { try? await TelegramSource.shared?.logOut(); await refreshSources() } }
+    /// Quit and reopen: a moment after this process ends, the app is opened again. Used when a change (the Telegram app
+    /// credentials) can only take effect at launch.
+    func relaunch() {
+        let path = Bundle.main.bundlePath
+        let p = Process(); p.executableURL = URL(fileURLWithPath: "/bin/sh"); p.arguments = ["-c", "sleep 1; open \"\(path)\""]
+        try? p.run()
+        NSApp.terminate(nil)
+    }
+
+    func signOutGoogle() { Task { await GoogleAuth.shared.signOut(); await refreshSources() } }
+
+    func signInSlack() {
+        guard SlackAuth.isConfigured else { announcement = "Slack sign-in isn't set up in this build — paste a user token instead."; return }
+        Task {
+            do { try await SlackAuth.shared.signIn(); enabledSources.insert("slack"); set(SettingKey.enabledSources, json(enabledSources.map(\.rawValue))); await refreshSources() }
+            catch { announcement = "Slack sign-in didn't complete: \(error)" }
+        }
+    }
+    func useSlackToken(_ t: String) { SlackAuth.useToken(t); enabledSources.insert("slack"); set(SettingKey.enabledSources, json(enabledSources.map(\.rawValue))); Task { await refreshSources() } }
+    func signOutSlack() { SlackAuth.signOut(); Task { await refreshSources() } }
+    func signInMicrosoft() {
+        guard MicrosoftAuth.isConfigured else { announcement = "Microsoft sign-in isn't set up in this build."; return }
+        Task {
+            do { try await MicrosoftAuth.shared.signIn(); enabledSources.insert("teams"); set(SettingKey.enabledSources, json(enabledSources.map(\.rawValue))); await refreshSources() }
+            catch { announcement = "Microsoft sign-in didn't complete: \(error)" }
+        }
+    }
+    func signOutMicrosoft() { MicrosoftAuth.signOut(); Task { await refreshSources() } }
+
+    func addFileRoot(_ url: URL) {
+        guard !fileRoots.contains(url) else { return }
+        fileRoots.append(url); set(SettingKey.fileRoots, json(fileRoots.map(\.path)))
+        Task { await refreshSources() }
+    }
+    func setRecordingsFolder(_ url: URL) {
+        recordingsFolder = url; set(SettingKey.recordingsFolder, url.path)
+        Task { await refreshSources() }
+    }
+    func removeFileRoot(_ url: URL) { fileRoots.removeAll { $0 == url }; set(SettingKey.fileRoots, json(fileRoots.map(\.path))); Task { await refreshSources() } }
+
+    func refreshPermissions() async {
+        for p in [Permission.fullDiskAccess, .accessibility, .screenRecording, .calendar, .contacts] { permissions[p] = PermissionProbe.status(p) }
+        permissions[.speech] = SpeechTranscriber.isAuthorized
+    }
+
+    // MARK: brain + reader
+
+    func rebuildBrain() {
+        if brainConfig.engine == .local {
+            brain = reader.map { LocalBrain(reader: $0) }    // nothing leaves, so nothing to log
+            brainStatus = brain == nil ? "The reader isn't downloaded yet" : "This Mac only · nothing leaves"
+        } else {
+            // The key read can put up a Keychain dialog; never block the UI on it.
+            let cfg = brainConfig, logger = sendLogger
+            brainStatus = "Checking the Keychain…"
+            Task.detached(priority: .userInitiated) {
+                let made = BrainFactory.make(cfg)
+                let hasKey = BrainFactory.hasKey(cfg.engine)
+                if hasKey, let k = cfg.engine.keyName { Keychain.reown(k) }
+                await MainActor.run { [weak self] in
+                    guard let self, self.brainConfig == cfg else { return }
+                    self.brain = made.map { SendLogger.wrap($0, model: cfg.model, logger: logger) }
+                    self.brainStatus = self.brain == nil ? "No brain — notes only" : (hasKey ? "Key present · not checked" : "No key for \(cfg.engine.displayName)")
+                    self.finishBrain()
+                }
+            }
+            return
+        }
+        finishBrain()
+    }
+    private func finishBrain() {
+        if let b = brain as? AgenticBrain { hands = Hands(brain: b, knowledge: knowledge, effort: handsSpeed == "fast" ? .low : (handsSpeed == "careful" ? .high : .medium)) } else { hands = nil }
+        rebuildCoordinator()
+    }
+
+    func saveBrain() {
+        set(SettingKey.brainEngine, brainConfig.engine.rawValue); set(SettingKey.brainModel, brainConfig.model); set(SettingKey.customBaseURL, brainConfig.customBaseURL)
+        rebuildBrain()
+    }
+    /// After a key is saved: rebuild, then check it against the provider so a typo is caught now, not at 3 AM.
+    func saveKeyAndCheck(_ key: String, _ value: String) {
+        Keychain.set(key, value); rebuildBrain()
+        Task { var waited = 0; while brain == nil, brainStatus.hasPrefix("Checking"), waited < 40 { try? await Task.sleep(nanoseconds: 250_000_000); waited += 1 }; await validateBrain() }
+    }
+
+    func validateBrain() async {
+        guard let brain else { brainStatus = "No brain configured"; return }
+        brainStatus = "Checking…"
+        do { try await brain.validate(); brainStatus = "Signed in · \(brain.descriptor.name) · \(brainConfig.model)" }
+        catch BrainError.unauthorized { brainStatus = "Key rejected" }
+        catch BrainError.notConfigured { brainStatus = "No key" }
+        catch { brainStatus = "Couldn't reach \(brain.descriptor.name): \(error)" }
+    }
+
+    func chooseReader(_ choice: String) {
+        readerChoice = choice; set(SettingKey.localModel, choice); UserDefaults.standard.set(choice, forKey: "reader.model")
+        modelPath = ModelCatalog.locate(ModelCatalog.info(for: choice)); rebuildReader()
+        announcement = modelPath == nil ? "Relaunch Brownie to download \(ModelCatalog.info(for: choice).name)." : nil
+    }
+
+    func rebuildReader() {
+        reader = modelPath.map { Reader(modelPath: $0, jsonSchema: Triage.jsonSchema) }
+        if brainConfig.engine == .local { rebuildBrain() } else { rebuildCoordinator() }
+    }
+
+    /// The user's own names — the Mac's full name, the account name, the household member marked `isMe` — so no stage
+    /// of a run, and no note, ever takes the user for a person.
+    var selfNames: [String] {
+        SelfNames.clean([userName, NSFullUserName(), (try? FileManager.default.attributesOfItem(atPath: NSHomeDirectory()))?[.ownerAccountName] as? String, household?.me?.name])
+    }
+
+    /// A ledger written before the loop bar existed is held to it once: sentiments, promises to nobody and loops with the
+    /// user as the other party go, and registry records that name nobody go with them. A clean ledger is untouched.
+    func sweepLoops(registry: PersonRegistry) async {
+        let loops = await LoopLedger.load(store)
+        let (kept, dropped) = LoopQuality.sweep(loops, selfNames: selfNames)
+        if !dropped.isEmpty {
+            for d in dropped { log.info("loop let go at launch: “\(d.loop.what)” — \(d.reason)") }
+            await LoopLedger.save(kept, store)
+        }
+        let nobodies = await registry.removeNobodies { !LoopQuality.isPersonLabel($0) }
+        if nobodies > 0 { try? await registry.save() }
+        if !dropped.isEmpty || nobodies > 0 { log.info("launch sweep: \(dropped.count) loops let go, \(nobodies) records that named nobody removed") }
+    }
+    /// The name changed in Settings: the coordinator takes the new self names, and a People note in that name moves out tonight's way now.
+    func rebuildCoordinatorForSelf() {
+        rebuildCoordinator()
+        Task {
+            let registry = PersonRegistry(vault: knowledge.rootURL, selfNames: selfNames); await registry.load()
+            await VaultMigration.moveSelfNotes(root: knowledge.rootURL, registry: registry, store: store, selfNames: selfNames, now: Date())
+            await reload()
+        }
+    }
+    private func rebuildCoordinator() {
+        let logger = sendLogger
+        coordinator = RunCoordinator(.init(store: store, knowledge: knowledge, sources: sourcesForRun, reader: reader, brain: brain, policy: policy,
+                                            calendarText: { CalendarSource.judgeContext() }, stage: { p, d in logger.setPurpose(p, detail: d) }, selfNames: selfNames, contacts: Self.contactCards,
+                                            bucketProofs: { [weak self] in await self?.bucketProofs() ?? [:] }))
+    }
+    /// The address book's cards for the registry, once Contacts is allowed (never a prompt from here).
+    static let contactCards: @Sendable () async -> [ContactCard] = { ContactLookup.cards() }
+    /// What discovery found each direct chat's profile proves, by handle, for the night's registry work.
+    func bucketProofs() -> [String: [String]] {
+        Dictionary(discovered.values.flatMap { $0 }.compactMap { b in b.handle.map { ($0, b.proofs) } }, uniquingKeysWith: { a, b in a + b.filter { !a.contains($0) } })
+    }
+    var runCoordinator: RunCoordinator? { rebuildCoordinator(); return coordinator }
+
+    // MARK: runs
+
+    func analyzeNow(trigger: RunTrigger = .manual) {
+        guard !isRunning else { overlay = .processing; return }
+        guard modelPath != nil else { announcement = "The reader isn't downloaded yet — Settings → Brain → On this Mac."; return }
+        guard freeGB > 1 else { announcement = String(format: "Only %.1f GB free on this Mac. Brownie needs about 1 GB to run — free some space first.", freeGB); return }
+        guard !sourcesForRun.isEmpty else { announcement = "No sources are turned on, so there is nothing to read. Pick some in Settings → Sources."; openSettings(.sources); return }
+        rebuildCoordinator()
+        guard let coordinator else { return }
+        isRunning = true; overlay = .processing; thoughts = []; progress = RunProgress()
+        // Nobody is at the Mac for an overnight or catch-up run: the Keychain is read quietly, so a permission prompt
+        // never holds the night. A manual run is the user's, and a prompt then is answered.
+        Keychain.quiet = trigger == .overnight || trigger == .catchUp || trigger == .daytime
+        Task {
+            defer { Keychain.quiet = false }
+            let outcome = await coordinator.run(trigger: trigger) { [weak self] e in
+                Task { @MainActor in
+                    guard let self else { return }
+                    switch e {
+                    case .progress(let p): self.progress = p
+                    case .thought(let t): self.thoughts.append(t); if self.thoughts.count > 3 { self.thoughts.removeFirst() }
+                    case .finished: break
+                    }
+                }
+            }
+            await MainActor.run {
+                self.isRunning = false; self.runOutcome = outcome
+                if self.overlay == .processing { self.overlay = .none }
+            }
+            await scheduler?.noteRun(at: Date())
+            await reload()
+            Notifier.runFinished(outcome, stats: progress.stats)
+        }
+    }
+
+    func stopRun() { Task { await coordinator?.cancel() } }
+
+    @Published var pastCards: [Card] = []
+    @Published var snoozedCards: [Card] = []
+    @Published var bulkUnread: Int = 0
+
+    func reload() async {
+        let now = Date()
+        var all = ((try? await RunCoordinator.loadCards(store: store)) ?? []).map { $0.housekept(now: now) }
+        all.removeAll { c in (c.state == .expired || c.state == .dismissed || c.state == .fired) && now.timeIntervalSince(c.resolvedAt ?? c.createdAt) > 30 * 86400 }
+        // The quiet check, again, right before showing: a loop may have closed since 3 AM.
+        folders = (try? await knowledge.folders()) ?? []
+        var noteDates: [String: Date] = [:]; for f in folders { for n in f.notes { noteDates[n.relativePath] = n.updatedAt } }
+        let ledger = await LoopLedger.load(store)
+        let checked = QuietCheck.run(cards: all.filter { $0.state == .ready }, loops: ledger, past: all.filter { $0.state != .ready }, noteUpdated: { noteDates[$0] }, fileExists: { FileManager.default.fileExists(atPath: $0) }, now: now, staleDays: staleDays)
+        if !checked.dropped.isEmpty {
+            for d in checked.dropped { log.info("quiet check dropped “\(d.card.title)”: \(d.why)"); if let i = all.firstIndex(where: { $0.id == d.card.id }) { all[i].state = .dismissed; all[i].resolvedAt = now } }
+            quietlyDropped = checked.dropped.map { "“\($0.card.title)” — \($0.why)" }
+        }
+        for k in checked.kept { if let i = all.firstIndex(where: { $0.id == k.id }) { all[i].staleLine = k.staleLine } }
+        try? await RunCoordinator.saveCards(all, store: store)
+        cards = all.filter { $0.state == .ready }.sorted { $0.urgency > $1.urgency }
+        snoozedCards = all.filter { $0.state == .snoozed }.sorted { ($0.snoozedUntil ?? .distantFuture) < ($1.snoozedUntil ?? .distantFuture) }
+        bulkUnread = fileRoots.reduce(0) { $0 + FilesSource.counts($1).bulk }
+        pastCards = all.filter { $0.state != .ready && $0.state != .snoozed }.sorted { ($0.resolvedAt ?? $0.createdAt) > ($1.resolvedAt ?? $1.createdAt) }
+        lastRun = try? await store.lastRun()
+        runs = (try? await store.recentRuns(limit: 7)) ?? []
+        drops = (try? await store.drops(since: Date().addingTimeInterval(-7 * 86400))) ?? []
+        letter = try? await store.value(SettingKey.letter)
+        lastSkipped = try? await store.value("run.lastSkipped")
+        let coverage = SourceCoverage.decode(try? await store.value(SettingKey.coverage))
+        self.coverage = Dictionary(coverage.map { ($0.source, $0) }, uniquingKeysWith: { a, _ in a })
+        let needsDisk: Set<String> = ["whatsapp", "imessage", "notes"]
+        let readLately = coverage.contains { needsDisk.contains($0.source.rawValue.lowercased()) && $0.lastRun > Date().addingTimeInterval(-14 * 86400) }
+        lostFullDiskAccess = readLately && !PermissionProbe.status(.fullDiskAccess)
+        lastError = try? await store.value("run.lastError")
+        await reloadV2()
+        await reloadPeople()
+    }
+
+    // MARK: cards
+
+    func card(_ id: String) -> Card? { cards.first { $0.id == id } }
+
+    func dismiss(_ id: String) { setCardState(id, .dismissed); overlay = .none }
+
+    func updateDraft(_ id: String, _ text: String) {
+        guard let i = cards.firstIndex(where: { $0.id == id }) else { return }
+        cards[i] = cards[i].withDraft(text)
+        let updated = cards[i]
+        Task {
+            var all = (try? await RunCoordinator.loadCards(store: store)) ?? []
+            if let j = all.firstIndex(where: { $0.id == id }) { all[j] = updated }
+            try? await RunCoordinator.saveCards(all, store: store)
+        }
+    }
+
+    func fire(_ id: String) {
+        guard var card = card(id) else { return }
+        markWalkthrough("card")
+        // The sign-off rides on the message itself, so what you see in the box is what goes.
+        if signMessages, card.person != nil { card = card.withDraft(Signature.apply(card.draft, enabled: true)) }
+        overlay = .firing(id); fireEvents = []
+        if case .computerUse = card.recipe {
+            if !Hands.hasAccessibility { fireEvents = [.step("Hands needs Accessibility — System Settings → Privacy & Security → Accessibility → add Brownie", done: false), .finished(.couldNot)]; PermissionProbe.openSettings(for: .accessibility); return }
+            if hands == nil { fireEvents = [.step("Hands needs a brain with tools — Settings → Brain", done: false), .finished(.couldNot)]; return }
+        }
+        let executor = RecipeExecutor(knowledgeRoot: knowledge.rootURL) { [weak self] goal, onEvent in
+            guard let self, let hands = await self.hands else { onEvent(.step("Hands needs a brain with tools", done: false)); return .couldNot }
+            onEvent(.step("Hands is starting: \(goal)", done: true))
+            let o = await hands.perform(goal) { e in
+                switch e {
+                case .step(let s): onEvent(.step(s, done: true))
+                case .plan(let p): onEvent(.plan(p))
+                case .stepDone(let n, let note): onEvent(.stepDone(n, note))
+                default: break
+                }
+            }
+            switch o {
+            case .done(let s): onEvent(.step(s, done: true)); return .done
+            case .pausedForUser(let w): onEvent(.pausedForUser(w)); return .pausedAtUserStep
+            case .stopped: return .stopped
+            case .couldNot(let r): onEvent(.step("Hands couldn't: \(r)", done: false)); return .couldNot
+            }
+        }
+        Task {
+            let outcome = (try? await executor.fire(card) { e in Task { @MainActor in self.fireEvents.append(e) } }) ?? .couldNot
+            await MainActor.run { self.fireEvents.append(.finished(outcome)); if outcome != .couldNot { self.setCardState(id, .fired) } }
+            if outcome == .pausedAtUserStep { Notifier.paused("Ready for you", body: "The message is in place. Press Send when you're ready.") }
+        }
+    }
+
+    func unsnooze(_ id: String) {
+        Task {
+            var all = (try? await RunCoordinator.loadCards(store: store)) ?? []
+            if let i = all.firstIndex(where: { $0.id == id }) { all[i].state = .ready; all[i].snoozedUntil = nil }
+            try? await RunCoordinator.saveCards(all, store: store); await reload()
+        }
+    }
+
+    func snooze(_ id: String, days: Int) {
+        Task {
+            var all = (try? await RunCoordinator.loadCards(store: store)) ?? []
+            if let i = all.firstIndex(where: { $0.id == id }) { all[i].state = .snoozed; all[i].snoozedUntil = Calendar.current.date(byAdding: .day, value: days, to: Calendar.current.startOfDay(for: Date()))?.addingTimeInterval(7 * 3600) }
+            try? await RunCoordinator.saveCards(all, store: store)
+            await reload(); overlay = .none
+        }
+    }
+
+    /// A thumbs-down with a reason: the card goes away and the lesson is kept for every night after.
+    func giveFeedback(_ id: String, _ verdict: CardFeedback.Verdict, note: String = "") {
+        guard let c = card(id) ?? pastCards.first(where: { $0.id == id }) else { return }
+        feedback.append(CardFeedback(cardID: id, cardTitle: c.title, person: c.person, sourceLabel: c.sourceLabel, verdict: verdict, note: note, at: Date()))
+        if feedback.count > 200 { feedback.removeFirst(feedback.count - 200) }
+        set(SettingKey.feedback, json(feedback))
+        if verdict == .alreadyDone, let loopID = c.loopID { closeLoop(loopID, how: "you said it was done") }
+        setCardState(id, .dismissed); overlay = .none
+    }
+    func forgetFeedback(_ id: String) { feedback.removeAll { $0.id == id }; set(SettingKey.feedback, json(feedback)) }
+    /// What the thumbs-downs currently teach, as the judge will read it.
+    var learnedInstructions: String { FeedbackDigest.instructions(feedback, now: Date()) }
+
+    private func setCardState(_ id: String, _ s: CardState) {
+        Task {
+            var all = (try? await RunCoordinator.loadCards(store: store)) ?? []
+            if let i = all.firstIndex(where: { $0.id == id }) { all[i].state = s; all[i].resolvedAt = Date() }
+            try? await RunCoordinator.saveCards(all, store: store)
+            // A fired card about a loop: remember it, so the loop comes back if nothing changes.
+            if s == .fired, let loopID = all.first(where: { $0.id == id })?.loopID {
+                var ls = await LoopLedger.load(store)
+                if let j = ls.firstIndex(where: { $0.id == loopID }) { ls[j].firedCardIDs.append(id); await LoopLedger.save(ls, store) }
+            }
+            await reload()
+        }
+    }
+
+    func openLetter() { letterOpened = true; set(SettingKey.letterOpened, "true") }
+
+    // MARK: overnight
+
+    func startScheduler() {
+        let s = OvernightScheduler(store: store) { [weak self] trigger in
+            guard let self else { return .cancelled }
+            return await withCheckedContinuation { cont in
+                Task { @MainActor in
+                    self.rebuildCoordinator()
+                    guard let c = self.coordinator else { cont.resume(returning: .cancelled); return }
+                    self.isRunning = true
+                    let o = await c.run(trigger: trigger) { _ in }
+                    self.isRunning = false; await self.reload()
+                    // Daytime reads are quiet unless something new deserves a card.
+                    if trigger != .daytime { Notifier.runFinished(o, stats: self.progress.stats) }
+                    else if case .ran(let n) = o, n > 0 { Notifier.post("\(n) new thing\(n == 1 ? "" : "s") while you were away", body: "Refreshed on your Mac. Nothing has been sent.", id: "cards.daytime", category: "cards") }
+                    cont.resume(returning: o)
+                }
+            }
+        }
+        scheduler = s
+        let last = lastRun?.startedAt
+        Task { if let last { await s.noteRun(at: last) }; await s.start(overnight); await s.catchUpIfNeeded(lastRun: lastRun) }
+    }
+
+    func saveOvernight() {
+        set(SettingKey.overnightEnabled, overnight.enabled ? "true" : "false")
+        set(SettingKey.overnightTime, String(format: "%02d:%02d", overnight.hour, overnight.minute))
+        set(SettingKey.catchUp, overnight.catchUp ? "true" : "false")
+        set(SettingKey.daytime, overnight.daytime)
+        Task { await scheduler?.start(overnight) }
+    }
+
+    func installHelper() {
+        let exe = Bundle.main.executablePath ?? CommandLine.arguments[0]
+        do { try WakeHelper.Client().install(executable: exe); helperInstalled = true } catch { announcement = "Couldn't install the wake helper: \(error)" }
+    }
+
+    func setLoginItem(_ on: Bool) { OvernightScheduler.setLoginItem(on); loginItem = on }
+
+    // MARK: walkthroughs
+
+    func markWalkthrough(_ key: String) {
+        guard !walkthroughDone.contains(key) else { return }
+        walkthroughDone.insert(key); set(SettingKey.walkthrough(key), "true")
+    }
+    func replayWalkthroughs() { for k in walkthroughDone { set(SettingKey.walkthrough(k), nil) }; walkthroughDone = []; screen = .forYou }
+
+    // MARK: reset / uninstall
+
+    func factoryReset() {
+        Task {
+            try? await store.factoryReset()
+            try? FileManager.default.removeItem(at: knowledge.rootURL)
+            await MainActor.run { letter = nil; letterOpened = false; walkthroughDone = []; cards = [] }
+            await reload()
+        }
+    }
+
+    func uninstall() {
+        try? WakeHelper.Client().uninstall()
+        OvernightScheduler.setLoginItem(false)
+        try? FileManager.default.removeItem(at: knowledge.rootURL)
+        try? FileManager.default.removeItem(at: Paths.applicationSupport)
+        Keychain.wipeAll()
+        NSApp.terminate(nil)
+    }
+
+    // MARK: helpers
+
+    func json<T: Encodable>(_ v: T) -> String { (try? String(data: JSONEncoder().encode(v), encoding: .utf8)) ?? "[]" }
+
+    var brainName: String { brain?.descriptor.name ?? (brainStatus.hasPrefix("Checking") ? "checking the Keychain…" : "No brain") }
+    var sidebarStatus: (String, String) {
+        guard let r = lastRun else { return ("No run yet", "Press Analyze now to read for the first time") }
+        let f = DateFormatter(); f.dateFormat = "h:mm a"
+        return ("Last run \(f.string(from: r.startedAt))", "\(r.stats.read) items read · \(r.stats.kept) kept")
+    }
+}

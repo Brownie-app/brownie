@@ -1,0 +1,68 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: -apple-system, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #1d1d1f; background: #d8d8dc; }
+    a { color: #b3762a; } a:hover { color: #8f5c1f; }
+    .stage { width: 560px; height: 660px; position: relative; background: linear-gradient(180deg, #2b3a55, #4a5f85); overflow: hidden; display: flex; flex-direction: column; align-items: flex-end; gap: 12px; padding: 40px 16px 0 0; box-sizing: border-box; }
+    .n { width: 360px; background: rgba(246,246,247,0.94); backdrop-filter: blur(30px); border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,0.3), 0 0 0 0.5px rgba(0,0,0,0.15); padding: 12px 14px; display: flex; gap: 12px; align-items: flex-start; font-size: 13px; }
+    .icon { width: 36px; height: 36px; border-radius: 9px; background: linear-gradient(150deg, #f2d9a6, #d8983a); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .icon svg { width: 20px; height: 20px; stroke: #1a1205; fill: none; stroke-width: 1.8; stroke-linecap: round; }
+    .t { font-weight: 600; }
+    .b { color: #3a3a3c; margin-top: 1px; }
+    .when { font-size: 11px; color: #8e8e93; margin-left: auto; white-space: nowrap; }
+    .acts { display: flex; gap: 6px; margin-top: 8px; }
+    .a { height: 24px; padding: 0 10px; border-radius: 6px; background: rgba(0,0,0,0.06); display: inline-flex; align-items: center; font-size: 12px; font-weight: 500; cursor: pointer; }
+    .a.p { background: #d8983a; color: #1a1205; }
+    .cap { color: #fff; opacity: 0.85; font-size: 11px; width: 360px; text-align: left; }
+  </style>
+</helmet>
+<div class="stage">
+  <div class="cap">7:30 AM · the only scheduled notification, never earlier</div>
+  <div class="n">
+    <div class="icon"><svg viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2"></path><circle cx="12" cy="12" r="4"></circle></svg></div>
+    <div style="flex: 1;">
+      <div style="display: flex; align-items: baseline;"><div class="t">5 things for this morning</div><div class="when">now</div></div>
+      <div class="b">Two replies people are waiting on, a meeting to prep, a renewal, a form. Nothing has been sent.</div>
+      <div class="acts"><div class="a p">Show me</div><div class="a">Later</div></div>
+    </div>
+  </div>
+
+  <div class="cap" style="margin-top: 12px;">After a manual run</div>
+  <div class="n">
+    <div class="icon"><svg viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2"></path><circle cx="12" cy="12" r="4"></circle></svg></div>
+    <div style="flex: 1;">
+      <div style="display: flex; align-items: baseline;"><div class="t">Done reading</div><div class="when">2m ago</div></div>
+      <div class="b">88 new items · 12 kept · 1 sensitive item erased. Your notes are up to date.</div>
+    </div>
+  </div>
+
+  <div class="cap" style="margin-top: 12px;">Morning after a missed night</div>
+  <div class="n">
+    <div class="icon" style="background: linear-gradient(150deg, #f3e0c8, #c9853a);"><svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"></path><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg></div>
+    <div style="flex: 1;">
+      <div style="display: flex; align-items: baseline;"><div class="t">Last night didn't run</div><div class="when">7:30 AM</div></div>
+      <div class="b">Your Mac was on battery at 3 AM. Plug in tonight, or run now.</div>
+      <div class="acts"><div class="a p">Run now</div><div class="a">OK</div></div>
+    </div>
+  </div>
+
+  <div class="cap" style="margin-top: 12px;">Hands paused at an irreversible step</div>
+  <div class="n">
+    <div class="icon"><svg viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2"></path><circle cx="12" cy="12" r="4"></circle></svg></div>
+    <div style="flex: 1;">
+      <div style="display: flex; align-items: baseline;"><div class="t">Ready to send to Amma</div><div class="when">now</div></div>
+      <div class="b">The message and the file are in place. Press Send in Messages, or tell Hands to stop.</div>
+      <div class="acts"><div class="a p">Show</div><div class="a">Stop</div></div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

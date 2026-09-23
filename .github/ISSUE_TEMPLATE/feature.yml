@@ -1,0 +1,25 @@
+name: Idea
+description: Something Brownie should do, or do differently
+labels: [idea]
+body:
+  - type: textarea
+    attributes:
+      label: What you want Brownie to do
+      description: "The situation first, then what you wish happened. Never paste a chat, a note or anything private."
+      placeholder: "Every Monday I forget who is waiting on me from the week before…"
+    validations: { required: true }
+  - type: textarea
+    attributes:
+      label: What you do today instead
+      description: "How you handle it now, and what is wrong with that."
+  - type: dropdown
+    attributes:
+      label: Which part of Brownie
+      options: [The night (reading), The notes, The morning cards, Hands, The Notes screen, Sources and sign-ins, Privacy, Something else]
+    validations: { required: true }
+  - type: checkboxes
+    attributes:
+      label: Before you send
+      options:
+        - label: "This keeps Brownie's promises: everything on the Mac, nothing sent without the user pressing Send."
+          required: true

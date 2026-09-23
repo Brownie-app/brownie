@@ -1,0 +1,13 @@
+name: Bug
+description: Something Brownie did wrong
+labels: [bug]
+body:
+  - type: textarea
+    attributes: { label: What happened, description: "What you expected, what you got. Never paste a real message, note or key here." }
+    validations: { required: true }
+  - type: input
+    attributes: { label: macOS and Mac, placeholder: "macOS 14.8 · MacBook Pro M3, 18 GB" }
+  - type: input
+    attributes: { label: Brain, placeholder: "ChatGPT / OpenAI · gpt-5.6-luna, or This Mac only" }
+  - type: textarea
+    attributes: { label: Log lines, description: "From ~/Library/Logs/Brownie — the file that matches the feature (run.log, recipe.log, hands.log…). Redact anything personal." }

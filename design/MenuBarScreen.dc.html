@@ -1,0 +1,60 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: -apple-system, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #1d1d1f; background: #d8d8dc; }
+    a { color: #b3762a; } a:hover { color: #8f5c1f; }
+    .stage { width: 560px; height: 480px; position: relative; background: linear-gradient(180deg, #2b3a55, #4a5f85); overflow: hidden; }
+    .menubar { position: absolute; top: 0; left: 0; right: 0; height: 24px; background: rgba(20,24,34,0.55); display: flex; align-items: center; justify-content: flex-end; gap: 16px; padding: 0 12px; color: #fff; font-size: 13px; font-weight: 500; }
+    .item { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 6px; border-radius: 4px; background: rgba(255,255,255,0.22); }
+    .menu { position: absolute; top: 30px; right: 96px; width: 300px; background: rgba(246,246,247,0.92); backdrop-filter: blur(30px); border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.35), 0 0 0 0.5px rgba(0,0,0,0.2); padding: 6px; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+    .mi { display: flex; align-items: center; justify-content: space-between; height: 26px; padding: 0 10px; border-radius: 6px; cursor: pointer; }
+    .mi:hover { background: #d8983a; color: #1a1205; }
+    .mi .k { font-size: 11px; color: #8e8e93; }
+    .sep { height: 1px; background: rgba(0,0,0,0.1); margin: 4px 8px; }
+    .head { padding: 8px 10px 6px 10px; display: flex; flex-direction: column; gap: 4px; }
+    .tiny { font-size: 11px; color: #6e6e73; }
+    .pulse { width: 8px; height: 8px; border-radius: 50%; background: #d8983a; box-shadow: 0 0 0 3px rgba(216,152,58,0.2); }
+    .cards { display: flex; flex-direction: column; gap: 4px; padding: 4px 4px 6px 4px; }
+    .mini { background: #fff; border: 1px solid rgba(0,0,0,0.08); border-radius: 8px; padding: 8px 10px; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+    .urg { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  </style>
+</helmet>
+<div class="stage">
+  <div class="menubar">
+    <div class="item"><span style="width: 8px; height: 8px; border-radius: 50%; background: #d8983a; display: inline-block;"></span><span>Brownie</span></div>
+    <span>Sat 13 Sep</span><span>9:41 AM</span>
+  </div>
+  <div class="menu">
+    <div class="head">
+      <div style="display: flex; align-items: center; gap: 8px;"><div class="pulse"></div><div style="font-weight: 600;">Ready for your morning</div></div>
+      <div class="tiny">Ran 3:00–3:41 AM · 255 read · 38 kept · nothing left your Mac</div>
+    </div>
+    <div class="cards">
+      <div class="mini"><div class="urg" style="background: #d94f45;"></div><div style="flex: 1;">Reply to Priya about Goa</div><div class="tiny">WhatsApp</div></div>
+      <div class="mini"><div class="urg" style="background: #d94f45;"></div><div style="flex: 1;">Amma is waiting for the scan report</div><div class="tiny">iMessage</div></div>
+      <div class="mini"><div class="urg" style="background: #c9853a;"></div><div style="flex: 1;">Prep for 4 PM with Rohan</div><div class="tiny">Calendar</div></div>
+      <div class="tiny" style="padding: 2px 6px;">+ 2 more in For You</div>
+    </div>
+    <div class="sep"></div>
+    <div class="mi"><span>Open Brownie</span><span class="k">⌘O</span></div>
+    <div class="mi"><span>Hands</span><span class="k">hold right ⌘</span></div>
+    <div class="mi"><span>Command bar</span><span class="k">⌘⇧Space</span></div>
+    <div class="sep"></div>
+    <div class="mi"><span>Analyze now</span></div>
+    <div class="mi"><span>Pause tonight's run</span></div>
+    <div class="sep"></div>
+    <div class="mi"><span>Settings…</span><span class="k">⌘,</span></div>
+    <div class="mi"><span>Quit Brownie</span><span class="k">⌘Q</span></div>
+    <div class="tiny" style="padding: 6px 10px 4px 10px;">Quitting means no run tonight.</div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

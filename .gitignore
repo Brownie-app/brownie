@@ -1,0 +1,59 @@
+# Build output
+.build/
+.swiftpm/
+DerivedData/
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+*.o
+*.a
+*.dSYM/
+
+# What the release makes: the app, the disk image, the checksum beside it
+dist/
+*.dmg
+*.pkg
+*.zip
+*.ips
+
+# Credentials and signing, which live on the maintainer's Mac and nowhere else
+.secrets/
+*.p12
+*.cer
+*.certSigningRequest
+*.provisionprofile
+*.mobileprovision
+
+# The on-device model and the vendored Telegram library: fetched or built, never committed
+Models/
+*.litertlm
+*.task
+Vendor/tdlib/lib/
+Vendor/tdlib/include/
+
+# Written while Brownie runs, or while its tests do
+*.log
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+Evals/
+.transcripts/
+
+# The agent workspace: worktrees and session files, never part of the project
+.claude/
+
+# macOS, editors and the noise they leave
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+*.swp
+*~
+*.orig
+*.rej
+.idea/
+.vscode/
+node_modules/
+
+# The design canvas writes this from the .dc.html sources
+design/brownie.html

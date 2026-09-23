@@ -1,0 +1,884 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: -apple-system, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #1d1d1f; background: #d8d8dc; }
+    a { color: #b3762a; } a:hover { color: #8f5c1f; }
+    .win { --side: #ececee; --content: #ffffff; --ink: #1d1d1f; --ink2: #6e6e73; --ink3: #aeaeb2; --sep: rgba(0,0,0,0.10); --ctl: rgba(0,0,0,0.05); --ctl2: rgba(0,0,0,0.09); --card: #ffffff; --cardb: rgba(0,0,0,0.08); --accent: #d8983a; --accent-ink: #8f5c1f; --accent-soft: rgba(216,152,58,0.14); --ok: #2f9e5a; --warn: #c9853a; --bad: #d94f45; --chip: #f4f4f6; --code: #f6f6f7; }
+    .win.dark { --side: #2a2a2d; --content: #1e1e21; --ink: #f2f2f4; --ink2: #a1a1a8; --ink3: #6a6a70; --sep: rgba(255,255,255,0.10); --ctl: rgba(255,255,255,0.07); --ctl2: rgba(255,255,255,0.12); --card: #27272b; --cardb: rgba(255,255,255,0.08); --accent: #e2a54a; --accent-ink: #f0c47c; --accent-soft: rgba(226,165,74,0.16); --chip: #303034; --code: #232326; }
+    .win { width: 1440px; height: 900px; display: flex; border-radius: 10px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.28), 0 0 0 0.5px rgba(0,0,0,0.25); background: var(--content); color: var(--ink); font-size: 13px; line-height: 1.4; }
+    .side { width: 220px; flex-shrink: 0; background: var(--side); border-right: 1px solid var(--sep); display: flex; flex-direction: column; }
+    .lights { display: flex; gap: 8px; padding: 20px 0 0 18px; }
+    .light { width: 12px; height: 12px; border-radius: 50%; }
+    .nav { display: flex; flex-direction: column; gap: 2px; padding: 18px 10px 0 10px; }
+    .navh { font-size: 11px; font-weight: 600; color: var(--ink3); padding: 14px 8px 4px 8px; text-transform: uppercase; letter-spacing: 0.02em; }
+    .navi { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; border-radius: 6px; cursor: pointer; color: var(--ink); font-size: 13px; }
+    .navi:hover { background: var(--ctl); }
+    .navi.on { background: var(--ctl2); font-weight: 500; }
+    .navi svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; color: var(--ink2); }
+    .navi.on svg { color: var(--accent-ink); }
+    .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+    .bar { height: 52px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; border-bottom: 1px solid var(--sep); }
+    .title { font-size: 15px; font-weight: 600; }
+    .body { flex: 1; overflow: auto; padding: 24px 28px; }
+    .btn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid var(--cardb); background: var(--card); color: var(--ink); box-shadow: 0 1px 1px rgba(0,0,0,0.04); white-space: nowrap; }
+    .btn.p { background: var(--accent); border-color: transparent; color: #1a1205; }
+    .btn.q { background: transparent; border-color: transparent; box-shadow: none; color: var(--ink2); }
+    .btn.d { color: var(--bad); }
+    .btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .card { background: var(--card); border: 1px solid var(--cardb); border-radius: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    .h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2; }
+    .h2 { font-size: 17px; font-weight: 600; letter-spacing: -0.005em; }
+    .sub { color: var(--ink2); }
+    .tiny { font-size: 11px; color: var(--ink2); }
+    .chip { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 8px; border-radius: 10px; background: var(--chip); font-size: 11px; font-weight: 500; color: var(--ink2); }
+    .chip svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+    .urg { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .sep { height: 1px; background: var(--sep); }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .tog { width: 38px; height: 22px; border-radius: 11px; background: var(--ctl2); position: relative; flex-shrink: 0; }
+    .tog::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.25); }
+    .tog.on { background: var(--accent); }
+    .tog.on::after { left: 18px; }
+    .field { height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--cardb); background: var(--card); display: flex; align-items: center; color: var(--ink); font-size: 13px; }
+    .code { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 12px; background: var(--code); border-radius: 6px; padding: 12px 14px; color: var(--ink); white-space: pre-wrap; line-height: 1.5; }
+    .tabs { display: flex; gap: 2px; padding: 3px; background: var(--ctl); border-radius: 8px; }
+    .tab { height: 24px; padding: 0 12px; border-radius: 6px; display: flex; align-items: center; font-size: 12px; font-weight: 500; cursor: pointer; color: var(--ink2); }
+    .tab.on { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,0.12); }
+    .kv { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 10px 16px; align-items: center; }
+    .ico { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+    .prog { height: 6px; border-radius: 3px; background: var(--ctl2); overflow: hidden; }
+    .prog > div { height: 100%; background: var(--accent); border-radius: 3px; }
+    .step { display: flex; gap: 10px; align-items: flex-start; }
+    .dot { width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+    .dot svg { width: 11px; height: 11px; stroke: #fff; fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+    table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+    th { text-align: left; font-weight: 600; color: var(--ink2); font-size: 11px; padding: 8px 12px; border-bottom: 1px solid var(--sep); }
+    td { padding: 9px 12px; border-bottom: 1px solid var(--sep); vertical-align: top; }
+    .note h3 { font-size: 15px; margin: 0 0 8px 0; }
+    .note p { margin: 0 0 10px 0; }
+    .note ul { margin: 0 0 10px 18px; padding: 0; }
+    .note li { margin: 3px 0; }
+    .envelope { width: 420px; height: 260px; border-radius: 12px; background: linear-gradient(160deg, #f4e7cf, #e7c894); position: relative; box-shadow: 0 10px 30px rgba(120,80,20,0.25); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    .envelope::before { content: ""; position: absolute; left: 0; top: 0; right: 0; height: 130px; background: linear-gradient(170deg, #f9efdd, #ecd2a5); clip-path: polygon(0 0, 100% 0, 50% 100%); border-radius: 12px 12px 0 0; }
+    .seal { position: relative; width: 56px; height: 56px; border-radius: 50%; background: var(--accent); box-shadow: 0 3px 8px rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: center; }
+    .seal svg { width: 26px; height: 26px; stroke: #1a1205; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .cursor { position: absolute; width: 18px; height: 22px; }
+    .pulse { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+    .rail { width: 260px; flex-shrink: 0; border-right: 1px solid var(--sep); overflow: auto; padding: 8px; display: flex; flex-direction: column; gap: 1px; }
+    .raili { padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+    .raili.on { background: var(--ctl2); font-weight: 500; }
+    .raili svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.6; color: var(--ink2); flex-shrink: 0; }
+    .main { position: relative; }
+    .scrim { position: absolute; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; background: rgba(20,20,22,0.38); z-index: 5; pointer-events: none; }
+    .spot { position: relative; z-index: 6; box-shadow: 0 0 0 3px var(--accent), 0 0 0 9px var(--accent-soft); }
+    .tip { position: absolute; z-index: 7; width: 300px; background: var(--card); border: 1px solid var(--cardb); border-radius: 10px; box-shadow: 0 14px 36px rgba(0,0,0,0.28); padding: 14px 16px 12px 16px; display: flex; flex-direction: column; gap: 6px; }
+    .tip .arrow { position: absolute; width: 12px; height: 12px; background: var(--card); border-left: 1px solid var(--cardb); border-top: 1px solid var(--cardb); transform: rotate(45deg); }
+    .tip .eyebrow { font-size: 11px; font-weight: 600; color: var(--accent-ink); text-transform: uppercase; letter-spacing: 0.04em; }
+    .tip .t { font-size: 14px; font-weight: 600; }
+    .tip .b { font-size: 12.5px; color: var(--ink2); }
+    .tip .do { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 500; margin-top: 2px; }
+    .tip .do svg { width: 14px; height: 14px; stroke: var(--accent-ink); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .tip .foot { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
+  </style>
+</helmet>
+
+<div class="win {{themeClass}}">
+
+  <!-- ───────── Sidebar ───────── -->
+  <div class="side">
+    <div class="lights">
+      <div class="light" style="background: #ff5f57;"></div>
+      <div class="light" style="background: #febc2e;"></div>
+      <div class="light" style="background: #28c840;"></div>
+    </div>
+    <div class="nav">
+      <div class="navi {{nav.foryou}}" onClick="{{goForYou}}">
+        <svg viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"></path><circle cx="12" cy="12" r="4"></circle></svg>
+        <span>For You</span>
+        <span style="margin-left: auto; font-size: 11px; color: var(--ink2);">{{cardCount}}</span>
+      </div>
+      <div class="navh">Knowledge</div>
+      <div class="navi {{nav.knowledge}}" onClick="{{goKnowledge}}">
+        <svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"></path><path d="M4 20.5V5.5M8 7h8M8 11h6"></path></svg>
+        <span>Notes</span>
+      </div>
+      <div class="navi {{nav.graph}}" onClick="{{goGraph}}">
+        <svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"></circle><circle cx="18" cy="8" r="2.5"></circle><circle cx="12" cy="18" r="2.5"></circle><path d="M8.2 7l7.4 0.8M7.4 8.2l3.4 7.6M16.6 10.2l-3.4 5.6"></path></svg>
+        <span>Graph</span>
+      </div>
+      <div class="navi {{nav.excluded}}" onClick="{{goExcluded}}">
+        <svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+        <span>Excluded</span>
+      </div>
+      <div class="navh">App</div>
+      <div class="navi {{nav.settings}}" onClick="{{goSettings}}">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"></path></svg>
+        <span>Settings</span>
+      </div>
+    </div>
+    <div style="margin-top: auto; padding: 14px 16px 16px 16px; border-top: 1px solid var(--sep); display: flex; flex-direction: column; gap: 8px;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <div class="pulse"></div>
+        <div style="font-size: 12px; font-weight: 500;">Last run 3:00 AM</div>
+      </div>
+      <div class="tiny">255 items read · 38 kept · 0 left your Mac</div>
+      <div class="tiny" style="display: flex; align-items: center; gap: 6px;">
+        <svg class="ico" viewBox="0 0 24 24" style="width: 12px; height: 12px;"><path d="M12 2l3 7h7l-5.5 4.5L18.5 21 12 16.8 5.5 21l2-7.5L2 9h7z"></path></svg>
+        <span>Brain: {{brain}}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────── Content ───────── -->
+  <div class="main">
+
+    <!-- ===== FIRST-TIME WALKTHROUGH (plays once per screen, completes on the action) ===== -->
+    <sc-if value="{{ftue.active}}" hint-placeholder-val="{{ false }}">
+      <div class="scrim"></div>
+      <div class="tip" style="left: {{ftue.left}}; top: {{ftue.top}}; right: {{ftue.right}};">
+        <div class="arrow" style="left: {{ftue.ax}}; top: {{ftue.ay}}; right: {{ftue.ar}};"></div>
+        <div class="eyebrow">First time here · {{ftue.n}} of 6</div>
+        <div class="t">{{ftue.title}}</div>
+        <div class="b">{{ftue.body}}</div>
+        <div class="do"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"></path></svg><span>{{ftue.action}}</span></div>
+        <div class="foot">
+          <div class="tiny">Shown once. Done when you do it.</div>
+          <div class="btn q" style="height: 22px; padding: 0 6px;" onClick="{{ftue.skip}}"><span>Skip</span></div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ===== FOR YOU ===== -->
+    <sc-if value="{{is.foryou}}" hint-placeholder-val="{{ true }}">
+      <div class="bar">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div class="title">For You</div>
+          <div class="tiny">Prepared overnight · Saturday 13 Sep</div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <div class="btn q" onClick="{{toggleCaution}}">
+            <svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"></path><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>
+            <span>Simulate a missed night</span>
+          </div>
+          <div class="btn" onClick="{{goProcessing}}">
+            <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4"></path><path d="M21 3v6h-6"></path></svg>
+            <span>Analyze now</span>
+          </div>
+        </div>
+      </div>
+      <div class="body" style="display: flex; flex-direction: column; gap: 20px;">
+
+        <sc-if value="{{caution}}" hint-placeholder-val="{{ false }}">
+          <div class="card" style="padding: 14px 16px; display: flex; align-items: flex-start; gap: 12px; border-color: rgba(201,133,58,0.45); background: var(--accent-soft);">
+            <svg class="ico" viewBox="0 0 24 24" style="color: var(--warn); flex-shrink: 0; margin-top: 2px;"><path d="M12 9v4M12 17h.01"></path><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>
+            <div style="flex: 1;">
+              <div style="font-weight: 600;">Last night didn't run</div>
+              <div class="sub" style="margin-top: 2px;">Your Mac was on battery at 3:00 AM. Brownie only works overnight while plugged in, so nothing was read and these cards are from Thursday. Plug in tonight, or run an analysis now.</div>
+            </div>
+            <div class="btn" onClick="{{goProcessing}}"><span>Run now</span></div>
+            <div class="btn q" onClick="{{toggleCaution}}"><span>Dismiss</span></div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{showLetter}}" hint-placeholder-val="{{ true }}">
+          <div class="card" style="padding: 16px 18px; display: flex; align-items: center; gap: 16px; cursor: pointer;" onClick="{{goLetter}}">
+            <div class="seal" style="width: 40px; height: 40px;"><svg viewBox="0 0 24 24" style="width: 18px; height: 18px;"><path d="M4 6h16v12H4z"></path><path d="M4 7l8 6 8-6"></path></svg></div>
+            <div style="flex: 1;">
+              <div style="font-weight: 600;">A letter from Brownie</div>
+              <div class="sub">Written once, after your first night. What it learned about you, in its own words.</div>
+            </div>
+            <svg class="ico" viewBox="0 0 24 24" style="color: var(--ink3);"><path d="M9 6l6 6-6 6"></path></svg>
+          </div>
+        </sc-if>
+
+        <div>
+          <div class="row" style="margin-bottom: 12px;">
+            <div class="h2">{{cardCount}} things worth your attention</div>
+            <div class="tiny">Ranked by urgency · nothing is sent until you tap</div>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px;">
+            <sc-for list="{{cards}}" as="c" hint-placeholder-count="4">
+              <div class="card {{c.spot}}" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; cursor: pointer;" onClick="{{c.open}}">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <div class="urg" style="background: {{c.urgColor}};"></div>
+                  <div style="font-weight: 600; font-size: 14px; flex: 1;">{{c.title}}</div>
+                  <div class="chip"><span>{{c.source}}</span></div>
+                </div>
+                <div class="sub" style="font-size: 12.5px;">{{c.why}}</div>
+                <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
+                  <div class="chip" style="background: var(--accent-soft); color: var(--accent-ink);"><span>{{c.actionLabel}}</span></div>
+                  <div class="tiny">{{c.due}}</div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div class="card" style="padding: 14px 18px; display: flex; align-items: center; gap: 14px;">
+          <div style="flex: 1;">
+            <div style="font-weight: 600;">Overnight, in numbers</div>
+            <div class="tiny">3:00–3:41 AM · WhatsApp 96 · iMessage 41 · Files 58 · Gmail 19 · Slack 31 · Linear 8 · Granola 2</div>
+          </div>
+          <div class="btn q" onClick="{{goExcluded}}"><span>What was excluded</span></div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ===== CARD DETAIL ===== -->
+    <sc-if value="{{is.card}}" hint-placeholder-val="{{ false }}">
+      <div class="bar">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div class="btn q" onClick="{{goForYou}}"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"></path></svg><span>For You</span></div>
+          <div class="title">{{card.title}}</div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <div class="btn q" onClick="{{goForYou}}"><span>Not now</span></div>
+          <div class="btn"><span>Edit draft</span></div>
+          <div class="btn p {{spot.fire}}" onClick="{{goFiring}}">
+            <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+            <span>{{card.fireLabel}}</span>
+          </div>
+        </div>
+      </div>
+      <div class="body" style="display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px;">
+        <div style="display: flex; flex-direction: column; gap: 18px;">
+          <div class="card" style="padding: 18px 20px; display: flex; flex-direction: column; gap: 8px;">
+            <div class="tiny" style="text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;">Why this is here</div>
+            <div style="font-size: 14px;">{{card.why}}</div>
+          </div>
+          <div class="card" style="padding: 18px 20px; display: flex; flex-direction: column; gap: 10px;">
+            <div class="row">
+              <div class="tiny" style="text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;">{{card.draftLabel}}</div>
+              <div class="chip"><span>in your voice</span></div>
+            </div>
+            <div class="code" style="font-family: inherit; font-size: 13.5px; background: var(--code);">{{card.draft}}</div>
+            <div class="tiny">You can edit this before it goes. Brownie never sends on its own.</div>
+          </div>
+          <div class="card" style="padding: 18px 20px; display: flex; flex-direction: column; gap: 10px;">
+            <div class="tiny" style="text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;">What will happen when you tap</div>
+            <sc-for list="{{recipe}}" as="s" hint-placeholder-count="3">
+              <div class="step">
+                <div class="dot" style="background: var(--ctl2); color: var(--ink2); font-size: 10px; font-weight: 600;">{{s.n}}</div>
+                <div>{{s.text}}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <div class="card" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 10px;">
+            <div class="tiny" style="text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;">Evidence</div>
+            <sc-for list="{{card.evidence}}" as="e" hint-placeholder-count="3">
+              <div style="display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-top: 1px solid var(--sep);">
+                <div style="display: flex; gap: 8px; align-items: center;"><div class="chip"><span>{{e.src}}</span></div><div class="tiny">{{e.when}}</div></div>
+                <div style="font-size: 12.5px;">{{e.text}}</div>
+              </div>
+            </sc-for>
+            <div class="tiny">Summaries were written on your Mac. Raw messages never left it.</div>
+          </div>
+          <div class="card" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 6px;">
+            <div class="tiny" style="text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;">Verified this morning</div>
+            <div style="display: flex; gap: 8px; align-items: center;"><div class="dot" style="background: var(--ok);"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"></path></svg></div><div style="font-size: 12.5px;">{{card.verified}}</div></div>
+          </div>
+          <div class="btn q d" onClick="{{goForYou}}"><span>Never show cards like this</span></div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ===== FIRING ===== -->
+    <sc-if value="{{is.firing}}" hint-placeholder-val="{{ false }}">
+      <div class="bar">
+        <div class="title">{{card.title}}</div>
+        <div style="display: flex; gap: 8px;">
+          <div class="btn d" onClick="{{goCard}}"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg><span>Stop</span></div>
+        </div>
+      </div>
+      <div class="body" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px;">
+        <div class="card" style="width: 560px; padding: 24px 26px; display: flex; flex-direction: column; gap: 16px;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <div class="pulse"></div>
+            <div class="h2">Doing it now</div>
+            <div class="tiny" style="margin-left: auto;">{{card.channel}}</div>
+          </div>
+          <div class="prog"><div style="width: 62%;"></div></div>
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <sc-for list="{{fireSteps}}" as="s" hint-placeholder-count="4">
+              <div class="step">
+                <div class="dot" style="background: {{s.color}};"><sc-if value="{{s.done}}" hint-placeholder-val="{{ true }}"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"></path></svg></sc-if></div>
+                <div style="color: {{s.ink}};">{{s.text}}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div class="sep"></div>
+          <div class="tiny">Stop at any time. Nothing irreversible happens without a step you can see here.</div>
+        </div>
+        <div class="btn" onClick="{{finishFire}}"><span>Simulate completion</span></div>
+      </div>
+    </sc-if>
+
+    <!-- ===== LETTER ===== -->
+    <sc-if value="{{is.letter}}" hint-placeholder-val="{{ false }}">
+      <div class="bar">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div class="btn q" onClick="{{goForYou}}"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"></path></svg><span>For You</span></div>
+          <div class="title">A letter from Brownie</div>
+        </div>
+        <div class="tiny">Written once · 13 Sep · never uploaded</div>
+      </div>
+      <div class="body" style="display: flex; align-items: flex-start; justify-content: center; gap: 40px; padding-top: 40px;">
+        <sc-if value="{{letterSealed}}" hint-placeholder-val="{{ true }}">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 18px;">
+            <div class="envelope" onClick="{{openLetter}}"><div class="seal"><svg viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2"></path><circle cx="12" cy="12" r="4"></circle></svg></div></div>
+            <div class="sub">Tap the seal to open</div>
+          </div>
+        </sc-if>
+        <sc-if value="{{letterOpen}}" hint-placeholder-val="{{ false }}">
+          <div class="card note" style="width: 640px; padding: 36px 44px; font-size: 14.5px; line-height: 1.6;">
+            <h3 style="font-size: 20px; margin-bottom: 16px;">Hello. I spent last night reading.</h3>
+            <p>Not everything, and nothing I shouldn't have. 214 things came in since you installed me; I kept 31 and forgot the rest on the spot.</p>
+            <p>Here's what I think I know. You run a small company from Bengaluru and most of your working day happens in three WhatsApp groups and one Linear board. You reply to Rohan fast and to everyone else slowly. Your mother sends you things to read and you rarely read them, which is fine, but you did promise her the scan report.</p>
+            <p>There are two subscriptions you probably forgot about, a form due at the end of the month, and a trip to Goa that four people are waiting on you to confirm. None of that is urgent today. All of it will be in a week.</p>
+            <p>I got things wrong, certainly. Open Notes and fix me. I only get better when you do.</p>
+            <p style="margin-top: 20px;">— Brownie</p>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <!-- ===== PROCESSING ===== -->
+    <sc-if value="{{is.processing}}" hint-placeholder-val="{{ false }}">
+      <div class="bar">
+        <div class="title">Reading what's new</div>
+        <div class="btn d" onClick="{{goForYou}}"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg><span>Stop</span></div>
+      </div>
+      <div class="body" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 26px;">
+        <div style="width: 620px; display: flex; flex-direction: column; gap: 16px;">
+          <div class="row">
+            <div class="h2">On your Mac · WhatsApp</div>
+            <div class="tiny">Chat 7 of 12 · item 143 of 255</div>
+          </div>
+          <div class="prog"><div style="width: 67%;"></div></div>
+          <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px;">
+            <div class="card" style="padding: 12px 14px;"><div class="tiny">Read</div><div style="font-size: 20px; font-weight: 600;">143</div></div>
+            <div class="card" style="padding: 12px 14px;"><div class="tiny">Kept</div><div style="font-size: 20px; font-weight: 600; color: var(--ok);">22</div></div>
+            <div class="card" style="padding: 12px 14px;"><div class="tiny">Not worth keeping</div><div style="font-size: 20px; font-weight: 600;">118</div></div>
+            <div class="card" style="padding: 12px 14px;"><div class="tiny">Sensitive · erased</div><div style="font-size: 20px; font-weight: 600; color: var(--bad);">3</div></div>
+          </div>
+          <div class="card" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px;">
+            <div class="tiny" style="text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;">Thinking</div>
+            <div style="color: var(--ink3);">Family group, 40 messages — Amma asked twice about the scan report; the user said “tonight” on Tuesday.</div>
+            <div style="color: var(--ink2);">Kept: the user promised to send the scan report. Left out: the medical details.</div>
+            <div>Goa trip group, 61 messages — four people proposed 3–6 Oct; the user hasn’t answered.</div>
+          </div>
+          <div class="tiny" style="text-align: center;">Stage 1 of 3 · next: update your knowledge base, then look for what needs you</div>
+        </div>
+        <div class="btn" onClick="{{goForYou}}"><span>Simulate finish</span></div>
+      </div>
+    </sc-if>
+
+    <!-- ===== KNOWLEDGE NOTES ===== -->
+    <sc-if value="{{is.knowledge}}" hint-placeholder-val="{{ false }}">
+      <div class="bar">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div class="title">Knowledge</div>
+          <div class="tiny">84 notes · plain Markdown in ~/Brownie Knowledge Base</div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <div class="field" style="width: 220px; color: var(--ink3);"><span>Search notes</span></div>
+          <div class="btn"><span>Open in Finder</span></div>
+        </div>
+      </div>
+      <div style="flex: 1; display: flex; min-height: 0;">
+        <div class="rail {{spot.rail}}">
+          <sc-for list="{{folders}}" as="f" hint-placeholder-count="6">
+            <div class="raili {{f.cls}}" onClick="{{f.pick}}">
+              <svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+              <span style="flex: 1;">{{f.name}}</span>
+              <span class="tiny">{{f.n}}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div class="body note" style="max-width: 720px;">
+          <div class="row" style="margin-bottom: 14px;">
+            <div class="tiny">{{folder.name}} / {{folder.note}}</div>
+            <div style="display: flex; gap: 8px;"><div class="chip"><span>edited by you</span></div><div class="btn q"><span>Edit</span></div></div>
+          </div>
+          <h3 style="font-size: 22px;">{{folder.note}}</h3>
+          <p class="sub" style="font-size: 12px;">Sources: WhatsApp (Family), iMessage, Files · Last updated 3:19 AM today</p>
+          <sc-for list="{{folder.paras}}" as="p" hint-placeholder-count="3">
+            <p>{{p}}</p>
+          </sc-for>
+          <div class="card" style="padding: 12px 14px; margin-top: 16px; display: flex; gap: 10px; align-items: center;">
+            <svg class="ico" viewBox="0 0 24 24" style="color: var(--ink2);"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+            <div class="tiny">Anything you delete here is gone from the knowledge base and, if you share it, from the sealed cloud copy within a minute.</div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ===== GRAPH ===== -->
+    <sc-if value="{{is.graph}}" hint-placeholder-val="{{ false }}">
+      <div class="bar">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div class="title">Graph</div>
+          <div class="tiny">People and threads, sized by how often they come up</div>
+        </div>
+        <div class="tabs"><div class="tab on">People</div><div class="tab">Projects</div><div class="tab">Places</div></div>
+      </div>
+      <div class="body" style="padding: 0; position: relative; background: radial-gradient(ellipse at 50% 40%, var(--accent-soft), transparent 60%), var(--content);">
+        <svg viewBox="0 0 1220 848" style="width: 100%; height: 100%; font-family: inherit;">
+          <g stroke="var(--sep)" stroke-width="1.5">
+            <line x1="610" y1="400" x2="380" y2="250"></line><line x1="610" y1="400" x2="850" y2="230"></line><line x1="610" y1="400" x2="300" y2="520"></line><line x1="610" y1="400" x2="900" y2="560"></line><line x1="610" y1="400" x2="640" y2="680"></line><line x1="380" y1="250" x2="300" y2="520"></line><line x1="850" y1="230" x2="900" y2="560"></line><line x1="900" y1="560" x2="640" y2="680"></line><line x1="850" y1="230" x2="1020" y2="330"></line><line x1="300" y1="520" x2="180" y2="380"></line>
+          </g>
+          <g font-size="12" fill="var(--ink)" text-anchor="middle">
+            <circle cx="610" cy="400" r="34" fill="var(--accent)"></circle><text x="610" y="405" fill="#1a1205" font-weight="600">You</text>
+            <circle cx="380" cy="250" r="26" fill="var(--card)" stroke="{{graph.ring}}" stroke-width="{{graph.ringW}}" style="cursor: pointer;" onClick="{{graph.pickRohan}}"></circle><text x="380" y="292" style="cursor: pointer;" onClick="{{graph.pickRohan}}">Rohan</text>
+            <circle cx="850" cy="230" r="22" fill="var(--card)" stroke="var(--cardb)"></circle><text x="850" y="268">Amma</text>
+            <circle cx="300" cy="520" r="20" fill="var(--card)" stroke="var(--cardb)"></circle><text x="300" y="556">Priya</text>
+            <circle cx="900" cy="560" r="24" fill="var(--card)" stroke="var(--cardb)"></circle><text x="900" y="600">Goa trip</text>
+            <circle cx="640" cy="680" r="18" fill="var(--card)" stroke="var(--cardb)"></circle><text x="640" y="714">Linear · Q4</text>
+            <circle cx="1020" cy="330" r="14" fill="var(--card)" stroke="var(--cardb)"></circle><text x="1020" y="360">Dr. Menon</text>
+            <circle cx="180" cy="380" r="14" fill="var(--card)" stroke="var(--cardb)"></circle><text x="180" y="410">Karan</text>
+          </g>
+        </svg>
+        <sc-if value="{{graph.selected}}" hint-placeholder-val="{{ true }}">
+        <div class="card" style="position: absolute; right: 24px; bottom: 24px; width: 280px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px;">
+          <div style="font-weight: 600;">Rohan</div>
+          <div class="tiny">Co-founder · 3 threads · 41 mentions this month</div>
+          <div style="font-size: 12.5px;">Runs product. You two decided on Tuesday to ship the pricing page before the 4 PM review today.</div>
+          <div class="btn q" style="align-self: flex-start; padding-left: 0;" onClick="{{goKnowledge}}"><span>Open note</span></div>
+        </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <!-- ===== EXCLUDED ===== -->
+    <sc-if value="{{is.excluded}}" hint-placeholder-val="{{ false }}">
+      <div class="bar">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div class="title">Excluded</div>
+          <div class="tiny">What Brownie chose not to keep, and why. The content itself is gone.</div>
+        </div>
+        <div class="tabs {{spot.extabs}}"><div class="tab {{exTabs.night}}" onClick="{{exNight}}">Last night</div><div class="tab {{exTabs.week}}" onClick="{{exWeek}}">7 days</div></div>
+      </div>
+      <div class="body" style="display: flex; flex-direction: column; gap: 18px;">
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;">
+          <div class="card" style="padding: 14px 16px;"><div class="tiny">Not worth keeping</div><div style="font-size: 22px; font-weight: 600;">214</div><div class="tiny">Banter, logistics, memes, installers, #random</div></div>
+          <div class="card" style="padding: 14px 16px;"><div class="tiny">Sensitive · erased on sight</div><div style="font-size: 22px; font-weight: 600; color: var(--bad);">3</div><div class="tiny">Model flag 2 · pattern match 1</div></div>
+          <div class="card" style="padding: 14px 16px;"><div class="tiny">Couldn't read</div><div style="font-size: 22px; font-weight: 600;">0</div><div class="tiny">Model errors, retried</div></div>
+        </div>
+        <div class="card" style="overflow: hidden;">
+          <table>
+            <thead><tr><th>Time</th><th>Source</th><th>Kind</th><th>Reason</th><th>What we kept</th></tr></thead>
+            <tbody>
+              <tr><td>3:04 AM</td><td>WhatsApp · Family</td><td style="color: var(--bad); font-weight: 500;">Sensitive</td><td>Looked like a medical report</td><td>Nothing</td></tr>
+              <tr><td>3:07 AM</td><td>Files · Downloads</td><td style="color: var(--bad); font-weight: 500;">Sensitive</td><td>Matched a card-number pattern</td><td>Nothing</td></tr>
+              <tr><td>3:11 AM</td><td>iMessage · Karan</td><td>Not worth keeping</td><td>Only reactions and “ok”</td><td>Nothing</td></tr>
+              <tr><td>3:12 AM</td><td>Files · Downloads</td><td>Not worth keeping</td><td>Installer</td><td>Nothing</td></tr>
+              <tr><td>3:17 AM</td><td>Slack · #random</td><td>Not worth keeping</td><td>Lunch plans and reactions</td><td>Nothing</td></tr>
+              <tr><td>3:19 AM</td><td>WhatsApp · Founders group</td><td>Not worth keeping</td><td>Other people's intros, you only reacted</td><td>Nothing</td></tr>
+              <tr><td>3:22 AM</td><td>Gmail</td><td style="color: var(--bad); font-weight: 500;">Sensitive</td><td>Bank statement</td><td>Nothing</td></tr>
+              <tr><td>3:26 AM</td><td>WhatsApp · Priya</td><td>Kept, trimmed</td><td>Useful plan, private figure left out</td><td>A summary without the amount</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="tiny">The log records the decision, never the content. If a rule is wrong, change it in Settings → Privacy.</div>
+      </div>
+    </sc-if>
+
+    <!-- ===== SETTINGS ===== -->
+    <sc-if value="{{is.settings}}" hint-placeholder-val="{{ false }}">
+      <div class="bar">
+        <div class="title">Settings</div>
+        <div class="tabs">
+          <div class="tab {{tabs.sources}}" onClick="{{tabSources}}">Sources</div>
+          <div class="tab {{tabs.brain}}" onClick="{{tabBrain}}">Brain</div>
+          <div class="tab {{tabs.proactive}}" onClick="{{tabProactive}}">Proactive &amp; Hands</div>
+          <div class="tab {{tabs.privacy}}" onClick="{{tabPrivacy}}">Privacy &amp; Cloud</div>
+          <div class="tab {{tabs.overnight}}" onClick="{{tabOvernight}}">Overnight</div>
+          <div class="tab {{tabs.about}}" onClick="{{tabAbout}}">About</div>
+        </div>
+      </div>
+      <div class="body" style="max-width: 760px;">
+
+        <sc-if value="{{st.sources}}" hint-placeholder-val="{{ true }}">
+          <div style="display: flex; flex-direction: column; gap: 14px;">
+            <div class="h2">Sources</div>
+            <div class="sub">Everything is read on this Mac. Turn a source off and its notes stay; nothing new is read.</div>
+            <div class="h2" style="margin-top: 4px; font-size: 14px;">Personal</div>
+            <div class="card {{spot.sources}}" style="display: flex; flex-direction: column;">
+              <sc-for list="{{sources}}" as="s" hint-placeholder-count="7">
+                <div class="row" style="padding: 12px 16px; border-bottom: 1px solid var(--sep);">
+                  <div style="display: flex; flex-direction: column; gap: 2px;">
+                    <div style="font-weight: 500;">{{s.name}}</div>
+                    <div class="tiny">{{s.detail}}</div>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <sc-if value="{{s.hasPicker}}" hint-placeholder-val="{{ false }}"><div class="btn q"><span>Choose chats</span></div></sc-if>
+                    <div class="tog {{s.togCls}}" onClick="{{s.flip}}"></div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+            <div class="h2" style="margin-top: 10px; font-size: 14px;">Work</div>
+            <div class="sub">Work apps connect with their own sign-in, or through an MCP server you already use. They're read exactly the same way: on this Mac, summaries only.</div>
+            <div class="card" style="display: flex; flex-direction: column;">
+              <sc-for list="{{workSources}}" as="s" hint-placeholder-count="6">
+                <div class="row" style="padding: 12px 16px; border-bottom: 1px solid var(--sep);">
+                  <div style="display: flex; flex-direction: column; gap: 2px;">
+                    <div style="font-weight: 500;">{{s.name}}</div>
+                    <div class="tiny">{{s.detail}}</div>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <sc-if value="{{s.hasPicker}}" hint-placeholder-val="{{ false }}"><div class="btn q"><span>{{s.pickerLabel}}</span></div></sc-if>
+                    <div class="tog {{s.togCls}}" onClick="{{s.flip}}"></div>
+                  </div>
+                </div>
+              </sc-for>
+              <div class="row" style="padding: 12px 16px;">
+                <div style="display: flex; flex-direction: column; gap: 2px;">
+                  <div style="font-weight: 500;">Add an app through MCP</div>
+                  <div class="tiny">Anything with an MCP server: paste its address, sign in, pick what to read</div>
+                </div>
+                <div class="btn"><span>Add…</span></div>
+              </div>
+            </div>
+            <div class="h2" style="margin-top: 10px;">Chats · WhatsApp</div>
+            <div class="sub">Off by default. Only the chats you pick are ever read.</div>
+            <div class="card" style="display: flex; flex-direction: column;">
+              <sc-for list="{{chats}}" as="c" hint-placeholder-count="5">
+                <div class="row" style="padding: 10px 16px; border-bottom: 1px solid var(--sep);">
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 26px; height: 26px; border-radius: 50%; background: var(--ctl2); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600;">{{c.ini}}</div>
+                    <div><div style="font-weight: 500;">{{c.name}}</div><div class="tiny">{{c.kind}}</div></div>
+                  </div>
+                  <div class="tog {{c.togCls}}" onClick="{{c.flip}}"></div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{st.brain}}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; flex-direction: column; gap: 14px;">
+            <div class="h2">Brain</div>
+            <div class="sub">Your Mac reads and filters everything with a small model that never goes online. The last 10% — building your notes, deciding what matters, drafting — uses a bigger model you already pay for. Summaries only; never the raw data.</div>
+            <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;">
+              <sc-for list="{{brains}}" as="b" hint-placeholder-count="5">
+                <div class="card" style="padding: 14px 16px; display: flex; gap: 12px; align-items: flex-start; cursor: pointer; border-color: {{b.border}};" onClick="{{b.pick}}">
+                  <div style="width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid {{b.ring}}; background: {{b.fill}}; flex-shrink: 0; margin-top: 1px;"></div>
+                  <div style="display: flex; flex-direction: column; gap: 3px;">
+                    <div style="font-weight: 600;">{{b.name}}</div>
+                    <div class="tiny">{{b.detail}}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+            <div class="card" style="padding: 14px 16px;">
+              <div class="kv">
+                <div class="sub">Status</div><div style="display: flex; align-items: center; gap: 8px;"><div class="dot" style="background: var(--ok); width: 14px; height: 14px;"><svg viewBox="0 0 24 24" style="width: 8px; height: 8px;"><path d="M5 12l5 5 9-10"></path></svg></div><span>Signed in · {{brain}}</span></div>
+                <div class="sub">Effort for overnight work</div><div class="tabs" style="width: fit-content;"><div class="tab">Faster</div><div class="tab on">Balanced</div><div class="tab">Smarter</div></div>
+                <div class="sub">Gmail &amp; Calendar</div><div>{{brainConnectors}}</div>
+                <div class="sub">What it costs you</div><div>₹0 extra. It runs on the plan you already have.</div>
+              </div>
+            </div>
+            <div class="h2" style="margin-top: 10px;">On this Mac</div>
+            <div class="card" style="padding: 14px 16px;">
+              <div class="kv">
+                <div class="sub">Local model</div><div>Gemma 4 E4B · 3.7 GB · GPU</div>
+                <div class="sub">Last night</div><div>255 items in 41 min · 2.5 items per second average</div>
+                <div class="sub">Model files</div><div style="display: flex; gap: 8px;"><div class="btn"><span>Check for update</span></div><div class="btn q"><span>Show in Finder</span></div></div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{st.proactive}}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; flex-direction: column; gap: 14px;">
+            <div class="h2">Proactive</div>
+            <div class="card" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;">
+              <div class="row"><div><div style="font-weight: 500;">Morning cards</div><div class="tiny">Prepared overnight, shown when you open your Mac</div></div><div class="tog on"></div></div>
+              <div class="sep"></div>
+              <div class="row"><div><div style="font-weight: 500;">Notify me when cards are ready</div><div class="tiny">One notification, no sound, never before 7 AM</div></div><div class="tog on"></div></div>
+              <div class="sep"></div>
+              <div class="row"><div><div style="font-weight: 500;">Cards per morning</div><div class="tiny">Fewer is better. It will show less if there's less.</div></div><div class="tabs"><div class="tab">3</div><div class="tab on">5</div><div class="tab">8</div></div></div>
+            </div>
+            <div class="h2" style="margin-top: 6px;">Standing instructions</div>
+            <div class="sub">Plain words. These are read every night before it decides what to show you.</div>
+            <div class="code" style="font-family: inherit; min-height: 90px;">Never draft replies to my investors — just tell me.
+Ignore the cricket group entirely.
+Anything from Amma is important even when it doesn't look it.</div>
+            <div class="h2" style="margin-top: 10px;">Hands</div>
+            <div class="card" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;">
+              <div class="row"><div><div style="font-weight: 500;">Hold to talk</div><div class="tiny">Hold the key, say what you want done, let go</div></div><div class="tabs"><div class="tab on">Right ⌘</div><div class="tab">Right ⌥</div><div class="tab">Off</div></div></div>
+              <div class="sep"></div>
+              <div class="row"><div><div style="font-weight: 500;">Speed vs. care</div><div class="tiny">Care re-reads the screen before every click</div></div><div class="tabs"><div class="tab">Fast</div><div class="tab on">Balanced</div><div class="tab">Careful</div></div></div>
+              <div class="sep"></div>
+              <div class="row"><div><div style="font-weight: 500;">Always ask before sending, paying, or deleting</div><div class="tiny">Recommended. Hands pauses and shows you the button.</div></div><div class="tog on"></div></div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{st.privacy}}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; flex-direction: column; gap: 14px;">
+            <div class="h2">Privacy</div>
+            <div class="card" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;">
+              <div class="step"><div class="dot" style="background: var(--ok);"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"></path></svg></div><div><div style="font-weight: 500;">Raw messages and files never leave this Mac</div><div class="tiny">Only short summaries, with private specifics removed, reach the brain you chose</div></div></div>
+              <div class="step"><div class="dot" style="background: var(--ok);"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"></path></svg></div><div><div style="font-weight: 500;">Sensitive things are erased on sight</div><div class="tiny">ID numbers, card numbers, passwords, medical records — nothing stored, nothing logged</div></div></div>
+              <div class="step"><div class="dot" style="background: var(--ok);"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"></path></svg></div><div><div style="font-weight: 500;">No account</div><div class="tiny">A random token in your Keychain is the only identity anything ever sees</div></div></div>
+            </div>
+            <div class="h2" style="margin-top: 6px;">Share your knowledge base with your other AIs</div>
+            <div class="sub">Off by default. When on, a sealed copy is kept online so ChatGPT and Claude can read your notes. Sealed on this Mac; the server holds scrambled bytes and no key.</div>
+            <div class="card" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;">
+              <div class="row"><div><div style="font-weight: 500;">Sealed cloud copy</div><div class="tiny">Deleted the moment you turn this off · self-destructs after 30 days without a sync</div></div><div class="tog {{mirrorCls}}" onClick="{{flipMirror}}"></div></div>
+              <sc-if value="{{mirror}}" hint-placeholder-val="{{ true }}">
+                <div class="sep"></div>
+                <div class="kv">
+                  <div class="sub">Your private link</div><div class="field" style="font-family: 'SF Mono', Menlo, monospace; font-size: 11.5px; color: var(--ink2);"><span>https://mirror.[your-domain]/k/••••••••••••••••••••</span></div>
+                  <div class="sub">Connect</div><div style="display: flex; gap: 8px;"><div class="btn"><span>Add to ChatGPT</span></div><div class="btn"><span>Add to Claude</span></div><div class="btn q"><span>Copy link</span></div></div>
+                  <div class="sub">Last synced</div><div>3:41 AM · 84 notes · 212 KB sealed</div>
+                </div>
+                <div class="tiny">Anyone with the link can read your notes. Treat it like a password.</div>
+              </sc-if>
+            </div>
+            <div class="h2" style="margin-top: 6px;">Diagnostics</div>
+            <div class="card" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;">
+              <div class="row"><div><div style="font-weight: 500;">Send crash reports</div><div class="tiny">Stack traces only. Never your notes, never message content.</div></div><div class="tog"></div></div>
+              <div class="sep"></div>
+              <div class="row"><div><div style="font-weight: 500;">Anonymous usage counts</div><div class="tiny">“a night ran”, “a card was fired”. No identifiers.</div></div><div class="tog"></div></div>
+            </div>
+            <div class="btn d" style="align-self: flex-start;"><span>Wipe everything on this Mac and online</span></div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{st.overnight}}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; flex-direction: column; gap: 14px;">
+            <div class="h2">Overnight</div>
+            <div class="sub">Brownie wakes your Mac, reads what's new, and puts it back to sleep. Only while plugged in, only while Brownie is open.</div>
+            <div class="card" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;">
+              <div class="row"><div><div style="font-weight: 500;">Run every night</div><div class="tiny">Lid closed is fine</div></div><div class="tog on"></div></div>
+              <div class="sep"></div>
+              <div class="row"><div><div style="font-weight: 500;">Time</div><div class="tiny">Pick an hour you're asleep and it's charging</div></div><div class="field" style="width: 90px; justify-content: center;"><span>3:00 AM</span></div></div>
+              <div class="sep"></div>
+              <div class="row"><div><div style="font-weight: 500;">Open Brownie at login</div><div class="tiny">Needed so it's around at 3 AM</div></div><div class="tog on"></div></div>
+              <div class="sep"></div>
+              <div class="row"><div><div style="font-weight: 500;">If a night is missed</div><div class="tiny">Run as soon as you're plugged in and idle for 20 minutes</div></div><div class="tog on"></div></div>
+            </div>
+            <div class="h2" style="margin-top: 6px;">Health · last 7 nights</div>
+            <div class="card" style="overflow: hidden;">
+              <table>
+                <thead><tr><th>Night</th><th>Woke</th><th>Read</th><th>Kept</th><th>Took</th><th>Result</th></tr></thead>
+                <tbody>
+                  <tr><td>Fri → Sat</td><td>3:00 AM</td><td>255</td><td>38</td><td>41 min</td><td style="color: var(--ok);">Ran · 5 cards</td></tr>
+                  <tr><td>Thu → Fri</td><td>3:00 AM</td><td>167</td><td>19</td><td>33 min</td><td style="color: var(--ok);">Ran · 4 cards</td></tr>
+                  <tr><td>Wed → Thu</td><td>—</td><td>—</td><td>—</td><td>—</td><td style="color: var(--warn);">Skipped · on battery</td></tr>
+                  <tr><td>Tue → Wed</td><td>3:00 AM</td><td>402</td><td>56</td><td>78 min</td><td style="color: var(--ok);">Ran · 5 cards</td></tr>
+                  <tr><td>Mon → Tue</td><td>3:00 AM</td><td>88</td><td>12</td><td>19 min</td><td style="color: var(--ok);">Ran · 2 cards</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div style="display: flex; gap: 8px;"><div class="btn q"><span>Open scheduler log</span></div><div class="btn q"><span>Test wake tonight</span></div></div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{st.about}}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; flex-direction: column; gap: 14px;">
+            <div style="display: flex; gap: 16px; align-items: center;">
+              <div style="width: 64px; height: 64px; border-radius: 16px; background: linear-gradient(150deg, #f2d9a6, var(--accent)); display: flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" style="width: 32px; height: 32px; stroke: #1a1205; fill: none; stroke-width: 1.8; stroke-linecap: round;"><path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2"></path><circle cx="12" cy="12" r="4"></circle></svg></div>
+              <div><div class="h1" style="font-size: 22px;">Brownie</div><div class="tiny">Version 0.1 (1) · Apple silicon · macOS 15 or later</div></div>
+            </div>
+            <div class="card" style="padding: 14px 16px;">
+              <div class="kv">
+                <div class="sub">Updates</div><div style="display: flex; align-items: center; gap: 10px;"><span>Up to date</span><div class="btn q"><span>Check now</span></div></div>
+                <div class="sub">Source code</div><div><a href="#">[your-repo-url]</a></div>
+                <div class="sub">Licence</div><div>[LICENCE] · inspired by all personal assistant apps and the architecture of Sentient OS · made with ❤️ in India</div>
+                <div class="sub">Acknowledgements</div><div>Gemma 4 · LiteRT-LM · Sparkle</div>
+              </div>
+            </div>
+            <div class="h2" style="margin-top: 6px;">Appearance</div>
+            <div class="card" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;">
+              <div class="row"><div><div style="font-weight: 500;">Theme</div><div class="tiny">System follows macOS. Overnight runs don't care either way.</div></div><div class="tabs"><div class="tab {{themeTabs.system}}" onClick="{{themeSystem}}">System</div><div class="tab {{themeTabs.light}}" onClick="{{themeLight}}">Light</div><div class="tab {{themeTabs.dark}}" onClick="{{themeDark}}">Dark</div></div></div>
+              <div class="sep"></div>
+              <div class="row"><div><div style="font-weight: 500;">Menu bar icon</div><div class="tiny">Show the small sun in the menu bar. Hands still works without it.</div></div><div class="tog on"></div></div>
+            </div>
+            <div class="h2" style="margin-top: 6px;">Leave</div>
+            <div class="card" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;">
+              <div class="row"><div><div style="font-weight: 500;">Walkthroughs</div><div class="tiny">Each screen's first-time tip plays once and is gone. Bring them back here.</div></div><div class="btn" onClick="{{replayFtue}}"><span>Replay</span></div></div>
+              <div class="sep"></div>
+              <div class="row"><div><div style="font-weight: 500;">Reset and start over</div><div class="tiny">Keeps your settings, forgets everything it learned</div></div><div class="btn"><span>Reset</span></div></div>
+              <div class="sep"></div>
+              <div class="row"><div><div style="font-weight: 500;">Uninstall completely</div><div class="tiny">Removes the app, the model, the knowledge base, the wake helper, the login item, and any cloud copy. There was never an account to close.</div></div><div class="btn d"><span>Uninstall</span></div></div>
+            </div>
+          </div>
+        </sc-if>
+
+      </div>
+    </sc-if>
+
+  </div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"route":{"editor":"enum","default":"card","options":["foryou","card","firing","letter","processing","caution","knowledge","graph","excluded","settings-sources","settings-brain","settings-proactive","settings-privacy","settings-overnight","settings-about"],"section":"Screen"},"dark":{"editor":"boolean","default":false,"section":"Theme"},"walkthrough":{"editor":"enum","default":"on","options":["on","off"],"section":"First time"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  state = { route: null, tab: null, card: 0, caution: null, letterOpen: false, fired: null, mirror: true, brain: 'ChatGPT Plus', srcOn: null, chatOn: null, workOn: null, folder: 0, ftueDone: null, graphSel: null, exTab: 'night', theme: null };
+
+  renderVals() {
+    const p = this.props;
+    const initial = p.route ?? 'foryou';
+    let route = this.state.route ?? initial;
+    const caution = this.state.caution ?? (initial === 'caution');
+    if (route === 'caution') route = 'foryou';
+    let tab = this.state.tab ?? (initial.startsWith('settings-') ? initial.split('-')[1] : 'sources');
+    if (route.startsWith('settings')) route = 'settings';
+
+    const go = (r) => () => this.setState({ route: r });
+    const is = {}; ['foryou','card','firing','letter','processing','knowledge','graph','excluded','settings'].forEach(k => is[k] = (route === k));
+    const nav = { foryou: is.foryou || is.card || is.firing || is.letter || is.processing ? 'on' : '', knowledge: is.knowledge ? 'on' : '', graph: is.graph ? 'on' : '', excluded: is.excluded ? 'on' : '', settings: is.settings ? 'on' : '' };
+    const st = {}; ['sources','brain','proactive','privacy','overnight','about'].forEach(k => st[k] = (tab === k));
+    const tabs = {}; Object.keys(st).forEach(k => tabs[k] = st[k] ? 'on' : '');
+    const setTab = (t) => () => this.setState({ tab: t, route: 'settings' });
+
+    // First-time walkthrough: one keyed tip per screen, completes only when the user performs the action.
+    const done = this.state.ftueDone ?? {};
+    const mark = (k) => ({ ...done, [k]: true });
+    const ftueOn = (p.walkthrough ?? 'on') === 'on';
+    const order = ['foryou', 'card', 'knowledge', 'graph', 'excluded', 'sources'];
+    const tips = {
+      foryou:    { title: 'This is your morning.', body: 'Everything here was prepared overnight, on this Mac. Nothing has been sent.', action: 'Tap the first card to see why it’s here', left: '28px', top: '352px', right: 'auto', ax: '24px', ay: '-7px', ar: 'auto' },
+      card:      { title: 'Nothing goes out until you tap.', body: 'The draft is in your voice and the evidence is on the right. Hands will do the steps and stop at Send.', action: 'Press the button to watch it go', left: 'auto', top: '62px', right: '20px', ax: 'auto', ay: '-7px', ar: '40px' },
+      knowledge: { title: 'These are plain files.', body: 'Your knowledge base is Markdown on disk. Fix anything that’s wrong; it only gets better when you do.', action: 'Pick a folder on the left', left: '292px', top: '80px', right: 'auto', ax: '-7px', ay: '20px', ar: 'auto' },
+      graph:     { title: 'People, sized by how often they come up.', body: 'Click anyone to see what Brownie knows about them.', action: 'Click Rohan', left: '430px', top: '250px', right: 'auto', ax: '-7px', ay: '20px', ar: 'auto' },
+      excluded:  { title: 'Here’s what it chose not to keep.', body: 'The reason is recorded, never the content. Widen the window to see a week.', action: 'Switch to 7 days', left: 'auto', top: '62px', right: '20px', ax: 'auto', ay: '-7px', ar: '40px' },
+      sources:   { title: 'You decide what it reads.', body: 'Turn a source off and its notes stay; nothing new is read. Chats are off until you pick them one by one.', action: 'Flip any switch', left: '810px', top: '150px', right: 'auto', ax: '-7px', ay: '20px', ar: 'auto' }
+    };
+    let ftueKey = null;
+    if (ftueOn) {
+      if (is.foryou && !done.foryou) ftueKey = 'foryou';
+      else if (is.card && !done.card) ftueKey = 'card';
+      else if (is.knowledge && !done.knowledge) ftueKey = 'knowledge';
+      else if (is.graph && !done.graph) ftueKey = 'graph';
+      else if (is.excluded && !done.excluded) ftueKey = 'excluded';
+      else if (is.settings && st.sources && !done.sources) ftueKey = 'sources';
+    }
+    const ftue = { active: !!ftueKey, n: order.indexOf(ftueKey) + 1, skip: () => this.setState({ ftueDone: mark(ftueKey) }), ...(tips[ftueKey] ?? {}) };
+    const spot = { fire: ftueKey === 'card' ? 'spot' : '', rail: ftueKey === 'knowledge' ? 'spot' : '', extabs: ftueKey === 'excluded' ? 'spot' : '', sources: ftueKey === 'sources' ? 'spot' : '' };
+
+    const urg = { high: '#d94f45', medium: '#c9853a', low: '#8e8e93' };
+    const allCards = [
+      { title: 'Reply to Priya about Goa', source: 'WhatsApp', urgency: 'high', why: 'Four people in the Goa trip group proposed 3–6 Oct on Wednesday. You haven’t answered, and your calendar is clear those days.', actionLabel: 'Send a reply', due: 'Waiting 3 days', fireLabel: 'Send to Priya', draftLabel: 'Draft reply', channel: 'WhatsApp · Priya', draft: 'Hey! 3–6 Oct works for me. Booking my flight tonight. Are we doing the Anjuna place again or trying somewhere new?', recipe: ['Open the WhatsApp chat with Priya', 'Paste the draft into the message field', 'Stop and show you the Send button — you press it'], evidence: [{ src: 'WhatsApp · Goa trip', when: 'Wed 9:14 PM', text: 'Priya, Karan and two others proposed 3–6 Oct; asked you to confirm.' }, { src: 'Calendar', when: 'live', text: 'No events 3–6 Oct.' }, { src: 'Knowledge', when: 'note', text: 'You went to Goa with this group last October.' }], verified: 'Re-read the thread this morning — still unanswered.' },
+      { title: 'Amma is waiting for the scan report', source: 'iMessage', urgency: 'high', why: 'You told her “tonight” on Tuesday. The PDF is in Downloads since Monday. She asked again yesterday.', actionLabel: 'Send the file', due: 'Promised 4 days ago', fireLabel: 'Send to Amma', draftLabel: 'Draft message', channel: 'iMessage · Amma', draft: 'Sorry Amma, here it is. Nothing to worry about — Dr. Menon said it’s all normal. Will call you Sunday.', recipe: ['Open Messages to Amma', 'Attach “scan-report-sep.pdf” from Downloads', 'Paste the draft and stop at Send'], evidence: [{ src: 'iMessage · Amma', when: 'Tue 8:02 PM', text: 'You wrote “will send tonight”.' }, { src: 'Files · Downloads', when: 'Mon', text: 'A PDF that looks like a scan report arrived. Contents were not kept.' }, { src: 'iMessage · Amma', when: 'Fri', text: 'She asked again.' }], verified: 'File still in Downloads; no reply sent since Tuesday.' },
+      { title: 'Prep for 4 PM with Rohan', source: 'Calendar', urgency: 'medium', why: 'You two agreed on Tuesday to ship the pricing page before this review. Three Linear tickets are still open. Tuesday’s Granola transcript lists what he expects.', actionLabel: 'Open a brief', due: 'Today, 4:00 PM', fireLabel: 'Open the brief', draftLabel: 'One-page brief', channel: 'Notes', draft: 'Pricing page review · 4 PM\n\nAgreed Tuesday: ship before review.\nOpen: BUD-231 copy, BUD-234 annual toggle, BUD-240 mobile layout.\nRohan will ask about: launch date, the ₹ vs $ switch, and whether the free tier stays.', recipe: ['Create a note in your knowledge base', 'Open it beside your calendar at 3:45 PM'], evidence: [{ src: 'WhatsApp · Rohan', when: 'Tue', text: 'Decision to ship pricing before the review.' }, { src: 'Calendar', when: 'live', text: '4:00–4:45 PM, Rohan, “Pricing review”.' }, { src: 'Linear', when: 'live', text: 'BUD-231, BUD-234, BUD-240 still open, all assigned to you.' }, { src: 'Granola', when: 'Tue', text: 'Last transcript with Rohan lists his three questions.' }], verified: 'Event still on the calendar; not cancelled.' },
+      { title: 'Adobe renews on Friday', source: 'Gmail', urgency: 'medium', why: 'A renewal notice arrived Thursday. You last opened Photoshop in March, according to your files.', actionLabel: 'Decide', due: 'Renews in 6 days', fireLabel: 'Open the cancel page', draftLabel: 'What you’d lose', channel: 'Browser', draft: 'Cancelling stops the yearly charge. Your files stay on disk. You would lose cloud sync and Photoshop, which you haven’t opened since March.', recipe: ['Open the Adobe account page in your browser', 'Navigate to Plans → Cancel', 'Stop and show you the final button'], evidence: [{ src: 'Gmail', when: 'Thu', text: 'Renewal notice; the amount was left out of the summary.' }, { src: 'Files', when: 'Mar', text: 'Last edited .psd file.' }], verified: 'Renewal date confirmed in the email this morning.' },
+      { title: 'Form 16 upload due 30 Sep', source: 'Files', urgency: 'low', why: 'Your accountant’s email asked for it; the file landed in Downloads on Tuesday, unopened.', actionLabel: 'Send the file', due: 'Due in 17 days', fireLabel: 'Email it to Sunil', draftLabel: 'Draft email', channel: 'Gmail', draft: 'Hi Sunil, Form 16 attached. Let me know if you need anything else for the filing.', recipe: ['Compose an email to Sunil with the PDF attached', 'Stop at Send'], evidence: [{ src: 'Gmail', when: 'Mon', text: 'Sunil asked for Form 16 before the 30th.' }, { src: 'Files · Downloads', when: 'Tue', text: 'A file named like Form 16 arrived.' }], verified: 'No reply to Sunil yet.' }
+    ];
+    const fired = this.state.fired ?? {};
+    const cards0 = allCards.findIndex((c, i) => !fired[i]);
+    const cards = allCards.filter((c, i) => !fired[i]).map((c) => {
+      const i = allCards.indexOf(c);
+      return { ...c, urgColor: urg[c.urgency], spot: (ftueKey === 'foryou' && cards0 === i) ? 'spot' : '', open: () => this.setState({ route: 'card', card: i, ftueDone: mark('foryou') }) };
+    });
+    const card = allCards[this.state.card] ?? allCards[0];
+    const recipe = card.recipe.map((text, i) => ({ n: i + 1, text }));
+
+    const fireSteps = [
+      { text: 'Opened ' + card.channel, done: true },
+      { text: 'Found the right thread', done: true },
+      { text: 'Pasted your draft', done: true },
+      { text: 'Waiting for you to press Send', done: false }
+    ].map(s => ({ ...s, color: s.done ? '#2f9e5a' : 'var(--ctl2)', ink: s.done ? 'inherit' : 'var(--ink2)' }));
+
+    const folderData = [
+      { name: 'README — who you are', n: 1, note: 'README', paras: ['Founder of a small software company in Bengaluru. Works mostly from WhatsApp, Linear and Gmail. Replies quickly to close collaborators and slowly to everyone else.', 'Family: mother (Amma), a sister in Pune. Close friends: Priya, Karan.', 'Recurring: a Goa trip with the same group each October.'] },
+      { name: 'People', n: 14, note: 'Rohan', paras: ['Co-founder, runs product. Decisions with him tend to happen in WhatsApp late in the evening and are rarely written down elsewhere.', 'Tuesday: agreed to ship the pricing page before Saturday’s 4 PM review.', 'Prefers short messages; dislikes voice notes.'] },
+      { name: 'Work', n: 22, note: 'Pricing page', paras: ['Three tickets open: copy, annual toggle, mobile layout.', 'Open question: whether the free tier survives.'] },
+      { name: 'Money', n: 9, note: 'Subscriptions', paras: ['Adobe renews yearly in September. Photoshop unused since March.', 'Amounts are deliberately not recorded here.'] },
+      { name: 'Health', n: 3, note: 'Appointments', paras: ['Saw Dr. Menon in early September. Details were not kept.'] },
+      { name: 'Trips', n: 6, note: 'Goa, October', paras: ['Same group each year. This year: 3–6 Oct proposed, awaiting your confirmation.'] },
+      { name: 'Home', n: 11, note: 'Lease', paras: ['Lease renews in January. The landlord prefers WhatsApp.'] },
+      { name: 'Admin', n: 18, note: 'Taxes', paras: ['Sunil handles the filing. Form 16 due by the 30th.'] }
+    ];
+    const fi = this.state.folder;
+    const folders = folderData.map((f, i) => ({ ...f, cls: i === fi ? 'on' : '', pick: () => this.setState({ folder: i, ftueDone: mark('knowledge') }) }));
+    const folder = folderData[fi];
+
+    const srcDefault = { files: true, whatsapp: true, imessage: true, notes: false, telegram: false, gmail: true, calendar: true };
+    const srcOn = this.state.srcOn ?? srcDefault;
+    const srcList = [
+      ['files', 'Files', 'Documents, Desktop, Downloads · screenshots included'],
+      ['whatsapp', 'WhatsApp', 'Reads the desktop app’s history · 3 chats chosen', true],
+      ['imessage', 'iMessage', 'All chats · needs Full Disk Access', true],
+      ['notes', 'Apple Notes', 'Every note you write'],
+      ['telegram', 'Telegram', 'Sign in with your own account · 0 chats chosen', true],
+      ['gmail', 'Gmail', 'Through your ChatGPT account · last 7 days'],
+      ['calendar', 'Calendar', 'Through your ChatGPT account · for timing only']
+    ];
+    const sources = srcList.map(([k, name, detail, hasPicker]) => ({ name, detail, hasPicker: !!hasPicker, togCls: srcOn[k] ? 'on' : '', flip: () => this.setState({ srcOn: { ...srcOn, [k]: !srcOn[k] }, ftueDone: mark('sources') }) }));
+
+    const workDefault = { slack: true, linear: true, notion: false, granola: true, drive: false, github: false };
+    const workOn = this.state.workOn ?? workDefault;
+    const workList = [
+      ['slack', 'Slack', 'Signed in as you · 3 channels chosen', 'Choose channels'],
+      ['linear', 'Linear', 'Issues assigned to you or mentioning you · 2 projects', 'Choose projects'],
+      ['notion', 'Notion', 'Pages you edited or were mentioned in', 'Choose workspaces'],
+      ['granola', 'Granola', 'Meeting transcripts, via its MCP server', null],
+      ['drive', 'Google Drive', 'Docs and Sheets shared with you · via Google sign-in', 'Choose folders'],
+      ['github', 'GitHub', 'PRs and issues assigned to you · via MCP', 'Choose repos']
+    ];
+    const workSources = workList.map(([k, name, detail, pickerLabel]) => ({ name, detail, hasPicker: !!pickerLabel, pickerLabel: pickerLabel ?? '', togCls: workOn[k] ? 'on' : '', flip: () => this.setState({ workOn: { ...workOn, [k]: !workOn[k] } }) }));
+
+    const chatDefault = { fam: true, goa: true, rohan: true, founders: false, cricket: false };
+    const chatOn = this.state.chatOn ?? chatDefault;
+    const chatList = [['fam', 'Family', 'Group · 5 people', 'F'], ['goa', 'Goa trip', 'Group · 6 people', 'G'], ['rohan', 'Rohan', 'Direct', 'R'], ['founders', 'Founders BLR', 'Group · 212 people', 'FB'], ['cricket', 'Cricket', 'Group · 48 people', 'C']];
+    const chats = chatList.map(([k, name, kind, ini]) => ({ name, kind, ini, togCls: chatOn[k] ? 'on' : '', flip: () => this.setState({ chatOn: { ...chatOn, [k]: !chatOn[k] } }) }));
+
+    const brainList = [
+      ['ChatGPT Plus', 'Recommended · Gmail and Calendar work · uses your existing plan'],
+      ['Claude subscription', 'Uses your Claude plan · official computer use · Gmail via Google sign-in'],
+      ['OpenRouter', 'Any model, your key · no Gmail or Calendar'],
+      ['LM Studio (this Mac)', 'Fully offline · slower, simpler cards · needs 32 GB'],
+      ['No brain', 'Notes only. No cards, no drafts, no Hands.']
+    ];
+    const brains = brainList.map(([name, detail]) => { const on = name === this.state.brain; return { name, detail, border: on ? 'var(--accent)' : 'var(--cardb)', ring: on ? 'var(--accent)' : 'var(--ink3)', fill: on ? 'var(--accent)' : 'transparent', pick: () => this.setState({ brain: name }) }; });
+    const brainConnectors = this.state.brain === 'ChatGPT Plus' ? 'Connected through ChatGPT' : (this.state.brain === 'Claude subscription' ? 'Sign in with Google to connect' : 'Not available on this engine');
+
+    const graphSel = this.state.graphSel;
+    const graph = { selected: graphSel === 'rohan', ring: ftueKey === 'graph' ? 'var(--accent)' : (graphSel === 'rohan' ? 'var(--accent)' : 'var(--cardb)'), ringW: ftueKey === 'graph' || graphSel === 'rohan' ? 3 : 1, pickRohan: () => this.setState({ graphSel: 'rohan', ftueDone: mark('graph') }) };
+    const exTab = this.state.exTab;
+    const exTabs = { night: exTab === 'night' ? 'on' : '', week: exTab === 'week' ? 'on' : '' };
+
+    const theme = this.state.theme ?? 'system';
+    const isDark = theme === 'dark' || (theme === 'system' && !!p.dark);
+    const themeTabs = { system: theme === 'system' ? 'on' : '', light: theme === 'light' ? 'on' : '', dark: theme === 'dark' ? 'on' : '' };
+
+    return {
+      themeClass: isDark ? 'dark' : '',
+      themeTabs, themeSystem: () => this.setState({ theme: 'system' }), themeLight: () => this.setState({ theme: 'light' }), themeDark: () => this.setState({ theme: 'dark' }),
+      ftue, spot, graph, exTabs,
+      exNight: () => this.setState({ exTab: 'night', ftueDone: mark('excluded') }),
+      exWeek: () => this.setState({ exTab: 'week', ftueDone: mark('excluded') }),
+      replayFtue: () => this.setState({ ftueDone: {}, graphSel: null, route: 'foryou' }),
+      is, nav, st, tabs,
+      cardCount: cards.length,
+      caution, toggleCaution: () => this.setState({ caution: !caution }),
+      showLetter: !this.state.letterOpen,
+      cards, card, recipe, fireSteps,
+      goForYou: go('foryou'), goKnowledge: go('knowledge'), goGraph: go('graph'), goExcluded: go('excluded'), goSettings: go('settings'),
+      goProcessing: go('processing'), goLetter: go('letter'), goFiring: () => this.setState({ route: 'firing', ftueDone: mark('card') }), goCard: go('card'),
+      finishFire: () => this.setState({ route: 'foryou', fired: { ...(this.state.fired ?? {}), [this.state.card]: true } }),
+      letterSealed: !this.state.letterOpen, letterOpen: this.state.letterOpen, openLetter: () => this.setState({ letterOpen: true }),
+      folders, folder,
+      tabSources: setTab('sources'), tabBrain: setTab('brain'), tabProactive: setTab('proactive'), tabPrivacy: setTab('privacy'), tabOvernight: setTab('overnight'), tabAbout: setTab('about'),
+      sources, workSources, chats, brains, brain: this.state.brain, brainConnectors,
+      mirror: this.state.mirror, mirrorCls: this.state.mirror ? 'on' : '', flipMirror: () => this.setState({ mirror: !this.state.mirror })
+    };
+  }
+}
+</script>
+</body>
+</html>
