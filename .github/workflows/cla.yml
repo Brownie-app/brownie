@@ -35,5 +35,7 @@ jobs:
           # The maintainer has already agreed, and a bot bumping a dependency is nobody to ask. Written with a
           # wildcard on purpose: the action turns each entry into a regular expression, where "dependabot[bot]"
           # reads as "dependabot" followed by one of b, o or t — and so never matches the bot it names.
-          allowlist: vivek-brownie,dependabot*
+          # web-flow is GitHub's own identity on the commits it makes on someone's behalf — a Dependabot bump, a web
+          # edit — so it appears as the committer while the author stays whoever wrote it, and the author is still checked.
+          allowlist: vivek-brownie,dependabot*,web-flow
           lock-pullrequest-aftermerge: false
