@@ -56,6 +56,10 @@ public struct Ask: Codable, Sendable, Equatable, Identifiable {
         self.outcome = outcome; self.outcomeAt = outcomeAt; self.outcomeBy = outcomeBy; self.outcomeHow = outcomeHow; self.window = window
     }
     /// Still waiting: nothing settled it — no reply, a reply about something else, or a promise to get to it — and not yet let go.
+    /// Note that an unjudged reply counts as settled here, by `isAnswered`'s benefit of the doubt. That is deliberate but
+    /// not obviously right: if the reader never runs, a reply nothing has read closes the ask and the note shows a ✅ that
+    /// nothing stands behind. `AskLedgerTests`, `StatusRulesTests` and scenario 3 all pin the current reading, so changing
+    /// it is a decision about how much Brownie should nag, not a bug fix.
     public var isOpen: Bool { lapsedAt == nil && !isAnswered }
     /// Settled: a verdict that closes it, or, for an ask judged before there were verdicts, a reply that addressed it (an unjudged reply gets the benefit of the doubt).
     public var isAnswered: Bool {

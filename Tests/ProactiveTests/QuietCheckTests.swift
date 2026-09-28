@@ -77,8 +77,12 @@ import Domain
 
 @Suite struct RecentReplyTests {
     let now = Date(timeIntervalSince1970: 1_758_000_000)
-    func card(_ id: String, to person: String, state: CardState = .ready, resolvedAgo: TimeInterval? = nil, due: Date? = nil, cameBack: Bool? = nil) -> Card {
-        var c = Card(id: id, title: "Update \(person)", sourceLabel: "WhatsApp", why: "", actionLabel: "", dueLine: "", urgency: .medium, draftLabel: "", draft: "hi", recipe: .whatsapp(chat: person, body: "hi"), evidence: [], verification: .verified, verifiedLine: "", state: state, createdAt: now.addingTimeInterval(-600), cameBack: cameBack)
+    /// Each card is about its own thing unless a test says otherwise, so two cards to one person are two errands —
+    /// which is the whole point of the recent-reply rule: you wrote to them, so the other thing can wait its turn.
+    /// Two cards that really are one card share an `about`.
+    func card(_ id: String, to person: String, state: CardState = .ready, resolvedAgo: TimeInterval? = nil, due: Date? = nil, cameBack: Bool? = nil, about: String? = nil) -> Card {
+        let topic = about ?? id
+        var c = Card(id: id, title: "Update \(person) about \(topic)", sourceLabel: "WhatsApp", why: "", actionLabel: "", dueLine: "", urgency: .medium, draftLabel: "", draft: "hi, about \(topic)", recipe: .whatsapp(chat: person, body: "hi, about \(topic)"), evidence: [], verification: .verified, verifiedLine: "", state: state, createdAt: now.addingTimeInterval(-600), cameBack: cameBack)
         if let r = resolvedAgo { c.resolvedAt = now.addingTimeInterval(-r) }; c.dueDate = due; return c
     }
     func run(_ cards: [Card], past: [Card]) -> QuietCheck.Result { QuietCheck.run(cards: cards, loops: [], past: past, noteUpdated: { _ in nil }, fileExists: { _ in true }, now: now, staleDays: 7) }
@@ -91,6 +95,21 @@ import Domain
         #expect(run([card("new", to: "Kanika Pandey")], past: [sent]).kept.count == 1, "someone else")
         #expect(run([card("new", to: "Nitesh")], past: [card("old", to: "Nitesh", state: .dismissed, resolvedAgo: 120)]).kept.count == 1, "only a card you fired counts as writing")
     }
+    @Test func aCardYouTurnedDownDoesNotComeBack() {
+        let dismissed = card("mon", to: "Nitesh", state: .dismissed, resolvedAgo: 40 * 3600, about: "the deposit")
+        let r = run([card("tue", to: "Nitesh", about: "the deposit")], past: [dismissed])
+        #expect(r.kept.isEmpty && r.dropped.first?.why == "you turned this down yesterday")
+        #expect(run([card("tue", to: "Nitesh", about: "the flat viewing")], past: [dismissed]).kept.count == 1, "a different thing to say still gets through")
+        #expect(run([card("tue", to: "Kanika", about: "the deposit")], past: [dismissed]).kept.count == 1, "someone else")
+        #expect(run([card("tue", to: "Nitesh", about: "the deposit")], past: [card("mon", to: "Nitesh", state: .dismissed, resolvedAgo: 15 * 86400, about: "the deposit")]).kept.count == 1, "after a fortnight it may be raised again")
+        #expect(run([card("tue", to: "Nitesh", cameBack: true, about: "the deposit")], past: [dismissed]).kept.count == 1, "a came-back card is news")
+    }
+
+    @Test func aCardYouAlreadyDidDoesNotComeBack() {
+        #expect(run([card("tue", to: "Nitesh", about: "the deposit")], past: [card("mon", to: "Nitesh", state: .fired, resolvedAgo: 30 * 3600, about: "the deposit")]).kept.isEmpty, "you did this yesterday")
+        #expect(run([card("tue", to: "Nitesh", about: "the deposit")], past: [card("mon", to: "Nitesh", state: .fired, resolvedAgo: 3 * 86400, about: "the deposit")]).kept.count == 1, "past the card's lifetime the same errand is fair again")
+    }
+
     @Test func aDueOrCameBackCardStays() {
         let sent = card("old", to: "Nitesh", state: .fired, resolvedAgo: 60)
         #expect(run([card("due", to: "Nitesh", due: now.addingTimeInterval(86400))], past: [sent]).kept.count == 1)

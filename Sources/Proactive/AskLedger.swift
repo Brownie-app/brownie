@@ -69,13 +69,17 @@ public enum AskLedger {
         return AskScan(since: scanSince(open: [], now: now), sinceByBucket: byBucket, judgedReplies: judged)
     }
 
-    static let answering = ["answer", "reply", "respond", "get back", "question", "guidance", "tell", "let", "confirm", "share", "send"]
+    /// Loops that are about *responding* to someone. "Send" and "share" are deliberately not here: "send Kanika the
+    /// numbers by Friday" is a thing to do, not a reply owed, and closing it the moment the user writes anything is how
+    /// a promise came to mark itself done. A loop about sending is closed by `followers` instead, on a settled ask.
+    /// Matched as whole words — "let" used to match "wallet".
+    static let answering = ["answer", "answering", "reply", "replying", "replied", "respond", "responding", "get back", "question", "guidance", "confirm", "tell"]
     /// Loops the user owed someone that their reply settled: a `mine` loop about answering that person, opened before the
     /// reply. Only an ask the user's own reply in the chat settled: not one closed on their word or the judge's, where
     /// "you replied" would not be true.
     public static func closures(loops: [Loop], asks: [Ask], now: Date) -> [Loop] {
         loops.map { l in
-            guard l.status == .open, l.direction == .mine, answering.contains(where: { l.what.lowercased().contains($0) }) else { return l }
+            guard l.status == .open, l.direction == .mine, AskAnswering.has(AskAnswering.norm(l.what), answering) else { return l }
             guard let a = asks.first(where: { a in a.isAnswered && a.byReply && samePerson(a.person, l.person) && a.askedAt <= l.openedAt && StatusRules.settledAt(a).map { l.openedAt <= $0 } == true }) else { return l }
             var l = l; l.status = .closed; l.closedAt = StatusRules.settledAt(a); l.closedHow = "you replied"; l.closedBy = "reply"
             return l
