@@ -1,8 +1,43 @@
 # Brownie
 
-A house spirit that lives in your Mac. Every night, while the Mac is plugged in and you're asleep, Brownie wakes it, reads what's new in your life — files, messages, notes, mail — with a small model that runs entirely on the machine, distils what matters into a private knowledge base, and leaves a handful of morning cards: things worth your attention, each ready to do in one tap. **Hands** is the part that acts in your apps, and it always stops one step short of anything irreversible.
+**A house spirit that lives in your Mac.** Every night, while the Mac is plugged in and you are asleep, Brownie wakes it, reads what is new in your life with a model that never leaves the machine, writes private notes, and leaves a handful of morning cards. **Hands** does the steps for you in your own apps, and stops one step short of Send.
 
-Website: [usebrownie.com](https://usebrownie.com). Inspired by all personal assistant apps and the architecture of Sentient OS; written from scratch (see `docs/spec/provenance.md`). Made with ❤️ in India.
+[**Download for macOS**](https://github.com/Brownie-app/brownie/releases/latest) · [usebrownie.com](https://usebrownie.com) · Free, AGPL-3.0, no account, no server
+
+![Four morning cards, each with why it matters and a draft ready to send](docs/images/foryou.png)
+
+*Apple silicon · macOS 14 or later · your own OpenAI or Claude key, or no key at all*
+
+---
+
+## What it actually does
+
+**It reads at night, on this Mac.** Files, WhatsApp, iMessage, Telegram, Apple Notes, Gmail, Calendar, Slack, Teams, and meeting recordings transcribed by Apple's own speech engine. A small model on your GPU decides what is worth keeping. Almost everything is thrown away.
+
+**It keeps one note per person, forever.** What they asked you, what you promised them, what is still open between you. Written by code, not by the model, so it cannot drift.
+
+![A person's note: what she asked, what you promised, and what has been answered](docs/images/note.png)
+
+**It leaves four things in the morning, not a feed.** Each card says why it matters, shows the message it came from, and drafts a reply in your own words.
+
+![A card: the reason, the draft, the steps, and the original message it came from](docs/images/card.png)
+
+**It stops before Send.** Hands opens the chat, types the message, and hands you the button. That is the whole design, and it is enforced in code, not in a prompt.
+
+**It tracks promises in both directions** — yours and theirs — and brings a card back if the next night sees no reply.
+
+![Promises in both directions, with what was said and when](docs/images/loops.png)
+
+## What leaves your Mac
+
+| | |
+|---|---|
+| Your messages, mail, files, notes | **Never leave.** The reader runs on your GPU. |
+| Short summaries | Go to the brain *you* chose — or nowhere, in This Mac only mode. |
+| Every byte that goes out | Listed in **What left your Mac**, byte for byte, in the app. |
+| Accounts, telemetry, crash reports | None. There is nothing to sign up for and no Brownie server. |
+
+A sensitive item — an account number, a medical detail — leaves no trace at all: not a title, not a log line. There are tests for that.
 
 ## Run it
 
@@ -19,7 +54,7 @@ The first launch walks you through: downloading the reader (Gemma 4 E4B, 3.7 GB,
 For development, put your keys in `.secrets/brownie.env` (git-ignored; Debug builds read it). Gmail and Telegram need your own Google OAuth client and Telegram api_id/api_hash there — Brownie ships none. See `docs/launch-setup.md`.
 
 ```bash
-swift build && swift test          # 19 tests: cursors, atomic commit, fail-closed parsing, PII backstop, windowing
+swift build && swift test          # 709 tests: cursors, atomic commit, fail-closed parsing, PII backstop, windowing
 swift run browniectl list files ~/Documents
 swift run browniectl read files ~/Downloads   # judge a folder with the reader from Terminal
 ```
@@ -68,7 +103,7 @@ Files (skips code projects and bulk folders) · Apple Notes · iMessage · Whats
 
 ## Not in this build yet
 
-The sealed cloud mirror (v1.1); notarised DMG and live auto-updates (need an Apple Developer account and a domain — `Scripts/release.sh` and `Scripts/sparkle-keys.sh` are ready).
+The sealed cloud mirror (v1.1) and self-updating builds — 0.1 has to be replaced by hand when a new version ships (`Scripts/sparkle-keys.sh` is ready; the feed is not).
 
 ## Eval
 
