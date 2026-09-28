@@ -23,7 +23,11 @@ public enum QuietCheck {
 
     /// `noteUpdated` answers with the day a note's substance last changed (`Note.updatedAt`, from its front-matter's
     /// `updated`), never the file's mtime — the nightly status-block rewrite and iCloud must not make a note look fresh.
-    public static func run(cards: [Card], loops: [Loop], past: [Card], noteUpdated: (String) -> Date?, fileExists: (String) -> Bool, now: Date, staleDays: Int) -> Result {
+    /// How recently an ask must have been settled for a card that chases it to be dropped. Beyond this the answer is
+    /// old news and a card about the same subject is a new errand, not a stale chase.
+    public static let answeredQuietDays = 7.0
+
+    public static func run(cards: [Card], loops: [Loop], past: [Card], asks: [Ask] = [], noteUpdated: (String) -> Date?, fileExists: (String) -> Bool, now: Date, staleDays: Int) -> Result {
         var r = Result()
         for c in cards where c.state == .ready {
             // you just wrote to them — the next move is theirs
@@ -55,6 +59,22 @@ public enum QuietCheck {
             if let twin {
                 let when = ago(now.timeIntervalSince(twin.resolvedAt ?? twin.createdAt))
                 r.dropped.append((c, twin.state == .fired ? "you already did this \(when)" : "you turned this down \(when)")); continue
+            }
+            // the question it chases has been answered since. A card born of an ask carries no loop id, so the rule
+            // above cannot see it; this one matches the card against the asks themselves, the same way a loop is
+            // matched to the ask it came from. It is the deterministic backstop for a judge that proposed a chase
+            // from a summary written before the answer arrived.
+            if let p = c.person, let settled = asks.first(where: { a in
+                // isAnswered, not isSettled: here the benefit of the doubt is the kind reading. They asked, the user
+                // wrote back, and the reply shares the subject — that is enough not to nag. A promise is not an answer,
+                // and `isAnswered` already says so, which is what keeps the chase for a thing genuinely still owed.
+                guard a.isAnswered, samePerson(p, a.person) else { return false }
+                guard let at = StatusRules.settledAt(a), now.timeIntervalSince(at) < answeredQuietDays * 86400 else { return false }
+                // the title alone, not the reasoning: the title is what the card is about, while "why" is prose that
+                // only dilutes the share of words the two have in common.
+                return AskLedger.overlap(a.question, c.title) >= 0.5
+            }) {
+                r.dropped.append((c, "they have been answered since — \(settled.person) asked \"\(settled.question.prefix(60))\"")); continue
             }
             // an attachment or a note the recipe needs is gone
             if let missing = neededFiles(c).first(where: { !fileExists($0) }) {

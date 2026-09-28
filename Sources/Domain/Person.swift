@@ -74,6 +74,20 @@ public enum SelfNames {
             return (oneWord ? PersonKey.sameKey(label, n) : PersonKey.same(label, n)) || prefixed(label, by: n) != nil
         }
     }
+    /// True when a line speaks to the user by name — "Vivek, can you send the deck?" — matching any of their names
+    /// on its first word, as a whole word. This is what lets a request made in a group count as a request, while a
+    /// question thrown at the room does not. Names shorter than three letters are ignored: too much else matches them.
+    public static func addressed(_ text: String, among names: [String]) -> Bool {
+        guard !names.isEmpty else { return false }
+        let said = Set(text.folding(options: [.diacriticInsensitive, .caseInsensitive, .widthInsensitive], locale: nil)
+            .lowercased().split(whereSeparator: { !$0.isLetter }).map(String.init))
+        guard !said.isEmpty else { return false }
+        return names.contains { n in
+            guard let first = PersonKey.normalise(n).split(separator: " ").first, first.count >= 3 else { return false }
+            return said.contains(String(first))
+        }
+    }
+
     /// The title without the self name and its " — ": "Vivek Upreti — Career Materials (Jul–Aug 2026)" → "Career
     /// Materials (Jul–Aug 2026)". Nil when the title does not open that way, or when nothing would be left.
     public static func stripped(_ title: String, among names: [String]) -> String? {
@@ -150,6 +164,8 @@ public enum PersonHandle {
         let digits = h.filter(\.isNumber)
         return digits.isEmpty ? "imessage:" + h.lowercased() : "imessage:+" + digits
     }
+    /// "email:devika@raghavan-co.in" — the address, lowercased. Mail knows people by address, not by number.
+    public static func mail(_ address: String) -> String { "email:" + address.trimmingCharacters(in: .whitespaces).lowercased() }
     public static func slack(userID: String) -> String { "slack:" + userID }
     public static func teams(userID: String) -> String { "teams:" + userID }
     public static func telegram(chatID: Int64) -> String { "telegram:\(chatID)" }

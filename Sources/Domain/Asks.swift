@@ -82,8 +82,11 @@ public struct AskScan: Sendable, Equatable {
     public var sinceByBucket: [BucketID: Date]
     /// Ask id → the reply already judged to be about something else, so the user's next message after it is the one to pair now.
     public var judgedReplies: [String: Date]
-    public init(since: Date, sinceByBucket: [BucketID: Date] = [:], judgedReplies: [String: Date] = [:]) {
-        self.since = since; self.sinceByBucket = sinceByBucket; self.judgedReplies = judgedReplies
+    /// The user's own names. A group chat is read for asks only when a line names the user, so without these a
+    /// group is skipped entirely — which is the right way round: a question to the room is not a question to you.
+    public var selfNames: [String]
+    public init(since: Date, sinceByBucket: [BucketID: Date] = [:], judgedReplies: [String: Date] = [:], selfNames: [String] = []) {
+        self.since = since; self.sinceByBucket = sinceByBucket; self.judgedReplies = judgedReplies; self.selfNames = selfNames
     }
     public func since(_ bucket: BucketID) -> Date { sinceByBucket[bucket] ?? since }
 }

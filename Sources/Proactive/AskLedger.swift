@@ -62,11 +62,11 @@ public enum AskLedger {
     /// The night's scan, from the ledger: every chat is read three days back, except that a chat with an ask still
     /// waiting is read back to that ask — its own, not the source's oldest — and an ask whose reply was judged to be
     /// about something else names that reply, so the scan pairs it with the user's next message instead.
-    public static func scan(existing: [Ask], now: Date) -> AskScan {
+    public static func scan(existing: [Ask], now: Date, selfNames: [String] = []) -> AskScan {
         let open = existing.filter(\.isOpen)
         let byBucket = Dictionary(grouping: open, by: \.bucket).mapValues { scanSince(open: $0, now: now) }
         let judged = Dictionary(open.filter { $0.addressed == false }.compactMap { a in a.answeredAt.map { (a.id, $0) } }, uniquingKeysWith: { a, _ in a })
-        return AskScan(since: scanSince(open: [], now: now), sinceByBucket: byBucket, judgedReplies: judged)
+        return AskScan(since: scanSince(open: [], now: now), sinceByBucket: byBucket, judgedReplies: judged, selfNames: selfNames)
     }
 
     /// Loops that are about *responding* to someone. "Send" and "share" are deliberately not here: "send Kanika the

@@ -60,7 +60,7 @@ import Proactive
     /// WHAT HAPPENS: nothing. `scanAsks` drops every group before the detector ever sees a line
     /// (`Sources/LocalSources/AskDetector.swift:75`), so a request made to the user by name in a group is
     /// invisible to the ask ledger. The detector itself reads the line correctly — it is never handed it.
-    @Test(.disabled("fails: a request addressed to the user by name in a group is never seen; groups are skipped wholesale"))
+    @Test
     func aGroupQuestionAddressedToTheUser() async {
         let w = World([.group("whatsapp:111", "Loadmill — Launch")])
         w.say("whatsapp:111", from: "Sneha Kulkarni", "Vivek, can you send the deck before the meeting?", day: 1, at: 9)

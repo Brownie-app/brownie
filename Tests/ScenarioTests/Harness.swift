@@ -130,11 +130,13 @@ final class World {
         did(acts, on: day - 1)   // the user acted on yesterday's cards, the morning before this night
         let now = nightAt(day)
         let source = ChatSource(chats: chats.map { $0.upTo(now) }, now: now)
-        let enabled = Set(chats.filter { !$0.isGroup }.map(\.id))
+        // every scripted chat is switched on, groups included: the app's per-chat opt-in covers groups too, and
+        // whether a group's line is an ask is now the detector's judgement (does it name the user?), not the scan's.
+        let enabled = Set(chats.map(\.id))
 
         // 1. READ — every direct chat scanned back as far as its own oldest waiting ask, the asks paired with
         // what the user said after them, then judged on-device (rules first; no reader, so no cloud and no guess).
-        let scan = AskLedger.scan(existing: asks, now: now)
+        let scan = AskLedger.scan(existing: asks, now: now, selfNames: selfNames)
         let found = (try? await source.recentAsks(enabled: enabled, scan: scan)) ?? []
         asks = AskLedger.merge(existing: asks, found: found, now: now)
         asks = await AskAnswering.judge(asks, reader: nil)
@@ -174,7 +176,7 @@ final class World {
         let past = cards.filter { $0.state != .ready }
         var proposed = CardDedupe.dedupe(judge.cards.map { $0.stamped(now) } + dueCards)
         let folded = judge.cards.count + dueCards.count - proposed.count
-        let checked = QuietCheck.run(cards: proposed, loops: loops, past: past, noteUpdated: { [noteUpdated] in noteUpdated[$0] },
+        let checked = QuietCheck.run(cards: proposed, loops: loops, past: past, asks: asks, noteUpdated: { [noteUpdated] in noteUpdated[$0] },
                                      fileExists: { [files] in files.contains($0) }, now: now, staleDays: judge.staleDays)
         proposed = checked.kept
         cards = past + proposed
@@ -309,7 +311,9 @@ struct ChatSource: Source, ChatReader, AskScanning {
     func chats() async throws -> [BucketInfo] { chats.map(\.info) }
     func messages(in bucket: BucketID, from: Date, to: Date) async throws -> [ChatMessage] {
         guard let c = chats.first(where: { $0.id == bucket }) else { return [] }
-        return c.messages.filter { !c.inThread.contains($0.rowID) && $0.date >= from && $0.date <= to }.sorted { $0.date < $1.date }
+        // a threaded message is handed back like any other: Slack's reader now merges `conversations.replies`
+        // into the channel it read, so where in a conversation a line was written is the source's business.
+        return c.messages.filter { $0.date >= from && $0.date <= to }.sorted { $0.date < $1.date }
     }
     func recentAsks(enabled: Set<BucketID>?, scan: AskScan) async throws -> [Ask] {
         try await scanAsks(enabled: enabled, scan: scan, now: now)

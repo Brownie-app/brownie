@@ -1,11 +1,26 @@
 import Foundation
 import Domain
 
-/// Reads a direct chat the way a person would: their message that ends in a question mark or starts like a request
-/// is an ask; the user's next message after it is the answer. Groups are skipped — a question there is rarely to the user.
+/// Reads a chat the way a person would: their message that ends in a question mark or starts like a request is an
+/// ask; the user's next message after it is the answer. In a group only a line that names the user counts — a
+/// question thrown at the room is not a question to you — and the ask belongs to whoever wrote it, not to the group.
 public enum AskDetector {
     static let askStarts = ["can you", "could you", "would you", "will you", "please", "pls", "plz", "send me", "share", "let me know", "tell me", "any update", "did you", "have you", "when can", "what's the", "whats the", "where is", "how do",
                             "bata do", "batao", "bhej do", "bhejo", "kaise", "kab", "kya", "kahan", "chahiye", "kar do", "karo", "dena", "de do", "kar sakte", "ho gaya", "hua kya"]
+    /// Past this a message is read sentence by sentence rather than whole.
+    static let longMessage = 200
+    /// The sentences in one line, each keeping the mark that ended it, and the runts dropped.
+    static func sentences(_ s: String) -> [String] {
+        var out: [String] = [], cur = ""
+        for ch in s {
+            cur.append(ch)
+            if ch == "." || ch == "?" || ch == "!" { out.append(cur.trimmingCharacters(in: .whitespaces)); cur = "" }
+        }
+        let last = cur.trimmingCharacters(in: .whitespaces)
+        if !last.isEmpty { out.append(last) }
+        return out.filter { $0.count >= 4 }
+    }
+
     /// True when the line reads as a question or request.
     static let link = try! NSRegularExpression(pattern: #"https?://\S+|www\.\S+"#, options: .caseInsensitive)
     public static func isAsk(_ text: String) -> Bool {
@@ -13,6 +28,13 @@ public enum AskDetector {
         let stripped = link.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: " ")
         let t = stripped.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard t.count >= 4 else { return false }
+        // A long message — a mail, a forwarded note, a paragraph of context — is read a sentence at a time: the
+        // request is usually one line inside it, and the rules below are written for the length of one line. The
+        // split has to divide the text or this would read the same blob for ever.
+        if t.count >= longMessage {
+            let parts = t.split(whereSeparator: \.isNewline).flatMap { sentences(String($0)) }
+            return parts.count > 1 && parts.contains { isAsk($0) }
+        }
         if t.hasSuffix("?") || t.hasSuffix("??") || t.contains("?") && t.count < 200 { return true }
         // a request starts like one; a request word buried in the user's own kind of sentence ("I'll share…") does not count
         if t.hasPrefix("i'll ") || t.hasPrefix("i’ll ") || t.hasPrefix("i will ") || t.hasPrefix("i'm ") || t.hasPrefix("i’m ") { return false }
@@ -25,16 +47,20 @@ public enum AskDetector {
     /// (`judged`, by ask id), the user's newest message after that reply, with every user message between the two in
     /// the text (oldest first, the newest `repliesShown` of them). Until there is a newer message the judged reply
     /// stands, with the same text as before, so the ask still reads "you wrote, but not about this".
-    public static func detect(_ messages: [ChatMessage], person: String, bucket: BucketID, since: Date, handle: String? = nil, judged: [String: Date] = [:]) -> [Ask] {
+    public static func detect(_ messages: [ChatMessage], person: String, bucket: BucketID, since: Date, handle: String? = nil, judged: [String: Date] = [:],
+                              isGroup: Bool = false, selfNames: [String] = []) -> [Ask] {
         var out: [Ask] = []
+        // in a group, without knowing the user's own names there is no way to tell a request to them from the chatter
+        if isGroup, selfNames.isEmpty { return [] }
         let recent = messages.filter { $0.date >= since }.sorted { $0.date < $1.date }
-        for (i, m) in recent.enumerated() where !m.isMe && isAsk(m.text) {
+        for (i, m) in recent.enumerated() where !m.isMe && isAsk(m.text) && (!isGroup || SelfNames.addressed(m.text, among: selfNames)) {
             let id = "ask-" + String("\(bucket.rawValue)|\(m.rowID)".utf8.reduce(into: UInt64(1469598103934665603)) { $0 = ($0 ^ UInt64($1)) &* 1099511628211 }, radix: 16)
             // a burst of their messages with a question in the middle: the reply that counts is the first "Me" after the burst
             let after = recent[(i + 1)...]
             let replies = after.filter(\.isMe)
             let reply = judged[id].flatMap { j in replies.last { $0.date > j } ?? replies.first { $0.date == j } } ?? replies.first
-            out.append(Ask(id: id, person: person, bucket: bucket, askedAt: m.date, question: String(m.text.prefix(200)), answeredAt: reply?.date, reply: reply.map { replyText(replies, upTo: $0) }, handle: handle, window: window(after)))
+            let asker = isGroup ? (m.sender.isEmpty ? person : m.sender) : person
+            out.append(Ask(id: id, person: asker, bucket: bucket, askedAt: m.date, question: String(m.text.prefix(200)), answeredAt: reply?.date, reply: reply.map { replyText(replies, upTo: $0) }, handle: handle, window: window(after)))
         }
         return out
     }
@@ -68,16 +94,19 @@ public enum AskDetector {
     }
 }
 
-/// Every chat source that can read messages back can also scan them for asks — direct chats only, each read back
-/// as far as its own asks need.
+/// Every chat source that can read messages back can also scan them for asks, each chat read back as far as its
+/// own asks need — direct chats whole, and groups for the lines that name the user.
 extension ChatReader where Self: Source {
     public func scanAsks(enabled: Set<BucketID>?, scan: AskScan, now: Date = Date()) async throws -> [Ask] {
-        let chats = try await chats().filter { !$0.isGroup && (enabled?.contains($0.id) ?? false) }
+        let chats = try await chats().filter { enabled?.contains($0.id) ?? false }
         var out: [Ask] = []
         for c in chats {
+            // a group is worth reading only when the user's names are known; `detect` turns away the rest
+            if c.isGroup, scan.selfNames.isEmpty { continue }
             let since = scan.since(c.id)
             let msgs = try await messages(in: c.id, from: since, to: now.addingTimeInterval(3600))
-            out += AskDetector.detect(msgs, person: c.name, bucket: c.id, since: since, handle: c.handle, judged: scan.judgedReplies)
+            out += AskDetector.detect(msgs, person: c.name, bucket: c.id, since: since, handle: c.handle, judged: scan.judgedReplies,
+                                      isGroup: c.isGroup, selfNames: scan.selfNames)
         }
         return out
     }

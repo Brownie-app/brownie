@@ -24,7 +24,7 @@ import Proactive
     /// and no `AskScanning` (`Sources/CloudSources/GmailSource.swift:7`), so the nightly ask scan never asks it
     /// for anything. No ask is ever opened from mail, so none can close. Everything downstream is fine: the same
     /// thread read as messages gives the right ask and the right verdict, which is shown below.
-    @Test(.disabled("fails: mail is never scanned for asks — GmailSource declares no AskScanning"))
+    @Test
     func gmailAskAnsweredTwoDaysLater() async {
         #expect(Self.scansAsks(GmailSource.self), "mail carries asks like any other channel")
 
@@ -43,7 +43,7 @@ import Proactive
     @Test func whichSourcesCarryAsks() {
         #expect(Self.scansAsks(WhatsAppSource.self) && Self.scansAsks(iMessageSource.self), "the phone's chats")
         #expect(Self.scansAsks(SlackSource.self) && Self.scansAsks(TeamsSource.self), "work chat")
-        #expect(!Self.scansAsks(GmailSource.self), "mail, today, cannot be asked for asks — scenario 15")
+        #expect(Self.scansAsks(GmailSource.self), "mail, read as a conversation per thread")
     }
 
     // 16 ───────────────────────────────────────────────────────────────────────────────────────────
@@ -99,7 +99,7 @@ import Proactive
     /// `conversations.history` alone (`Sources/CloudSources/SlackSource.swift:235`) and never calls
     /// `conversations.replies`, so a reply inside a thread does not exist as far as Brownie is concerned. The
     /// user is chased for a review they wrote yesterday.
-    @Test(.disabled("fails: a Slack answer written in a thread is never read — only conversations.history is called"))
+    @Test
     func slackReviewAnsweredInAThread() async {
         let w = World([.direct("slack:D0ARIF", "Arif Qureshi", handle: "slack:U0ARIF")])
         w.say("slack:D0ARIF", "can you review the pricing PR today or tomorrow?", day: 1, at: 11)
