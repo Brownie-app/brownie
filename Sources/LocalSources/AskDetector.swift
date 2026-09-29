@@ -21,6 +21,16 @@ public enum AskDetector {
         return out.filter { $0.count >= 4 }
     }
 
+    /// What a long message actually asked: the first sentence in it that reads as a request, so the ask on the
+    /// ledger and the line on the note quote the request and not four paragraphs of pleasantries around it.
+    /// A message short enough to be one line is its own question.
+    public static func askLine(_ text: String) -> String {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard t.count >= longMessage else { return t }
+        let parts = t.split(whereSeparator: \.isNewline).flatMap { sentences(String($0)) }
+        return parts.count > 1 ? (parts.first { isAsk($0) } ?? t) : t
+    }
+
     /// True when the line reads as a question or request.
     static let link = try! NSRegularExpression(pattern: #"https?://\S+|www\.\S+"#, options: .caseInsensitive)
     public static func isAsk(_ text: String) -> Bool {
@@ -60,7 +70,7 @@ public enum AskDetector {
             let replies = after.filter(\.isMe)
             let reply = judged[id].flatMap { j in replies.last { $0.date > j } ?? replies.first { $0.date == j } } ?? replies.first
             let asker = isGroup ? (m.sender.isEmpty ? person : m.sender) : person
-            out.append(Ask(id: id, person: asker, bucket: bucket, askedAt: m.date, question: String(m.text.prefix(200)), answeredAt: reply?.date, reply: reply.map { replyText(replies, upTo: $0) }, handle: handle, window: window(after)))
+            out.append(Ask(id: id, person: asker, bucket: bucket, askedAt: m.date, question: String(askLine(m.text).prefix(200)), answeredAt: reply?.date, reply: reply.map { replyText(replies, upTo: $0) }, handle: handle, window: window(after)))
         }
         return out
     }
