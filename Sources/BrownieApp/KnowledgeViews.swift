@@ -33,7 +33,7 @@ struct KnowledgeView: View {
     var note: Note? { if case .note(let p) = selection { return m.note(at: p) }; return nil }
     var notePath: String? { note?.relativePath }
     var noteCount: Int { m.folders.reduce(0) { $0 + $1.notes.count } }
-    var subtitle: String { m.folders.isEmpty ? "Nothing yet · notes appear after the first run with a brain" : "\(noteCount) notes · plain Markdown in ~/Brownie Knowledge Base" }
+    var subtitle: String { m.folders.isEmpty ? "Nothing yet · notes appear after the first read" : "\(noteCount) notes · plain Markdown in ~/Brownie Knowledge Base" }
     var session: EditSession? { m.noteEditor.session }
     var draft: Binding<String> { Binding(get: { m.noteEditor.session?.draft ?? "" }, set: { m.noteEditor.session?.draft = $0 }) }
     /// The sheet up now: a move away asked by the model first, else the view's own.
@@ -248,7 +248,7 @@ struct KnowledgeView: View {
                     else if let s = session, s.path == p { gonePane(s) }
                     else { VStack(alignment: .leading, spacing: 8) { Text("That note isn't there any more.").font(.system(size: 15, weight: .semibold)); Text("It was deleted, renamed or archived since it was opened. Pick another from the rail.").foregroundStyle(t.ink2) }.padding(.top, 20) }
                 case .none:
-                    VStack(alignment: .leading, spacing: 8) { Text("No notes yet").font(.system(size: 17, weight: .semibold)); Text("Run an analysis with a brain configured and your knowledge base appears here as plain Markdown files.").foregroundStyle(t.ink2) }.padding(.top, 20)
+                    VStack(alignment: .leading, spacing: 8) { Text("No notes yet").font(.system(size: 17, weight: .semibold)); Text("Press Analyze now. Brownie writes a note for each day it reads — here, on this Mac, as plain Markdown. A brain turns those into notes about the people and things in them; without one you still get the reader's own words.").foregroundStyle(t.ink2) }.padding(.top, 20)
                 }
             }.padding(24).frame(maxWidth: 720, alignment: .leading).frame(maxWidth: .infinity, alignment: .leading)
         }

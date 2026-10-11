@@ -52,8 +52,10 @@ public struct BrainConfig: Sendable, Equatable {
 }
 
 public enum BrainFactory {
-    public static func make(_ c: BrainConfig) -> (any Brain)? {
-        let key = c.engine.keyName.flatMap(Secrets.value) ?? ""
+    /// `key` is for tests, which must not depend on whatever happens to be in the developer's own env file.
+    /// In the app it is always nil and the key comes from the Keychain (or, in Debug, `.secrets/brownie.env`).
+    public static func make(_ c: BrainConfig, key override: String? = nil) -> (any Brain)? {
+        let key = override ?? c.engine.keyName.flatMap(Secrets.value) ?? ""
         // No key, no brain. Without this the app manufactures a brain that sends "Bearer none", the first run
         // dies on a 401, and the first thing a stranger ever reads is "The brain rejected your key" about a key
         // they never had. Returning nil instead puts them on the no-brain path the app already knows how to walk.

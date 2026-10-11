@@ -313,9 +313,37 @@ public actor RunCoordinator {
                 }
                 outcome = .ran(cards: fresh.count)
             } else if deps.brain == nil {
+                // NOTES ONLY. Three screens promised that Brownie reads and keeps notes without a brain, and
+                // none of it was true: every note in the vault came from KnowledgeBuilder, which lives inside
+                // the branch above. So a keyless Mac read a hundred things and wrote nothing.
+                //
+                // What follows is the half of the night that needs no model at all. The summaries behind it are
+                // deliberately NOT marked merged: leaving `mergedAt` nil is what lets a brain added next week
+                // build proper notes out of everything read this week, and `prune` only ever deletes judged rows.
                 outcome = .failedBrain(.notConfigured)
                 if !summaries.isEmpty { log.info("no brain: keeping \(summaries.count) summaries for later") }
-                if stats.read > 0 { outcome = .partial(stage: "read only — no brain configured") }
+                let asks = Self.loadAsks(try await store.value(SettingKey.asks))
+                var written = 0
+                for note in SummaryNotes.notes(summaries: summaries, asks: asks, now: deps.clock.now(),
+                                               calendar: { var c = Calendar(identifier: .gregorian); c.timeZone = deps.clock.timeZone; return c }(),
+                                               existing: { _ in nil }) {
+                    let title = (note.path as NSString).deletingPathExtension
+                    let doc = Note(relativePath: note.path, title: (title as NSString).lastPathComponent, body: note.body,
+                                   sources: [], updatedAt: deps.clock.now(), userEdited: false)
+                    do { try await deps.knowledge.save(doc); written += 1 } catch { log.warn("notes only: \(note.path): \(error)") }
+                }
+                if written > 0 {
+                    deps.stage("Write what was read", "\(written) day\(written == 1 ? "" : "s"), on this Mac, with no brain")
+                    log.info("notes only: wrote \(written) day note(s)")
+                }
+                // The status block is rules all the way down, so a keyless vault still says who is waiting on what.
+                let registry = PersonRegistry(vault: deps.knowledge.rootURL, now: { [clock = deps.clock] in clock.now() }, selfNames: deps.selfNames)
+                await registry.load()
+                _ = await Self.writeStatusBlock(asks: asks, loops: await LoopLedger.load(store), knowledge: deps.knowledge,
+                                                registry: registry, now: deps.clock.now(), timeZone: deps.clock.timeZone)
+                if stats.read > 0 || written > 0 {
+                    outcome = .partial(stage: "notes only — no brain, so nothing was judged or drafted")
+                }
             } else {
                 outcome = .ran(cards: 0)
             }
