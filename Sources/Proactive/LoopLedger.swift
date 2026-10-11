@@ -29,7 +29,9 @@ public enum LoopLedger {
     }
 
     public static func same(_ a: Loop, _ b: Loop) -> Bool {
-        guard a.direction == b.direction, PersonKey.same(a.person, b.person) else { return false }
+        // sameKey, not same: "Nitesh" and "Nitesh Kumar" may be two people, and folding their promises into one
+        // loses one of them silently. Two loops until the registry says they are one person is the safer way round.
+        guard a.direction == b.direction, PersonKey.sameKey(a.person, b.person) else { return false }
         let wa = words(a.what), wb = words(b.what)
         guard !wa.isEmpty, !wb.isEmpty else { return a.what == b.what }
         let inter = wa.intersection(wb).count
@@ -151,14 +153,18 @@ public enum CardDedupe {
 
     public static func same(_ a: Card, _ b: Card) -> Bool {
         if let l = a.loopID, let m = b.loopID, l == m { return true }
-        guard let pa = person(a), let pb = person(b), PersonKey.same(pa, pb) else { return false }
+        // sameKey, not same: two cards are only one card when the two names are the same name. A bare "Nitesh"
+        // and a "Nitesh Kumar" may well be two people, and dropping one of their two cards loses a real one —
+        // where keeping both merely asks the user to merge them in the registry, which they can see and do.
+        guard let pa = person(a), let pb = person(b), PersonKey.sameKey(pa, pb) else { return false }
         let wa = LoopLedger.words(a.title + " " + a.why + " " + a.draft), wb = LoopLedger.words(b.title + " " + b.why + " " + b.draft)
         guard !wa.isEmpty, !wb.isEmpty else { return false }
         return Double(wa.intersection(wb).count) / Double(min(wa.count, wb.count)) >= 0.5
     }
 
-    /// Who the card is for, from its recipe: the chat, the recipient, the addressee. Compared with `PersonKey.same`,
-    /// so "Kanika Pandey Loadmill" and "Kanika Pandey" are one person here as everywhere else.
+    /// Who the card is for, from its recipe: the chat, the recipient, the addressee. Compared with `PersonKey.sameKey`,
+    /// so "Kanika Pandey Loadmill" and "Kanika Pandey" are one person (the key is the first two words either way),
+    /// while "Nitesh" and "Nitesh Kumar" are not assumed to be.
     static func person(_ c: Card) -> String? {
         switch c.recipe {
         case .whatsapp(let chat, _, _): return PersonKey.normalise(chat).isEmpty ? nil : chat

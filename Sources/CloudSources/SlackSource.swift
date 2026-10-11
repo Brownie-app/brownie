@@ -112,6 +112,18 @@ public enum SlackParsing {
         }.sorted { $0.date < $1.date }
     }
 
+    /// The `ts` of every message in this page that opens a thread with replies under it — the ones worth fetching
+    /// `conversations.replies` for. A message is the parent when Slack gives it a `thread_ts` equal to its own `ts`,
+    /// or a `reply_count` above zero.
+    public static func threadParents(_ obj: [String: Any]) -> [String] {
+        (obj["messages"] as? [[String: Any]] ?? []).compactMap { m in
+            guard let ts = m["ts"] as? String else { return nil }
+            let replies = (m["reply_count"] as? Int) ?? Int((m["reply_count"] as? String) ?? "") ?? 0
+            let isParent = (m["thread_ts"] as? String) == ts
+            return (replies > 0 || (isParent && m["latest_reply"] != nil)) ? ts : nil
+        }
+    }
+
     /// Slack's mrkdwn escapes: `<@U1>` → @Name, `<#C1|design>` → #design, `<https://x|label>` → label, `&amp;` → &.
     public static func unescape(_ s: String, names: [String: String]) -> String {
         var out = ""
@@ -224,10 +236,20 @@ public struct SlackSource: Source {
         try await historyPaged(channel, t, oldest: oldest, latest: latest, me: me, names: names).messages
     }
 
+    /// How many threads in one read are followed into `conversations.replies`. A busy channel can have hundreds;
+    /// the newest few dozen are where an answer to something asked this week will be.
+    static let threadCap = 40
+
     /// Ascending messages in the range, and whether the page cap stopped the listing with more still to fetch.
     /// `pageCap` nil pages until Slack has no more to give — the shape of a read bounded by the mark.
+    ///
+    /// `conversations.history` returns a thread's opening message and nothing else in it, so an answer written as a
+    /// reply — which on Slack is where most answers are written — does not exist as far as the rest of the app is
+    /// concerned: the question stays open and the chase card fires again. Each thread with replies is therefore
+    /// fetched once and merged in, the parent dropped because the listing already carried it.
     func historyPaged(_ channel: String, _ t: String, oldest: Double, latest: Double?, me: String, names: [String: String], pageCap: Int? = SlackSource.pageCap) async throws -> History {
         var all: [ChatMessage] = []
+        var threads: [String] = []
         var cursor: String? = nil, pages = 0
         repeat {
             var args = ["channel": channel, "oldest": String(format: "%.6f", oldest), "limit": "200", "inclusive": "true", "cursor": cursor ?? ""]
@@ -235,9 +257,20 @@ public struct SlackSource: Source {
             let r = try await call("conversations.history", t, args)
             guard r["ok"] as? Bool == true else { throw SourceError.cannotRead("Slack: \(r["error"] as? String ?? "history failed") in \(channel)") }
             all += SlackParsing.messages(r, me: me, names: names)
+            threads += SlackParsing.threadParents(r)
             cursor = (r["response_metadata"] as? [String: Any])?["next_cursor"] as? String; if cursor?.isEmpty == true { cursor = nil }
             pages += 1
         } while cursor != nil && pages < (pageCap ?? Int.max)
+
+        var seen = Set(all.map(\.rowID))
+        for ts in threads.sorted(by: >).prefix(SlackSource.threadCap) {
+            // one thread that cannot be read is not worth losing the channel over
+            guard let r = try? await call("conversations.replies", t, ["channel": channel, "ts": ts, "limit": "200"]), r["ok"] as? Bool == true else { continue }
+            for m in SlackParsing.messages(r, me: me, names: names) where !seen.contains(m.rowID) {
+                guard m.date.timeIntervalSince1970 >= oldest, latest.map({ m.date.timeIntervalSince1970 <= $0 }) ?? true else { continue }
+                seen.insert(m.rowID); all.append(m)
+            }
+        }
         return History(messages: all.sorted { $0.date < $1.date }, hitPageCap: cursor != nil)
     }
 

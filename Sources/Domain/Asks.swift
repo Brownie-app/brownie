@@ -56,6 +56,10 @@ public struct Ask: Codable, Sendable, Equatable, Identifiable {
         self.outcome = outcome; self.outcomeAt = outcomeAt; self.outcomeBy = outcomeBy; self.outcomeHow = outcomeHow; self.window = window
     }
     /// Still waiting: nothing settled it — no reply, a reply about something else, or a promise to get to it — and not yet let go.
+    /// Note that an unjudged reply counts as settled here, by `isAnswered`'s benefit of the doubt. That is deliberate but
+    /// not obviously right: if the reader never runs, a reply nothing has read closes the ask and the note shows a ✅ that
+    /// nothing stands behind. `AskLedgerTests`, `StatusRulesTests` and scenario 3 all pin the current reading, so changing
+    /// it is a decision about how much Brownie should nag, not a bug fix.
     public var isOpen: Bool { lapsedAt == nil && !isAnswered }
     /// Settled: a verdict that closes it, or, for an ask judged before there were verdicts, a reply that addressed it (an unjudged reply gets the benefit of the doubt).
     public var isAnswered: Bool {
@@ -78,8 +82,11 @@ public struct AskScan: Sendable, Equatable {
     public var sinceByBucket: [BucketID: Date]
     /// Ask id → the reply already judged to be about something else, so the user's next message after it is the one to pair now.
     public var judgedReplies: [String: Date]
-    public init(since: Date, sinceByBucket: [BucketID: Date] = [:], judgedReplies: [String: Date] = [:]) {
-        self.since = since; self.sinceByBucket = sinceByBucket; self.judgedReplies = judgedReplies
+    /// The user's own names. A group chat is read for asks only when a line names the user, so without these a
+    /// group is skipped entirely — which is the right way round: a question to the room is not a question to you.
+    public var selfNames: [String]
+    public init(since: Date, sinceByBucket: [BucketID: Date] = [:], judgedReplies: [String: Date] = [:], selfNames: [String] = []) {
+        self.since = since; self.sinceByBucket = sinceByBucket; self.judgedReplies = judgedReplies; self.selfNames = selfNames
     }
     public func since(_ bucket: BucketID) -> Date { sinceByBucket[bucket] ?? since }
 }

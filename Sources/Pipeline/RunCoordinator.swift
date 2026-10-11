@@ -270,7 +270,7 @@ public actor RunCoordinator {
                 let staleDays = Int(try await store.value(SettingKey.staleDays) ?? "") ?? QuietCheck.defaultStaleDays
                 var noteDates: [String: Date] = [:]
                 for f in (try? await deps.knowledge.folders()) ?? [] { for n in f.notes { noteDates[n.relativePath] = n.updatedAt } }
-                let checked = QuietCheck.run(cards: fresh, loops: loopsNow, past: kept, noteUpdated: { noteDates[$0] }, fileExists: { FileManager.default.fileExists(atPath: $0) }, now: deps.clock.now(), staleDays: staleDays)
+                let checked = QuietCheck.run(cards: fresh, loops: loopsNow, past: kept, asks: asks, noteUpdated: { noteDates[$0] }, fileExists: { FileManager.default.fileExists(atPath: $0) }, now: deps.clock.now(), staleDays: staleDays)
                 for d in checked.dropped { log.info("quiet check dropped “\(d.card.title)”: \(d.why)") }
                 fresh = checked.kept
                 try await Self.saveCards(kept + fresh, store: store)
@@ -432,7 +432,7 @@ public actor RunCoordinator {
         var found: [Ask] = []
         // Each chat is read back to its own oldest ask still waiting, so a late reply is found however late — and a
         // reply already judged off-topic is passed over for the user's next message. Other chats stay at three days.
-        let scan = AskLedger.scan(existing: existing, now: now)
+        let scan = AskLedger.scan(existing: existing, now: now, selfNames: deps.selfNames)
         for source in deps.sources {
             guard let scanner = source as? AskScanning, await source.availability() == .available else { continue }
             let enabled = try? await Self.enabledBucketsStatic(for: source, store: store)

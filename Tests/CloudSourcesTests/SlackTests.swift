@@ -23,7 +23,27 @@ let slackHistory = #"""
  "has_more":false,"response_metadata":{"next_cursor":""}}
 """#
 
+/// A DM where the question is in the channel and the answer is in a thread under it — which is where Slack
+/// puts most answers, and where `conversations.history` alone never looks.
+let slackThreadHistory = #"""
+{"ok":true,"messages":[
+ {"type":"message","user":"U2","text":"can you review the pricing PR today or tomorrow?","ts":"1757600000.000200","thread_ts":"1757600000.000200","reply_count":2,"latest_reply":"1757620000.000400"}],
+ "has_more":false,"response_metadata":{"next_cursor":""}}
+"""#
+let slackThreadReplies = #"""
+{"ok":true,"messages":[
+ {"type":"message","user":"U2","text":"can you review the pricing PR today or tomorrow?","ts":"1757600000.000200","thread_ts":"1757600000.000200"},
+ {"type":"message","user":"U1","text":"reviewed — two comments on the tiering, rest looks good","ts":"1757610000.000300","thread_ts":"1757600000.000200"},
+ {"type":"message","user":"U2","text":"perfect, thanks","ts":"1757620000.000400","thread_ts":"1757600000.000200"}],
+ "has_more":false}
+"""#
+
 @Suite struct SlackParsingTests {
+    @Test func threadParentsAreTheMessagesWorthFetchingRepliesFor() {
+        #expect(SlackParsing.threadParents(json(slackThreadHistory)) == ["1757600000.000200"])
+        #expect(SlackParsing.threadParents(json(slackHistory)).isEmpty, "a channel with no threads costs no extra call")
+    }
+
     @Test func usersPreferDisplayThenRealName() {
         let n = SlackParsing.users(json(slackUsers))
         #expect(n == ["U1": "vivek", "U2": "Meera Nair", "U3": "Rohan"])
@@ -60,6 +80,32 @@ let slackHistory = #"""
     }
     func wired() -> FakeTransport {
         FakeTransport().on("auth.test", #"{"ok":true,"user_id":"U1","user":"vivek"}"#).on("users.list", slackUsers).on("conversations.list", slackList).on("conversations.history", slackHistory)
+    }
+
+    /// The answer to a question is often written in a thread, and a thread reply the app never reads is a chase
+    /// card for something the user already did. Each thread is fetched once; the parent is not counted twice.
+    @Test func aThreadsRepliesAreReadAndMergedInOrder() async throws {
+        let t = FakeTransport().on("auth.test", #"{"ok":true,"user_id":"U1","user":"vivek"}"#).on("users.list", slackUsers)
+            .on("conversations.list", slackList).on("conversations.history", slackThreadHistory).on("conversations.replies", slackThreadReplies)
+        let m = try await source(t).messages(in: BucketID("slack:D1"), from: Date(timeIntervalSince1970: 1_757_000_000), to: Date(timeIntervalSince1970: 1_757_700_000))
+        #expect(m.map(\.text) == ["can you review the pricing PR today or tomorrow?",
+                                  "reviewed — two comments on the tiering, rest looks good",
+                                  "perfect, thanks"], "the thread reads in time order, the parent once")
+        #expect(m.map(\.isMe) == [false, true, false])
+        #expect(t.count("conversations.replies") == 1, "one call per thread")
+
+        let quiet = FakeTransport().on("auth.test", #"{"ok":true,"user_id":"U1","user":"vivek"}"#).on("users.list", slackUsers)
+            .on("conversations.list", slackList).on("conversations.history", slackHistory)
+        _ = try await source(quiet).messages(in: BucketID("slack:D1"), from: Date(timeIntervalSince1970: 1_757_000_000), to: Date(timeIntervalSince1970: 1_757_700_000))
+        #expect(quiet.count("conversations.replies") == 0, "a channel with no threads is read exactly as before")
+    }
+
+    @Test func aThreadThatCannotBeReadDoesNotLoseTheChannel() async throws {
+        let t = FakeTransport().on("auth.test", #"{"ok":true,"user_id":"U1","user":"vivek"}"#).on("users.list", slackUsers)
+            .on("conversations.list", slackList).on("conversations.history", slackThreadHistory)
+            .on("conversations.replies", #"{"ok":false,"error":"thread_not_found"}"#)
+        let m = try await source(t).messages(in: BucketID("slack:D1"), from: Date(timeIntervalSince1970: 1_757_000_000), to: Date(timeIntervalSince1970: 1_757_700_000))
+        #expect(m.count == 1, "the channel still reads; only the thread is missing")
     }
 
     @Test func availability() async {

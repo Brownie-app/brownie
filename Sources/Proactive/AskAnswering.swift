@@ -8,10 +8,24 @@ public enum AskAnswering {
     static let acknowledgements: Set<String> = ["ok", "okay", "k", "done", "sure", "yes", "yep", "yeah", "sent", "on it", "haan", "ha", "ho gaya", "kar diya", "bhej diya", "theek hai", "thik hai", "cool", "noted", "got it", "sorted", "sending", "👍", "✅"]
     /// The user says later: the ask is a promise now.
     static let laters = ["will do", "tomorrow", "kal", "later", "give me", "by evening", "next week", "i'll", "i will", "will send", "will share", "will get back", "will check", "will let you know", "tonight", "by eod", "end of day", "this week", "in a bit", "shortly", "soon", "abhi nahi", "thoda time", "parso", "baad mein", "kal tak"]
+        + Calendar.dayNames.flatMap { ["by \($0)", "on \($0)", "next \($0)", "\($0) tak"] }
+    /// A promise dated by a day of the week — "by Friday" is as much a later as "tomorrow", and reading it as one is
+    /// what stops the reply that makes a promise from being mistaken for the reply that keeps it.
+    enum Calendar { static let dayNames = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "mon", "tue", "tues", "wed", "thu", "thur", "thurs", "fri", "sat", "sun"] }
     /// The user says no.
     static let refusals = ["no", "nope", "nah", "can't", "cant", "cannot", "not possible", "won't be able", "wont be able", "unable to", "nahi", "nahi ho payega", "nahi ho paayega", "nahi kar", "not happening", "no way"]
-    /// A "no" that refuses nothing.
-    static let notRefusals = ["no problem", "no worries", "no issue", "no issues", "no prob", "no tension", "no wait", "no idea"]
+    /// A "no" that refuses nothing, and the two "can't"s that are enthusiasm rather than a refusal.
+    static let notRefusals = ["no problem", "no worries", "no issue", "no issues", "no prob", "no tension", "no wait", "no idea",
+                              "can't believe", "cant believe", "can't wait", "cant wait", "can't thank", "cant thank"]
+    /// A refusal said with a verb rather than a bare "no" — these are read wherever they stand in a short line,
+    /// so "oh no, I can't make it" is still a refusal while a bare "oh no" is not.
+    static let refusalVerbs = ["can't", "cant", "cannot", "not possible", "won't be able", "wont be able", "unable to",
+                               "not happening", "no way", "nahi ho payega", "nahi ho paayega", "nahi kar"]
+    /// The later words that commit to doing the thing ("will do", "I'll send"), as against the ones that only name a
+    /// time ("tomorrow", "this week"). A refusal that names a time is still a refusal — "sorry, can't this week" is a
+    /// no, not a promise — but a refusal that names an action is a promise: "can't today, will send tomorrow".
+    static let commitments = ["will do", "i'll", "i will", "will send", "will share", "will get back", "will check",
+                              "will let you know", "on it", "kar dunga", "bhej dunga", "kar deta hoon"]
     /// Their word that it is settled: a receipt closes on its own …
     static let receipts = ["got it", "received", "works now", "working now", "done", "ok done", "sorted", "resolved", "fixed", "mil gaya", "ho gaya", "all good", "that works", "it works"]
     /// … the ones that mean it wherever they stand in the line ("thanks, received"); a bare "done" counts only as the line's first word ("let me know when done" is a wait, not a receipt) …
@@ -21,7 +35,7 @@ public enum AskAnswering {
     /// A word that turns a receipt around: "not done yet" is no receipt, and "once fixed, ping me" is a wait.
     static let negations = ["not", "nahi", "doesn't", "didn't", "don't", "isn't", "still", "yet", "never", "cannot", "can't", "hasn't", "haven't", "doesnt", "didnt", "dont", "if", "when", "once", "after", "unless", "until"]
     /// What a line may open with before the word that counts: "ok, will do" · "sorry, can't" · "great, thanks".
-    static let softeners: Set<String> = ["ok", "okay", "oh", "ah", "ohh", "yes", "yeah", "haan", "arre", "sorry", "hmm", "umm", "great", "cool", "perfect", "awesome", "alright", "sure", "yep", "wow", "hey", "hi", "bhai", "bro", "dude", "man"]
+    static let softeners: Set<String> = ["ok", "okay", "yes", "yeah", "haan", "arre", "sorry", "hmm", "umm", "great", "cool", "perfect", "awesome", "alright", "sure", "yep", "wow", "hey", "hi", "bhai", "bro", "dude", "man"]
     static let stop: Set<String> = ["the", "and", "for", "with", "about", "that", "this", "you", "your", "can", "could", "would", "please", "pls", "have", "has", "had", "will", "what", "when", "where", "how", "why", "which", "who", "are", "was", "were", "not", "but", "its", "it's", "any", "all", "just", "also", "brownie", "hey", "dude", "bro", "bhai", "kya", "hai", "kaise", "kab", "bata", "do", "ye", "mai", "wala", "ka", "ki", "ke", "important", "message", "urgent", "really"]
 
     public static func words(_ s: String) -> Set<String> {
@@ -34,10 +48,18 @@ public enum AskAnswering {
     }
     static func has(_ n: String, _ phrases: [String]) -> Bool { phrases.contains { n.contains(" \($0) ") } }
     static func opens(_ n: String, _ phrases: [String]) -> Bool { phrases.contains { n.hasPrefix(" \($0) ") } }
+    /// Dismay about something else opens a line the way a softener does — but "oh no" is sympathy, not a refusal,
+    /// so these are not stripped when a bare no is what stands behind them.
+    static let sympathy: Set<String> = ["oh", "ah", "ohh", "aw", "aww", "ugh", "damn", "shit"]
+    static let bareNo: Set<String> = ["no", "nope", "nah", "nahi"]
     /// The line with its opening softeners gone, so "sorry, can't" reads as a refusal and "ok done" as a receipt.
+    /// "oh no" keeps its "oh", which is what stops sympathy about a cancelled train from closing an open question.
     static func lead(_ n: String) -> String {
         var words = n.split(separator: " ").map(String.init)
-        while let f = words.first, softeners.contains(f) { words.removeFirst() }
+        while let f = words.first, softeners.contains(f) || sympathy.contains(f) {
+            if sympathy.contains(f), words.count > 1, bareNo.contains(words[1]) { break }
+            words.removeFirst()
+        }
         return " " + words.joined(separator: " ") + " "
     }
 
@@ -54,9 +76,11 @@ public enum AskAnswering {
         let bare = line.lowercased().trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters))
         let n = norm(line), l = lead(n), count = n.split(separator: " ").count
         if acknowledgements.contains(bare) || acknowledgements.contains(l.trimmingCharacters(in: .whitespaces)) { return .answered }
+        // a refusal is read before a later: "sorry, can't this week" is a no that names a week, not a promise —
+        // unless the same line commits to doing it anyway ("can't today, will send tomorrow"), which is a promise.
+        let refuses = (opens(l, refusals) && count <= 12) || (has(l, refusalVerbs) && count <= 14)
+        if refuses, !has(n, notRefusals), !has(n, commitments) { return .declined }
         if has(n, laters) { return .promised }
-        let refuses = (opens(l, refusals) && count <= 12) || (has(l, ["not possible", "nahi ho payega", "nahi ho paayega", "won't be able", "wont be able", "not happening", "no way"]) && count <= 20)
-        if refuses, !opens(l, notRefusals) { return .declined }
         return (overlap(question: question, line: line)?.score ?? 0) >= 0.34 ? .answered : nil
     }
     /// Does one of their lines say the ask is settled? A receipt ("got it", "works now") does on its own — they may have
@@ -95,6 +119,9 @@ public enum AskAnswering {
         }
         if let verdict { return verdict }
         guard anyMine else { return Verdict(outcome: .open, at: window.last?.at ?? .distantPast) }
+        // the user wrote, but not one content word — "oh no", "hmm", "😅". That is not too little to tell; it is
+        // plainly not an answer to a question, so the ask stays open without troubling the reader about it.
+        if !rest.isEmpty, words(rest.joined(separator: "\n")).isEmpty { return Verdict(outcome: .open, at: window.last?.at ?? .distantPast) }
         guard let o = overlap(question: question, line: rest.joined(separator: "\n")), o.score == 0, o.lineWords >= 6 else { return nil }
         return Verdict(outcome: .open, at: window.last?.at ?? .distantPast)
     }

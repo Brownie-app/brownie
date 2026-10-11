@@ -15,9 +15,19 @@ public enum QuietCheck {
     /// You wrote to someone this recently → no card asking you to write to them again, unless a date or a came-back says so.
     public static let recentReplyHours = 6.0
 
+    /// How long a card you turned down keeps the same card from being proposed again. A card you *fired* is quiet for
+    /// its own lifetime — you did it, and next week's version of the same errand is a fair thing to raise. A card you
+    /// *dismissed* is a judgement about the thing itself, and asking again tomorrow is the single most annoying thing
+    /// this app can do, so it stays quiet for a fortnight. A due date or a came-back still gets through: both are news.
+    public static let dismissedQuietDays = 14.0
+
     /// `noteUpdated` answers with the day a note's substance last changed (`Note.updatedAt`, from its front-matter's
     /// `updated`), never the file's mtime — the nightly status-block rewrite and iCloud must not make a note look fresh.
-    public static func run(cards: [Card], loops: [Loop], past: [Card], noteUpdated: (String) -> Date?, fileExists: (String) -> Bool, now: Date, staleDays: Int) -> Result {
+    /// How recently an ask must have been settled for a card that chases it to be dropped. Beyond this the answer is
+    /// old news and a card about the same subject is a new errand, not a stale chase.
+    public static let answeredQuietDays = 7.0
+
+    public static func run(cards: [Card], loops: [Loop], past: [Card], asks: [Ask] = [], noteUpdated: (String) -> Date?, fileExists: (String) -> Bool, now: Date, staleDays: Int) -> Result {
         var r = Result()
         for c in cards where c.state == .ready {
             // you just wrote to them — the next move is theirs
@@ -36,6 +46,35 @@ public enum QuietCheck {
             // the same loop was fired within the card's lifetime, and this is not a deliberate nudge
             if let l = c.loopID, !c.isComeBack, past.contains(where: { $0.loopID == l && $0.state == .fired && now.timeIntervalSince($0.resolvedAt ?? $0.createdAt) < Card.lifetime }) {
                 r.dropped.append((c, "you already fired a card for this")); continue
+            }
+            // you have seen this card before and answered it — by doing it, or by turning it down. A card born of an
+            // ask carries no loop id and is stamped with a fresh id every night, so the rule above never sees it; this
+            // one recognises the card itself. Without it the same nudge arrives every morning until the ask lapses.
+            let twin: Card? = (c.isComeBack || c.isDue) ? nil : past.first { (p: Card) -> Bool in
+                guard p.state == .dismissed || p.state == .fired else { return false }
+                let quiet: TimeInterval = p.state == .dismissed ? dismissedQuietDays * 86400 : Card.lifetime
+                guard now.timeIntervalSince(p.resolvedAt ?? p.createdAt) < quiet else { return false }
+                return QuietCheck.twin(p, c)
+            }
+            if let twin {
+                let when = ago(now.timeIntervalSince(twin.resolvedAt ?? twin.createdAt))
+                r.dropped.append((c, twin.state == .fired ? "you already did this \(when)" : "you turned this down \(when)")); continue
+            }
+            // the question it chases has been answered since. A card born of an ask carries no loop id, so the rule
+            // above cannot see it; this one matches the card against the asks themselves, the same way a loop is
+            // matched to the ask it came from. It is the deterministic backstop for a judge that proposed a chase
+            // from a summary written before the answer arrived.
+            if let p = c.person, let settled = asks.first(where: { a in
+                // isAnswered, not isSettled: here the benefit of the doubt is the kind reading. They asked, the user
+                // wrote back, and the reply shares the subject — that is enough not to nag. A promise is not an answer,
+                // and `isAnswered` already says so, which is what keeps the chase for a thing genuinely still owed.
+                guard a.isAnswered, samePerson(p, a.person) else { return false }
+                guard let at = StatusRules.settledAt(a), now.timeIntervalSince(at) < answeredQuietDays * 86400 else { return false }
+                // the title alone, not the reasoning: the title is what the card is about, while "why" is prose that
+                // only dilutes the share of words the two have in common.
+                return AskLedger.overlap(a.question, c.title) >= 0.5
+            }) {
+                r.dropped.append((c, "they have been answered since — \(settled.person) asked \"\(settled.question.prefix(60))\"")); continue
             }
             // an attachment or a note the recipe needs is gone
             if let missing = neededFiles(c).first(where: { !fileExists($0) }) {
@@ -63,6 +102,20 @@ public enum QuietCheck {
         return r
     }
 
+    /// The share of words two cards must have in common to be the same card a fortnight apart. Higher than the
+    /// one night's dedupe uses, because that one only ever compares cards the same judge made in the same hour,
+    /// where near-identical wording really is one errand — while this one reaches back over days, and two
+    /// different things to say to the same person must both still get through.
+    static let twinOverlap = 0.8
+    /// The same card as one you already answered: the same loop, or the same person and almost the same words.
+    static func twin(_ a: Card, _ b: Card) -> Bool {
+        if let l = a.loopID, let m = b.loopID { return l == m }
+        guard let pa = CardDedupe.person(a), let pb = CardDedupe.person(b), PersonKey.sameKey(pa, pb) else { return false }
+        let wa = LoopLedger.words(a.title + " " + a.why + " " + a.draft), wb = LoopLedger.words(b.title + " " + b.why + " " + b.draft)
+        guard !wa.isEmpty, !wb.isEmpty else { return false }
+        return Double(wa.intersection(wb).count) / Double(min(wa.count, wb.count)) >= twinOverlap
+    }
+
     /// One matcher for the whole app: "Nitesh (+919540752593)" and "Nitesh" are one person, by `PersonKey`.
     static func samePerson(_ a: String?, _ b: String) -> Bool {
         guard let a else { return false }
@@ -72,7 +125,9 @@ public enum QuietCheck {
         let m = Int(t / 60)
         if m < 2 { return "just now" }
         if m < 60 { return "\(m) minutes ago" }
-        return "\(m / 60) hour\(m / 60 == 1 ? "" : "s") ago"
+        if m < 36 * 60 { return "\(m / 60) hour\(m / 60 == 1 ? "" : "s") ago" }
+        let d = m / (24 * 60)
+        return d == 1 ? "yesterday" : "\(d) days ago"
     }
     static func neededFiles(_ c: Card) -> [String] {
         switch c.recipe {
