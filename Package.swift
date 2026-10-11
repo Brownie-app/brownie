@@ -95,6 +95,9 @@ let package = Package(
         .testTarget(name: "SchedulingTests", dependencies: ["Scheduling"]),
         // Whole nights, replayed: invented people over invented days, through the real pieces in the real order.
         .testTarget(name: "ScenarioTests", dependencies: ["Domain", "LocalSources", "CloudSources", "Proactive", "Knowledge", "Platform", "Support"]),
+        // End-to-end against Apple's own on-device model. Skips itself on a Mac that cannot run it, which
+        // includes every CI runner — see the suite's own note for what that does and does not prove.
+        .testTarget(name: "InferenceTests", dependencies: ["Inference", "Domain", "Support"]),
         .testTarget(name: "Eval", dependencies: ["Domain", "Inference", "Ingest", "Privacy"], path: "Tests/Eval", resources: [.copy("Corpus")]),
     ]
 )
