@@ -6,7 +6,9 @@ import Support
 /// The one place engine choice + credentials become a `Brain`. Settings (store) decide the
 /// engine; Keychain (or the Debug env file) supplies the key.
 public enum BrainEngine: String, CaseIterable, Sendable {
-    case openai, anthropic, openrouter, custom, local, none
+    // Order is the order they are offered. The two that cost nothing come first on purpose: a stranger
+    // scanning the grid should meet a choice they can make before one that asks them to go and get a key.
+    case local, none, openai, anthropic, openrouter, custom
     public var displayName: String {
         switch self {
         case .openai: return "ChatGPT / OpenAI"
@@ -20,6 +22,21 @@ public enum BrainEngine: String, CaseIterable, Sendable {
     public var keyName: String? {
         switch self { case .openai: return "OPENAI_API_KEY"; case .anthropic: return "ANTHROPIC_API_KEY"; case .openrouter: return "OPENROUTER_API_KEY"; case .custom: return "CUSTOM_BRAIN_API_KEY"; case .local, .none: return nil }
     }
+    /// The line under the name, wherever the engine is offered. It lives here rather than in a view because
+    /// onboarding and Settings used to word the same choice differently — and onboarding told the one key-free
+    /// option, "This Mac only", that it needed "Your own API key".
+    public var caption: String {
+        switch self {
+        case .local: return "No key, no signup · nothing leaves, ever · plainer cards, no Hands"
+        case .none: return "Notes only · no cards, no drafts, no Hands"
+        case .openai: return "Your OpenAI key · drafts, cards, Hands"
+        case .anthropic: return "Your Anthropic key · official computer use"
+        case .openrouter: return "Any model, on your key"
+        case .custom: return "LM Studio or any local server · simpler cards"
+        }
+    }
+    /// True when this engine cannot do anything without a key the user has not given.
+    public var needsKey: Bool { self == .openai || self == .anthropic || self == .openrouter }
     public var defaultModel: String {
         switch self { case .openai: return "gpt-5.6-luna"; case .anthropic: return "claude-opus-5"; case .openrouter: return "anthropic/claude-opus-5"; case .custom: return "local"; case .local: return "gemma-4-e4b"; case .none: return "" }
     }
@@ -37,6 +54,11 @@ public struct BrainConfig: Sendable, Equatable {
 public enum BrainFactory {
     public static func make(_ c: BrainConfig) -> (any Brain)? {
         let key = c.engine.keyName.flatMap(Secrets.value) ?? ""
+        // No key, no brain. Without this the app manufactures a brain that sends "Bearer none", the first run
+        // dies on a 401, and the first thing a stranger ever reads is "The brain rejected your key" about a key
+        // they never had. Returning nil instead puts them on the no-brain path the app already knows how to walk.
+        // `.custom` is exempt: a local server legitimately needs no key, which is what `hasKey` already says.
+        guard !(c.engine.needsKey && key.isEmpty) else { return nil }
         switch c.engine {
         case .openai: return OpenAICompatibleBrain(flavour: .openai, baseURL: URL(string: "https://api.openai.com/v1")!, apiKey: key, model: c.model)
         case .openrouter: return OpenAICompatibleBrain(flavour: .openrouter, baseURL: URL(string: "https://openrouter.ai/api/v1")!, apiKey: key, model: c.model)

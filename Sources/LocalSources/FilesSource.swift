@@ -9,7 +9,7 @@ import Support
 public struct FilesSource: Source {
     public static let descriptor = SourceDescriptor(
         id: "files", name: "Files", detail: "Documents, Desktop, Downloads · screenshots included",
-        door: .localDatabase, permissions: [], supportsPerBucketOptIn: true)
+        door: .localDatabase, permissions: [.filesAndFolders], supportsPerBucketOptIn: true)
 
     public let roots: [URL]
     private let log = Log("source.files")

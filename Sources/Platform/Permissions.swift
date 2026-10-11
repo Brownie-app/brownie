@@ -22,6 +22,14 @@ public enum PermissionProbe {
             return EKEventStore.authorizationStatus(for: .event) == .fullAccess
         case .contacts:
             return CNContactStore.authorizationStatus(for: .contacts) == .authorized
+        case .filesAndFolders:
+            // There is no API that reports this; the honest probe is to try. Any one of the three readable
+            // counts as granted, because Brownie only needs somewhere to look. Note that the first call is
+            // also what raises the prompt — so this is never run before the user has been told why.
+            let h = FileManager.default.homeDirectoryForCurrentUser
+            return ["Documents", "Desktop", "Downloads"].contains { name in
+                (try? FileManager.default.contentsOfDirectory(atPath: h.appendingPathComponent(name).path)) != nil
+            }
         default:
             return false
         }
@@ -39,6 +47,7 @@ public enum PermissionProbe {
         case .contacts: anchor = "Privacy_Contacts"
         case .calendar: anchor = "Privacy_Calendars"
         case .automation: anchor = "Privacy_Automation"
+        case .filesAndFolders: anchor = "Privacy_FilesAndFolders"
         }
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)") {
             NSWorkspace.shared.open(url)
