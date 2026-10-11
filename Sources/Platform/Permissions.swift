@@ -3,6 +3,8 @@ import AppKit
 import ApplicationServices
 import EventKit
 import Contacts
+import Speech
+import AVFoundation
 import Domain
 
 /// Read-only probes for macOS grants. Requesting is the app's job (it opens the right pane);
@@ -22,6 +24,12 @@ public enum PermissionProbe {
             return EKEventStore.authorizationStatus(for: .event) == .fullAccess
         case .contacts:
             return CNContactStore.authorizationStatus(for: .contacts) == .authorized
+        case .speech:
+            // Was falling to `default: return false`, so Speech could never report as granted however it was
+            // answered — and the one path that needs it, hold-to-talk, is silent when it is missing.
+            return SFSpeechRecognizer.authorizationStatus() == .authorized
+        case .microphone:
+            return AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
         case .filesAndFolders:
             // There is no API that reports this; the honest probe is to try. Any one of the three readable
             // counts as granted, because Brownie only needs somewhere to look. Note that the first call is
