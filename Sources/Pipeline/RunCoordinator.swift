@@ -128,6 +128,9 @@ public actor RunCoordinator {
             }
 
             // 2–4. CLOUD
+            /// Set when the brain fell over at a stage the night can survive without, so the record can say which
+            /// half ran instead of reporting the whole night as a brain failure.
+            var brainFailedAt: String?
             // Only summaries the notes have not absorbed yet, oldest first; a resumed sync feeds the ids it froze.
             let summaries = try await store.unmergedSummaries()
             let weekAgo = deps.clock.now().addingTimeInterval(-7 * 86400)
@@ -160,6 +163,16 @@ public actor RunCoordinator {
                     let readStats = stats
                     // The notes a brain without file tools lost to a refusal are counted whether or not the sync went through.
                     do { usage = try await builder.sync(summaries: summaries, progress: { p in var p = p; p.stats = readStats; onEvent(.progress(p)) }, onEvent: { e in if case .message(let m) = e { onEvent(.thought(m)) } }) }
+                    catch let e as BrainError where { if case .badResponse = e { return true } else { return false } }() {
+                        // A brain that answers badly must not cost the whole night. Rethrowing here jumps past the
+                        // judge, the cards, the loop ledger, the status block (pure rules, no model needed), Today.md
+                        // and the FINISH housekeeping the comments promise happens "every run" — so one unparseable
+                        // reply used to throw away the half of the night that never needed a brain at all.
+                        stats.refused = await builder.refusals
+                        log.warn("knowledge: \(e) — writing what needs no brain and carrying on")
+                        brainFailedAt = "notes"
+                        _ = await Self.notesOnly(summaries: summaries, store: store, deps: deps, log: log)
+                    }
                     catch { stats.refused = await builder.refusals; throw error }
                     stats.refused = await builder.refusals
                 }
@@ -311,7 +324,8 @@ public actor RunCoordinator {
                         else { _ = try Vault.mirror(root, to: dest) }
                     } catch { log.warn("iCloud \(mode): \(error)") }
                 }
-                outcome = .ran(cards: fresh.count)
+                outcome = brainFailedAt == nil ? .ran(cards: fresh.count)
+                    : .partial(stage: "the brain couldn't write notes — the day's note and the status block were written instead")
             } else if deps.brain == nil {
                 // NOTES ONLY. Three screens promised that Brownie reads and keeps notes without a brain, and
                 // none of it was true: every note in the vault came from KnowledgeBuilder, which lives inside
@@ -322,25 +336,7 @@ public actor RunCoordinator {
                 // build proper notes out of everything read this week, and `prune` only ever deletes judged rows.
                 outcome = .failedBrain(.notConfigured)
                 if !summaries.isEmpty { log.info("no brain: keeping \(summaries.count) summaries for later") }
-                let asks = Self.loadAsks(try await store.value(SettingKey.asks))
-                var written = 0
-                for note in SummaryNotes.notes(summaries: summaries, asks: asks, now: deps.clock.now(),
-                                               calendar: { var c = Calendar(identifier: .gregorian); c.timeZone = deps.clock.timeZone; return c }(),
-                                               existing: { _ in nil }) {
-                    let title = (note.path as NSString).deletingPathExtension
-                    let doc = Note(relativePath: note.path, title: (title as NSString).lastPathComponent, body: note.body,
-                                   sources: [], updatedAt: deps.clock.now(), userEdited: false)
-                    do { try await deps.knowledge.save(doc); written += 1 } catch { log.warn("notes only: \(note.path): \(error)") }
-                }
-                if written > 0 {
-                    deps.stage("Write what was read", "\(written) day\(written == 1 ? "" : "s"), on this Mac, with no brain")
-                    log.info("notes only: wrote \(written) day note(s)")
-                }
-                // The status block is rules all the way down, so a keyless vault still says who is waiting on what.
-                let registry = PersonRegistry(vault: deps.knowledge.rootURL, now: { [clock = deps.clock] in clock.now() }, selfNames: deps.selfNames)
-                await registry.load()
-                _ = await Self.writeStatusBlock(asks: asks, loops: await LoopLedger.load(store), knowledge: deps.knowledge,
-                                                registry: registry, now: deps.clock.now(), timeZone: deps.clock.timeZone)
+                let written = await Self.notesOnly(summaries: summaries, store: store, deps: deps, log: log)
                 if stats.read > 0 || written > 0 {
                     outcome = .partial(stage: "notes only — no brain, so nothing was judged or drafted")
                 }
@@ -477,6 +473,36 @@ public actor RunCoordinator {
         guard let json = try await store.value(SettingKey.enabledBuckets(source.id)), let d = json.data(using: .utf8), let ids = try? JSONDecoder().decode([String].self, from: d) else { return [] }
         return Set(ids.map(BucketID.init))
     }
+    /// The half of a night that needs no model: a dated note of what was read, and the status block.
+    ///
+    /// Called from two places that used to be one. It ran only when there was no brain configured at all, which
+    /// meant that choosing "This Mac only" — a brain that cannot yet build notes — produced strictly less than
+    /// choosing nothing: the failure happened before this work, and this work was gated on the brain being absent
+    /// rather than on it having failed. Returns how many day notes were written.
+    ///
+    /// The summaries it renders are deliberately NOT marked merged: leaving `mergedAt` nil is what lets a brain
+    /// added next week build proper notes out of everything read this week, and `prune` only deletes judged rows.
+    static func notesOnly(summaries: [SummaryRecord], store: any RunStore, deps: Dependencies, log: Log) async -> Int {
+        let asks = loadAsks(try? await store.value(SettingKey.asks))
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = deps.clock.timeZone
+        var written = 0
+        for note in SummaryNotes.notes(summaries: summaries, asks: asks, now: deps.clock.now(), calendar: calendar, existing: { _ in nil }) {
+            let title = ((note.path as NSString).deletingPathExtension as NSString).lastPathComponent
+            let doc = Note(relativePath: note.path, title: title, body: note.body, sources: [], updatedAt: deps.clock.now(), userEdited: false)
+            do { try await deps.knowledge.save(doc); written += 1 } catch { log.warn("notes only: \(note.path): \(error)") }
+        }
+        if written > 0 {
+            deps.stage("Write what was read", "\(written) day\(written == 1 ? "" : "s"), on this Mac, with no brain")
+            log.info("notes only: wrote \(written) day note(s)")
+        }
+        // The status block is rules all the way down, so a vault with no usable brain still says who is waiting on what.
+        let registry = PersonRegistry(vault: deps.knowledge.rootURL, now: { [clock = deps.clock] in clock.now() }, selfNames: deps.selfNames)
+        await registry.load()
+        _ = await writeStatusBlock(asks: asks, loops: await LoopLedger.load(store), knowledge: deps.knowledge,
+                                   registry: registry, now: deps.clock.now(), timeZone: deps.clock.timeZone)
+        return written
+    }
+
     public static func loadAsks(_ json: String?) -> [Ask] {
         guard let j = json, let d = j.data(using: .utf8) else { return [] }
         return (try? JSONDecoder().decode([Ask].self, from: d)) ?? []

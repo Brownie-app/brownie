@@ -114,6 +114,12 @@ public enum BrainError: Error, Sendable, Equatable {
 
 public protocol Brain: Sendable {
     var descriptor: BrainDescriptor { get }
+    /// How much corpus this brain can be handed in one call. The knowledge builder slices the night into parts
+    /// of this size. It used to be 700 KB for every brain, including one whose whole context is 16k tokens —
+    /// which meant the part was planned nineteen times larger than the brain could read, the surplus was cut
+    /// inside the brain where the builder could not see it, and the builder then marked the whole part merged.
+    /// Rows nobody ever read were stamped and deleted. A brain that knows its own size cannot be overfed.
+    var corpusBudget: Int { get }
     func validate() async throws
     func complete(_ request: BrainRequest) async throws -> BrainResult
 }
@@ -123,6 +129,7 @@ public protocol AgenticBrain: Brain {
 }
 
 public extension Brain {
+    var corpusBudget: Int { BrainLimits.corpusPartBudget }
     var isAgentic: Bool { self is AgenticBrain }
 }
 

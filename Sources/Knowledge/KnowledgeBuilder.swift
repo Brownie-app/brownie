@@ -46,11 +46,11 @@ public actor KnowledgeBuilder {
     /// the user's ratings of the notes taught (the note feedback digest), given to both prompts at `{{instructions}}`.
     /// `selfNames` are the user's own, so the tools refuse a People or Groups note about them.
     public init(brain: any Brain, store: any KnowledgeStore, runStore: any RunStore, bundle: Bundle? = nil,
-                partBudget: Int = BrainLimits.corpusPartBudget, now: @escaping @Sendable () -> Date = { Date() }, timeZone: TimeZone = .current,
+                partBudget: Int? = nil, now: @escaping @Sendable () -> Date = { Date() }, timeZone: TimeZone = .current,
                 coverage: @escaping @Sendable () async -> String? = { nil }, people: @escaping @Sendable () async -> [Person] = { [] }, instructions: String = "", selfNames: [String] = []) throws {
         let bundle = bundle ?? Bundle.module
         self.brain = brain; self.store = store; self.runStore = runStore
-        self.partBudget = partBudget; self.now = now; self.timeZone = timeZone; self.coverage = coverage; self.people = people; self.instructions = instructions; self.selfNames = SelfNames.clean(selfNames)
+        self.partBudget = partBudget ?? brain.corpusBudget; self.now = now; self.timeZone = timeZone; self.coverage = coverage; self.people = people; self.instructions = instructions; self.selfNames = SelfNames.clean(selfNames)
         buildPrompt = try String(contentsOf: bundle.url(forResource: "build", withExtension: "md", subdirectory: "Prompts") ?? bundle.url(forResource: "build", withExtension: "md")!, encoding: .utf8)
         updatePrompt = try String(contentsOf: bundle.url(forResource: "update", withExtension: "md", subdirectory: "Prompts") ?? bundle.url(forResource: "update", withExtension: "md")!, encoding: .utf8)
     }
@@ -108,6 +108,8 @@ public actor KnowledgeBuilder {
                 } catch { try? restore(snapshot, to: staging); throw error }
                 try? fm.removeItem(at: snapshot)
                 // Mark first, then advance: a crash between the two makes the resumed part empty rather than fed twice.
+                // Safe only because the part was planned to the brain's own `corpusBudget`: a part larger than the
+                // brain can read would be cut inside the brain, unseen here, and these rows stamped unread.
                 try await runStore.markMerged(ids: part.map(\.id), at: now())
             }
             t.nextPart = i + 1
@@ -195,7 +197,16 @@ public actor KnowledgeBuilder {
         let existing = FileTools.listing(staging).prefix(200).joined(separator: "\n")
         let r = try await brain.complete(BrainRequest(system: system + "\n\nYou have no file tools. Reply with JSON {\"files\":[{\"path\":…,\"content\":…}]} containing every file to write or overwrite (full contents).",
                                                      input: "EXISTING FILES:\n\(existing)\n\n" + input, schema: schema, maxOutputTokens: 32_000))
-        guard let data = r.jsonData, let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let files = obj["files"] as? [[String: Any]] else { throw BrainError.badResponse("no file map") }
+        // One guard used to collapse five distinct failures — no bracket pair, invalid JSON, a top level that is
+        // not an object, no "files" key, "files" not an array of objects — and print none of the reply, so a real
+        // failure in the field said four words and nothing more. Say which one it was, and quote what came back.
+        guard let data = r.jsonData else { throw BrainError.badResponse("no file map: nothing JSON-shaped in the reply (\(r.text.prefix(200)))") }
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw BrainError.badResponse("no file map: the reply is not valid JSON — unescaped newlines or quotes in a note body do this (\(r.text.prefix(200)))")
+        }
+        guard let files = obj["files"] as? [[String: Any]] else {
+            throw BrainError.badResponse("no file map: JSON parsed but has no files array (keys: \(obj.keys.sorted().joined(separator: ", "))) (\(r.text.prefix(200)))")
+        }
         // No read step exists here, so the read-first rule is waived; every other rule and the re-attached front-matter still apply.
         // A refusal is not swallowed: this brain cannot see the rules' state and gets no turn to write again, so each one
         // is logged, shown and counted — and a part whose every note was refused is not done, so its rows are fed again.
@@ -210,7 +221,10 @@ public actor KnowledgeBuilder {
             }
         }
         refusals += refused
-        if written == 0, refused > 0 { throw Failure.nothingWritten }
+        // Whatever `refused` says. A reply of {"files":[]}, or entries missing path or content, writes nothing and
+        // used not to throw — and `hasNotes(staging)` cannot catch it either, because staging is a copy of the live
+        // vault. So a brain that answered with an empty map consumed the night's summaries and left no trace.
+        if written == 0 { throw Failure.nothingWritten }
         return r.usage
     }
 
