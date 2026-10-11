@@ -8,25 +8,27 @@ import Support
 public enum BrainEngine: String, CaseIterable, Sendable {
     // Order is the order they are offered. The two that cost nothing come first on purpose: a stranger
     // scanning the grid should meet a choice they can make before one that asks them to go and get a key.
-    case none, local, openai, anthropic, openrouter, custom
+    case none, apple, local, openai, anthropic, openrouter, custom
     public var displayName: String {
         switch self {
         case .openai: return "ChatGPT / OpenAI"
         case .anthropic: return "Claude"
         case .openrouter: return "OpenRouter"
         case .custom: return "LM Studio / custom"
+        case .apple: return "Apple Intelligence"
         case .local: return "This Mac only"
         case .none: return "No brain"
         }
     }
     public var keyName: String? {
-        switch self { case .openai: return "OPENAI_API_KEY"; case .anthropic: return "ANTHROPIC_API_KEY"; case .openrouter: return "OPENROUTER_API_KEY"; case .custom: return "CUSTOM_BRAIN_API_KEY"; case .local, .none: return nil }
+        switch self { case .openai: return "OPENAI_API_KEY"; case .anthropic: return "ANTHROPIC_API_KEY"; case .openrouter: return "OPENROUTER_API_KEY"; case .custom: return "CUSTOM_BRAIN_API_KEY"; case .local, .none, .apple: return nil }
     }
     /// The line under the name, wherever the engine is offered. It lives here rather than in a view because
     /// onboarding and Settings used to word the same choice differently — and onboarding told the one key-free
     /// option, "This Mac only", that it needed "Your own API key".
     public var caption: String {
         switch self {
+        case .apple: return "No key, no signup · this Mac's own model · notes and cards, nothing leaves"
         case .local: return "No key, nothing leaves, ever · no notes or cards yet — same as No brain"
         case .none: return "A note each day of what was read · no cards, no drafts, no Hands"
         case .openai: return "Your OpenAI key · drafts, cards, Hands"
@@ -38,7 +40,7 @@ public enum BrainEngine: String, CaseIterable, Sendable {
     /// True when this engine cannot do anything without a key the user has not given.
     public var needsKey: Bool { self == .openai || self == .anthropic || self == .openrouter }
     public var defaultModel: String {
-        switch self { case .openai: return "gpt-5.6-luna"; case .anthropic: return "claude-opus-5"; case .openrouter: return "anthropic/claude-opus-5"; case .custom: return "local"; case .local: return "gemma-4-e4b"; case .none: return "" }
+        switch self { case .openai: return "gpt-5.6-luna"; case .anthropic: return "claude-opus-5"; case .openrouter: return "anthropic/claude-opus-5"; case .custom: return "local"; case .local: return "gemma-4-e4b"; case .apple: return "apple-on-device"; case .none: return "" }
     }
 }
 
@@ -68,9 +70,9 @@ public enum BrainFactory {
             let base = URL(string: c.customBaseURL) ?? URL(string: Secrets.value("CUSTOM_BRAIN_BASE_URL") ?? "http://127.0.0.1:1234/v1")!
             return OpenAICompatibleBrain(flavour: .custom, baseURL: base, apiKey: key, model: c.model.isEmpty ? (Secrets.value("CUSTOM_BRAIN_MODEL") ?? "local") : c.model)
         case .anthropic: return AnthropicBrain(apiKey: key, model: c.model)
-        case .local, .none: return nil   // the app builds LocalBrain itself — it needs the reader
+        case .local, .none, .apple: return nil   // the app builds these itself: one needs the reader, one needs the OS
         }
     }
 
-    public static func hasKey(_ e: BrainEngine) -> Bool { e.keyName.flatMap(Secrets.value).map { !$0.isEmpty } ?? (e == .custom || e == .local) }
+    public static func hasKey(_ e: BrainEngine) -> Bool { e.keyName.flatMap(Secrets.value).map { !$0.isEmpty } ?? (e == .custom || e == .local || e == .apple) }
 }

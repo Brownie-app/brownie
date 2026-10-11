@@ -26,6 +26,33 @@ import Platform
         var recorded: [AgentTask] { lock.withLock { tasks } }
     }
 
+    /// A brain shaped exactly like `AppleBrain`: the same capability set, and a small window. Apple's framework
+    /// cannot be imported from a test that must run on macOS 14 and in CI, so this stands in for it and pins the
+    /// contract the real one has to satisfy. If `AppleBrain` ever stops matching this, the real thing will take
+    /// the single-shot path — the one that cannot work — and nothing else would notice.
+    final class AppleShapedBrain: AgenticBrain, @unchecked Sendable {
+        let descriptor = BrainDescriptor(id: "apple", name: "Apple Intelligence", capabilities: [.json, .tools, .files], costLine: "")
+        var corpusBudget: Int { 6 * 1024 }
+        private let lock = NSLock()
+        private var parts = 0
+        private var singleShots = 0
+        func validate() async throws {}
+        func complete(_ r: BrainRequest) async throws -> BrainResult {
+            lock.withLock { singleShots += 1 }
+            throw BrainError.badResponse("a brain with file tools must never be asked for a whole file map")
+        }
+        func run(_ task: AgentTask, tools: [Tool], onEvent: @escaping @Sendable (AgentEvent) -> Void) async throws -> AgentResult {
+            let n: Int = lock.withLock { parts += 1; return parts }
+            // write one note per part, the way a small model works through a tool loop
+            if let write = tools.first(where: { $0.name == "write_file" }) {
+                _ = try? await write.run(Data(#"{"path":"Life/Part \#(n).md","content":"- Something happened (2026-09-16)"}"#.utf8))
+            }
+            return AgentResult(finalText: "ok", usage: Usage(inputTokens: 10, outputTokens: 1), turns: 1)
+        }
+        var partsSeen: Int { lock.withLock { parts } }
+        var singleShotAttempts: Int { lock.withLock { singleShots } }
+    }
+
     /// A brain without file tools: every part is answered with the same file map, as a local model would answer.
     final class FileMapBrain: Brain, @unchecked Sendable {
         let descriptor = BrainDescriptor(id: "filemap", name: "File map", capabilities: [.json], costLine: "")
@@ -59,7 +86,7 @@ import Platform
         let kb: FileKnowledgeStore
         let store: SQLiteRunStore
         var live: URL { kb.rootURL }
-        func builder(_ brain: any Brain, budget: Int = BrainLimits.corpusPartBudget, coverage: @escaping @Sendable () async -> String? = { nil }, people: @escaping @Sendable () async -> [Person] = { [] }) throws -> KnowledgeBuilder {
+        func builder(_ brain: any Brain, budget: Int? = nil, coverage: @escaping @Sendable () async -> String? = { nil }, people: @escaping @Sendable () async -> [Person] = { [] }) throws -> KnowledgeBuilder {
             try KnowledgeBuilder(brain: brain, store: kb, runStore: store, partBudget: budget, now: { KnowledgeBuilderTests.today }, timeZone: KnowledgeBuilderTests.utc, coverage: coverage, people: people)
         }
         func token() async throws -> KnowledgeBuilder.ResumeToken? {
@@ -452,5 +479,50 @@ import Platform
         #expect(w.read("People/D.md") == nil, "a note the user deleted and the brain left alone stays deleted")
         #expect(w.read("README.md") == "# Me\nportrait")
         #expect(try await w.token() == nil)
+    }
+
+    // MARK: - INTEGRATION · the contract Apple Intelligence has to satisfy
+
+    /// A brain that declares file tools must be driven through the tool loop, one part at a time — never asked
+    /// for a whole file map. This is the difference between Apple's model working and failing the way Gemma does.
+    @Test func aBrainWithFileToolsIsDrivenThroughTheLoopAndNeverAskedForAWholeVault() async throws {
+        let w = try Self.world()
+        try await w.seed(6, from: 0, bytes: 2_000)
+        let brain = AppleShapedBrain()
+        _ = try await w.builder(brain, budget: brain.corpusBudget).sync(summaries: try await w.store.summaries(since: nil), progress: { _ in }, onEvent: { _ in })
+        #expect(brain.singleShotAttempts == 0, "the single-shot path is what cannot work; a brain with tools must never reach it")
+        #expect(brain.partsSeen >= 1, "the tool loop ran")
+        #expect(w.body("Life/Part 1.md") != nil, "and what it wrote through write_file is in the vault")
+    }
+
+    /// The night is sliced to the brain's own window. A model that can hold 6 KB must not be handed a part
+    /// planned for one that can hold 700 KB — that mismatch is what let rows be cut unseen and stamped merged.
+    @Test func thePartsAreSlicedToTheBrainsOwnWindowAndNotTheBiggestBrainImaginable() async throws {
+        let w = try Self.world()
+        try await w.seed(12, from: 0, bytes: 2_000)      // ~24 KB of corpus
+        let small = AppleShapedBrain()
+        _ = try await w.builder(small).sync(summaries: try await w.store.summaries(since: nil), progress: { _ in }, onEvent: { _ in })
+        #expect(small.partsSeen > 1, "24 KB of summaries against a 6 KB window has to become several parts")
+
+        let w2 = try Self.world()
+        try await w2.seed(12, from: 0, bytes: 2_000)
+        let roomy = ScriptedBrain { n, tools in
+            if let write = tools.first(where: { $0.name == "write_file" }) {
+                _ = try? await write.run(Data(#"{"path":"Life/Roomy \#(n).md","content":"- Something happened (2026-09-16)"}"#.utf8))
+            }
+        }
+        _ = try await w2.builder(roomy, budget: BrainLimits.corpusPartBudget).sync(summaries: try await w2.store.summaries(since: nil), progress: { _ in }, onEvent: { _ in })
+        #expect(roomy.recorded.count == 1, "and the same night is one part for a brain with room for it")
+    }
+
+    /// Every row stamped merged must be one the brain was actually shown. The budget is what guarantees it:
+    /// a part that fits the window is a part the brain saw whole.
+    @Test func nothingIsMarkedMergedThatTheBrainWasNeverShown() async throws {
+        let w = try Self.world()
+        let seeded = try await w.seed(9, from: 0, bytes: 2_000)
+        let brain = AppleShapedBrain()
+        _ = try await w.builder(brain).sync(summaries: seeded, progress: { _ in }, onEvent: { _ in })
+        let merged = try await w.store.summaries(since: nil).filter { $0.mergedAt != nil }
+        #expect(merged.count == seeded.count, "every row was shown, across however many parts that took")
     }
 }
