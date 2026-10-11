@@ -34,11 +34,17 @@ struct BrownieApp: App {
             // One window: a brownie:// link or a Dock click brings it forward instead of opening another.
             .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
             .onReceive(NotificationCenter.default.publisher(for: .brownieAsk)) { n in if let g = n.object as? String, !g.isEmpty { NSApp.activate(ignoringOtherApps: true); if CommandIntent.isQuestion(g) { model.overlay = .none; model.screen = .ask; model.ask(g) } else { hands.run(g) } } else { hands.showCommandBar = true } }
+            .onReceive(model.$onboardingDone) { done in if done { model.startHandsOnce(hands) } }
             .onAppear {
-                // Speech and Notifications are asked for only once onboarding is done. They used to be asked
-                // here, on the root window appearing — which is behind step 1 — so the first thing a stranger
-                // saw was a Speech Recognition dialog over a screen that reads "Nothing to sign up for".
-                if model.onboardingDone { hands.start(); Notifier.requestPermission() }
+                // Speech and Notifications are asked for only once onboarding is done — they used to be asked
+                // here, on the root window appearing, which is behind step 1, so the first thing a stranger saw
+                // was a Speech Recognition dialog over a screen that reads "Nothing to sign up for".
+                //
+                // Not a plain `if`. `onboardingDone` starts false and only becomes true inside loadSettings(),
+                // which runs in the async bootstrap task — so at first render it is false for everyone, every
+                // launch, and a plain check silently never started Hands at all: no hold-to-talk, no ⌘⇧Space.
+                // `onReceive` below re-evaluates it the moment the setting actually loads.
+                if model.onboardingDone { model.startHandsOnce(hands) }
                 NSApp.setActivationPolicy(.regular); NSApp.activate(ignoringOtherApps: true)
                 Notifier.install(model: model)
                 if let i = CommandLine.arguments.firstIndex(of: "--screen"), i + 1 < CommandLine.arguments.count {   // dev: open on a screen
