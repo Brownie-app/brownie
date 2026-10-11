@@ -29,8 +29,8 @@ import Domain
     }
 
     @Test func theTwoThatCostNothingAreOfferedFirst() {
-        #expect(BrainEngine.allCases.prefix(2).map(\.rawValue) == ["none", "local"],
-                "the grid is rendered in this order, and a stranger should meet a choice they can make")
+        #expect(BrainEngine.allCases.prefix(3).map(\.rawValue) == ["none", "apple", "local"],
+                "the grid is rendered in this order, and a stranger should meet the choices that cost nothing first")
         #expect(BrainEngine.allCases.firstIndex(of: .none)! < BrainEngine.allCases.firstIndex(of: .local)!,
                 "and \"no brain\" comes before \"this Mac only\" while it is the one that does more: it writes the day's note and the status block, and this Mac's model cannot build notes at all")
     }
@@ -42,6 +42,22 @@ import Domain
         #expect(BrainEngine.none.caption.contains("note each day"))
         #expect(BrainEngine.local.caption.contains("no notes or cards yet"),
                 "the caption must not promise notes this engine has never once produced")
+    }
+
+    /// UNIT. Apple Intelligence as an engine: free, keyless, built by the app rather than the factory (the
+    /// factory cannot see the OS framework), and offered above the readers that cannot build notes.
+    @Test func appleIntelligenceIsAKeylessEngineTheFactoryDoesNotBuild() {
+        #expect(BrainEngine.apple.needsKey == false && BrainEngine.apple.keyName == nil)
+        #expect(BrainFactory.hasKey(.apple), "nothing to hold, so nothing is missing")
+        #expect(BrainFactory.make(BrainConfig(engine: .apple, model: "apple-on-device"), key: "") == nil,
+                "the app builds it — the Brain target cannot import FoundationModels, and must not pretend to")
+        #expect(BrainEngine.apple.caption.contains("No key"))
+        #expect(BrainEngine.apple.caption.contains("nothing leaves"))
+        let order = BrainEngine.allCases.map(\.rawValue)
+        #expect(order.firstIndex(of: "apple")! < order.firstIndex(of: "openai")!,
+                "the free one that works comes before the ones that cost money")
+        #expect(order.firstIndex(of: "apple")! < order.firstIndex(of: "local")!,
+                "and before the reader that cannot build notes")
     }
 
     @Test func theLocalAndNoBrainEnginesAreBuiltElsewhereOrNotAtAll() {

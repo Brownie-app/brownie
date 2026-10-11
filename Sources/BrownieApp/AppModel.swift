@@ -444,7 +444,11 @@ final class AppModel: ObservableObject {
     // MARK: brain + reader
 
     func rebuildBrain() {
-        if brainConfig.engine == .local {
+        if brainConfig.engine == .apple {
+            // Nothing is logged: the model is Apple's, on this Mac, and no request leaves to be logged.
+            brain = AppleIntelligence.brain()
+            brainStatus = AppleIntelligence.state.line
+        } else if brainConfig.engine == .local {
             brain = reader.map { LocalBrain(reader: $0) }    // nothing leaves, so nothing to log
             brainStatus = brain == nil ? "The reader isn't downloaded yet" : "This Mac only · nothing leaves"
         } else {

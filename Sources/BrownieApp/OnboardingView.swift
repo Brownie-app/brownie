@@ -8,6 +8,9 @@ struct OnboardingView: View {
     @EnvironmentObject var m: AppModel
     @Environment(\.theme) var t
     @State private var step = 1
+    /// Asked on appear and again whenever the app comes back to the front, because the answer changes while
+    /// Brownie is running — that is the entire point of offering a button that leaves for System Settings.
+    @State private var appleState: AppleBrainState = .needsNewerMacOS
     @State private var key = ""
     let labels = ["Welcome", "Download the reader", "Choose a brain", "Choose sources", "Permissions", "Overnight", "First read"]
 
@@ -23,6 +26,12 @@ struct OnboardingView: View {
             }.padding(.horizontal, 28).frame(height: 72).overlay(alignment: .top) { Rectangle().fill(t.sep).frame(height: 1) }
         }
         .frame(width: 900, height: 640).background(t.content)
+        .onAppear { appleState = AppleIntelligence.state }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            // They have just been to System Settings and come back. Ask again, so the tile goes live without a relaunch.
+            appleState = AppleIntelligence.state
+            if m.brainConfig.engine == .apple { m.rebuildBrain() }
+        }
     }
 
     func next() {
@@ -67,7 +76,7 @@ struct OnboardingView: View {
             h1("Then, the brain.")
             lead("Reading and filtering always happen on your Mac. Deciding what matters and drafting can stay here too, or go to a bigger model on a key of your own. Either way, only short, scrubbed summaries ever leave.")
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible())], spacing: 10) {
-                ForEach(BrainEngine.allCases, id: \.self) { e in
+                ForEach(BrainEngine.allCases.filter { $0 != .apple || appleState.isOffered }, id: \.self) { e in
                     Button { m.brainConfig.engine = e; m.brainConfig.model = e.defaultModel; m.saveBrain() } label: {
                         HStack(alignment: .top, spacing: 12) {
                             Circle().stroke(m.brainConfig.engine == e ? t.accent : t.ink3, lineWidth: 1.5).background(Circle().fill(m.brainConfig.engine == e ? t.accent : .clear)).frame(width: 16, height: 16).padding(.top, 1)
@@ -76,10 +85,25 @@ struct OnboardingView: View {
                     }.buttonStyle(.plain)
                 }
             }
-            if m.brainConfig.engine == .local {
+            if m.brainConfig.engine == .apple {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(appleState.line).font(.system(size: 12)).foregroundStyle(appleState.isUsable ? t.ink : t.ink2)
+                    if let action = appleState.action {
+                        BButton(title: action, kind: .primary) { if let u = AppleBrainState.settingsURL { NSWorkspace.shared.open(u) } }
+                    }
+                }.frame(maxWidth: .infinity, alignment: .leading)
+            } else if m.brainConfig.engine == .local {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(m.brainStatus).font(.system(size: 12)).foregroundStyle(t.ink)
                     Text("Nothing leaves your Mac, ever. But this Mac's model cannot build your notes yet, and a card has to be grounded in a note — so this gives you the same daily note as “No brain”, and no cards. Use a key if you want those. “What left your Mac” reads 0 bytes, every night.").font(.system(size: 11)).foregroundStyle(t.ink2)
+                    if let nudge = appleState.nudgeFromLocalReader {
+                        HStack(spacing: 8) {
+                            Text(nudge).font(.system(size: 11)).foregroundStyle(t.ink2)
+                            if appleState.isFixable, let u = AppleBrainState.settingsURL {
+                                Button("Turn it on") { NSWorkspace.shared.open(u) }.buttonStyle(.link).font(.system(size: 11))
+                            }
+                        }
+                    }
                 }.frame(maxWidth: .infinity, alignment: .leading)
             } else if m.brainConfig.engine == .none {
                 Text("Brownie will read and write notes, and leave the deciding to you. You can add a brain later in Settings; everything read before then is kept, and the next run works through it.")
