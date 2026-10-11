@@ -19,6 +19,9 @@ import Support
         private var inputs: [String] = []
         var failPart: Int?
         var failJudge = false
+        /// Answer the file-map request with prose, the way a small model does when the prompt tells it to call
+        /// tools it has not got.
+        var badFileMap = false
         /// What the judge answers, when a test wants loops back rather than nothing.
         var judgeReply = #"{"action_items":[],"loops":[],"loop_updates":[]}"#
         func validate() async throws {}
@@ -26,6 +29,7 @@ import Support
             if r.schema?.contains("\"files\"") == true {
                 let n: Int = lock.withLock { parts += 1; return parts }
                 if n == failPart { throw BrainError.usageLimit(retryAfter: nil) }
+                if badFileMap { return BrainResult(text: "I read README.md and the notes they touch, then called finish.", usage: .zero) }
                 return BrainResult(text: "{\"files\":[{\"path\":\"Notes/part\(n).md\",\"content\":\"# part \(n)\"}]}", usage: Usage(inputTokens: 1, outputTokens: 1))
             }
             if r.schema?.contains("action_items") == true {
@@ -48,6 +52,7 @@ import Support
     // 2026-09-16 12:00 UTC, a Wednesday: no Sunday letter is due.
     static let today = Date(timeIntervalSince1970: 1_789_560_000)
     static let clock = FixedClock(today, timeZone: TimeZone(identifier: "UTC")!)
+    static var utc: Calendar { var c = Calendar(identifier: .gregorian); c.timeZone = TimeZone(identifier: "UTC")!; return c }
 
     struct World {
         let dir: URL, kb: FileKnowledgeStore, store: SQLiteRunStore
@@ -80,6 +85,37 @@ import Support
     }
     static func titles(_ tag: String, _ n: Int, in input: String) -> Int { (0..<n).filter { input.contains("T\(tag)\($0) — ") }.count }
     static func night(_ w: World, _ brain: Fake) async -> RunOutcome { await w.coordinator(brain).run(trigger: .test, onEvent: { _ in }) }
+
+    /// A brain that answers badly is not the same as a brain that is unusable. The first costs the notes it
+    /// would have written; the second stops the night and says so. Before this, both threw from the same catch,
+    /// which jumped past the judge, the cards, the status block and the day's note — so one unparseable reply
+    /// threw away the half of the night that never needed a brain at all.
+    @Test func aReplyThatCannotBeParsedCostsTheNotesAndNotTheNight() async throws {
+        let w = try Self.world()
+        try await w.seed(3, tag: "p")
+        let brain = Fake(); brain.badFileMap = true
+        let outcome = await Self.night(w, brain)
+        guard case .partial(let stage) = outcome else { Issue.record("expected partial, got \(outcome)"); return }
+        #expect(stage.contains("the brain couldn't write notes"), Comment(rawValue: stage))
+        // The judge does NOT run, and that is the design rather than a second bug: `awaitsJudge` is
+        // `mergedAt != nil && judgedAt == nil`, so the judge only ever sees rows the notes absorbed. Cards are
+        // grounded in notes. A brain that cannot build notes therefore cannot produce cards either, however far
+        // the night is allowed to carry on — which is worth pinning, because it is tempting to assume that
+        // surviving the knowledge stage is enough to get a morning out of a small model. It is not.
+        #expect(brain.judged.isEmpty, "no notes absorbed the rows, so the judge is owed nothing")
+        let read = try await w.kb.note(at: SummaryNotes.path(for: Self.today, calendar: Self.utc))
+        #expect(read != nil, "the day's note is written by code and needed no brain")
+        #expect(try await w.rows().allSatisfy { $0.mergedAt == nil },
+                "and nothing is stamped merged, so a brain added later still builds the real notes from it")
+    }
+
+    @Test func aBrainThatIsUnusableStillStopsTheNight() async throws {
+        let w = try Self.world()
+        try await w.seed(3, tag: "q")
+        let brain = Fake(); brain.failPart = 1          // a usage limit, not a bad reply
+        #expect(await Self.night(w, brain) == .failedBrain(.usageLimit),
+                "a rejected key or an exhausted quota is the user's to fix, and must not be papered over")
+    }
 
     @Test func theJudgeSeesRowsOnTheNightTheNotesAbsorbThemAndNeverAgain() async throws {
         let w = try Self.world()

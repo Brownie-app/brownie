@@ -354,7 +354,7 @@ struct BrainPane: View {
             CardBox {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) { Image(systemName: "lock.fill").foregroundStyle(t.ok); Text("This Mac only — what changes").fontWeight(.semibold) }
-                    Text("Cards: fewer and plainer; drafts are shorter; no Hands (it needs a model with tools). Notes: the same, since the reader was always local. Speed: the overnight run takes about twice as long. “What left your Mac” reads 0 bytes, every night.").font(.system(size: 12)).foregroundStyle(t.ink2)
+                    Text("Notes: this Mac's model cannot build them yet — the knowledge base is asked for more in one reply than a 4-billion-parameter model can give, and no run on this engine has yet produced one. Use a key for the first build if you want notes this week. Cards: none either, for now — a card has to be grounded in a note, so no notes means no cards. No Hands (it needs a model with tools). Speed: the overnight run takes about twice as long. “What left your Mac” reads 0 bytes, every night.").font(.system(size: 12)).foregroundStyle(t.ink2)
                     kv("Status") { Text(m.modelPath == nil ? "The reader isn't downloaded yet" : "Ready · \(m.readerChoice)") }
                 }
             }

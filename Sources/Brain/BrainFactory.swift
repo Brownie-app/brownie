@@ -8,7 +8,7 @@ import Support
 public enum BrainEngine: String, CaseIterable, Sendable {
     // Order is the order they are offered. The two that cost nothing come first on purpose: a stranger
     // scanning the grid should meet a choice they can make before one that asks them to go and get a key.
-    case local, none, openai, anthropic, openrouter, custom
+    case none, local, openai, anthropic, openrouter, custom
     public var displayName: String {
         switch self {
         case .openai: return "ChatGPT / OpenAI"
@@ -27,8 +27,8 @@ public enum BrainEngine: String, CaseIterable, Sendable {
     /// option, "This Mac only", that it needed "Your own API key".
     public var caption: String {
         switch self {
-        case .local: return "No key, no signup · nothing leaves, ever · plainer cards, no Hands"
-        case .none: return "Notes only · no cards, no drafts, no Hands"
+        case .local: return "No key, nothing leaves, ever · no notes or cards yet — same as No brain"
+        case .none: return "A note each day of what was read · no cards, no drafts, no Hands"
         case .openai: return "Your OpenAI key · drafts, cards, Hands"
         case .anthropic: return "Your Anthropic key · official computer use"
         case .openrouter: return "Any model, on your key"

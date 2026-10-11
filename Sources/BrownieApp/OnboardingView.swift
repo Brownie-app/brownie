@@ -79,7 +79,7 @@ struct OnboardingView: View {
             if m.brainConfig.engine == .local {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(m.brainStatus).font(.system(size: 12)).foregroundStyle(t.ink)
-                    Text("Cards get fewer and plainer, drafts shorter, and Hands is off. “What left your Mac” reads 0 bytes, every night.").font(.system(size: 11)).foregroundStyle(t.ink2)
+                    Text("Nothing leaves your Mac, ever. But this Mac's model cannot build your notes yet, and a card has to be grounded in a note — so this gives you the same daily note as “No brain”, and no cards. Use a key if you want those. “What left your Mac” reads 0 bytes, every night.").font(.system(size: 11)).foregroundStyle(t.ink2)
                 }.frame(maxWidth: .infinity, alignment: .leading)
             } else if m.brainConfig.engine == .none {
                 Text("Brownie will read and write notes, and leave the deciding to you. You can add a brain later in Settings; everything read before then is kept, and the next run works through it.")
