@@ -68,6 +68,41 @@ import Domain
         #expect(throws: Never.self) { try AppleIntelligence.brain().map { _ in } }
     }
 
+    /// THE one that answers the question all of this exists for: can Apple's on-device model be driven
+    /// through Brownie's own tool loop and made to write a note? Everything downstream of that — rows
+    /// marked merged, the judge being owed something, cards with evidence — already works and is tested
+    /// against a stand-in. This is the only link that was unproven.
+    @Test(.enabled(if: AppleBrainE2ETests.canRun, "needs macOS 26 with Apple Intelligence turned on"))
+    func theRealModelCallsAToolAndWritesSomething() async throws {
+        let brain = try #require(AppleIntelligence.brain() as? AgenticBrain)
+        let written = Written()
+        let tools = [
+            Domain.Tool(name: "write_file", description: "Write a note at a relative path with its full prose.",
+                        parametersSchema: #"{"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"}},"required":["path","content"]}"#) { data in
+                written.add(String(decoding: data, as: UTF8.self)); return "written"
+            },
+            Domain.Tool(name: "finish", description: "Call when every note is written. Give a one-line summary.",
+                        parametersSchema: #"{"type":"object","properties":{"summary":{"type":"string"}},"required":["summary"]}"#) { _ in
+                ToolOutput("done", endsRun: true)
+            },
+        ]
+        let task = AgentTask(
+            system: "You keep a small notebook of what matters in someone's life. Use write_file to write each note, then call finish.",
+            input: "Write one note at People/Amma.md saying that Amma asked about the deposit on 9 October and is waiting for an answer. Then call finish.",
+            effort: .low, maxTurns: 4)
+        let r = try await brain.run(task, tools: tools) { _ in }
+        print("Apple tool loop: \(r.turns) turn(s), wrote \(written.all.count) file(s)")
+        for w in written.all { print("  → \(w.prefix(180))") }
+        #expect(!written.all.isEmpty, "the model never called write_file — the loop reached it but it wrote nothing")
+        #expect(written.all.contains { $0.contains("People/Amma.md") }, "it wrote, but not where it was asked to: \(written.all)")
+    }
+
+    final class Written: @unchecked Sendable {
+        private let lock = NSLock(); private var v: [String] = []
+        func add(_ s: String) { lock.withLock { v.append(s) } }
+        var all: [String] { lock.withLock { v } }
+    }
+
     /// A Mac that cannot run it must hand back nil rather than a brain that fails on first use — nil is what
     /// puts the night on the notes-only path, and a half-working brain is what loses one.
     @Test(.disabled(if: AppleBrainE2ETests.canRun, "this Mac can run it, so there is nothing to refuse"))
