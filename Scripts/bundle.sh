@@ -15,7 +15,10 @@ BUILD=${BROWNIE_BUILD:-$(git -C "$(dirname "$0")/.." rev-list --count HEAD 2>/de
 swift build -c $CONFIG --product Brownie
 BIN=$(swift build -c $CONFIG --show-bin-path)
 APP=dist/Brownie.app
-chmod -R u+w "$APP" 2>/dev/null; rm -rf "$APP"; mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
+# `|| true` matters: chmod on a path that is not there returns non-zero, and `set -e` then kills the
+# script immediately after the build line, printing nothing. It only ever worked because dist/Brownie.app
+# was left over from a previous run — the first build on a clean checkout died here, silently.
+chmod -R u+w "$APP" 2>/dev/null || true; rm -rf "$APP"; mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 cp "$BIN/Brownie" "$APP/Contents/MacOS/Brownie"
 # resource bundles (prompts) + any dylibs/frameworks SwiftPM produced
 for b in "$BIN"/*.bundle; do [ -d "$b" ] && cp -R "$b" "$APP/Contents/Resources/"; done
