@@ -2,6 +2,20 @@
 
 All notable changes. Brownie follows semantic versioning once 1.0 ships; before that, minor versions may change behaviour.
 
+## 0.3 — 11 October 2026
+
+**A free brain that actually works.** Until now every key-free option gave you a daily note and nothing else: the small reader on your Mac can't build a knowledge base, and without notes there are no cards, because a card has to be grounded in one. On a Mac running macOS 26 with Apple Intelligence turned on, Brownie can now borrow Apple's own on-device model — no key, no signup, no download of ours — and it writes real notes. Cards and drafts follow from those. "What left your Mac" still reads 0 bytes.
+
+If Apple Intelligence is switched off, the option says so and offers to take you to the right pane; turn it on, come back, and it's ready without restarting. On a Mac that can't run it, the option isn't offered at all rather than sitting there failing.
+
+Hands is deliberately not part of this. A three-billion-parameter model shouldn't be driving your apps yet.
+
+**A brain that answers badly no longer costs you the night.** If the model returns something Brownie can't use, it now writes the half of the night that never needed a model — the day's note, the status block — and carries on to the cards, instead of throwing all of it away. A rejected key or an exhausted quota still stops the run and says so, because that's yours to fix.
+
+**Three ways work was being lost quietly, all fixed.** A night was sliced into parts sized for the largest brain imaginable, then cut down inside a smaller one where nothing could see it — and the whole part was marked as absorbed regardless, so summaries nobody had read were deleted for good. A brain now says how much it can take and the night is sliced to fit. When a cut does happen it drops the oldest rather than the newest, which is what it claimed to be doing all along. And a reply that wrote nothing at all used to pass silently; it fails now.
+
+**The app stopped promising things it couldn't do.** "This Mac only" said notes worked "the same" — they have never once worked on that engine. The failure message said four words and threw away the reply that would have explained it; it now says which of five things went wrong and quotes what came back.
+
 ## 0.2 — 11 October 2026
 
 The first build that can update itself. 0.1 shipped with no update feed and no signing key, so it never asks for one — if you are on 0.1, this is the last version you have to download by hand.
