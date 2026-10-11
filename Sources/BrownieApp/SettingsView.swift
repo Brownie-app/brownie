@@ -344,7 +344,7 @@ struct BrainPane: View {
                 Button { m.brainConfig.engine = e; m.brainConfig.model = e.defaultModel; m.saveBrain() } label: {
                     HStack(alignment: .top, spacing: 12) {
                         Circle().stroke(m.brainConfig.engine == e ? t.accent : t.ink3, lineWidth: 1.5).background(Circle().fill(m.brainConfig.engine == e ? t.accent : .clear)).frame(width: 16, height: 16).padding(.top, 1)
-                        VStack(alignment: .leading, spacing: 3) { Text(e.displayName).fontWeight(.semibold); Text(desc(e)).font(.system(size: 11)).foregroundStyle(t.ink2) }
+                        VStack(alignment: .leading, spacing: 3) { Text(e.displayName).fontWeight(.semibold); Text(e.caption).font(.system(size: 11)).foregroundStyle(t.ink2) }
                         Spacer()
                     }.padding(14).background(RoundedRectangle(cornerRadius: 10).fill(t.card)).overlay(RoundedRectangle(cornerRadius: 10).stroke(m.brainConfig.engine == e ? t.accent : t.cardBorder))
                 }.buttonStyle(.plain)
@@ -381,9 +381,6 @@ struct BrainPane: View {
                 if case .downloading(let p) = m.modelState { ProgressView(value: p.fraction).tint(t.accent) }
             }
         }
-    }
-    func desc(_ e: BrainEngine) -> String {
-        switch e { case .openai: return "Recommended · your OpenAI key · drafts, cards, Hands"; case .anthropic: return "Your Anthropic key · official computer use"; case .openrouter: return "Any model, your key"; case .custom: return "LM Studio or any local server · ₹0 · simpler cards"; case .local: return "Nothing leaves, ever · the reader doubles as the brain · plainer cards, no Hands"; case .none: return "Notes only. No cards, no drafts, no Hands." }
     }
     func kv<C: View>(_ k: String, @ViewBuilder _ c: () -> C) -> some View { HStack(alignment: .center) { Text(k).foregroundStyle(t.ink2).frame(width: 160, alignment: .leading); c(); Spacer() } }
 }

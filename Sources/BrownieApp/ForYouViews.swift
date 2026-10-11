@@ -173,7 +173,7 @@ struct EmptyCards: View {
         CardBox(padding: 24) {
             VStack(alignment: .leading, spacing: 8) {
                 Text(m.brain == nil ? "Notes only, for now" : (m.lastRun == nil ? "Run the first read" : "Nothing needs you this morning")).font(.system(size: 14, weight: .semibold))
-                Text(m.brain == nil ? "Without a brain, Brownie reads and keeps notes but can't decide what needs you or draft anything. Add one in Settings → Brain." : (m.lastRun == nil ? "Press Analyze now. The first read looks at everything you've enabled, so it takes a while." : "Cards appear here when something is waiting on you — a reply, a promise, a renewal, a meeting to prep.")).foregroundStyle(t.ink2)
+                Text(m.brain == nil ? "Brownie read what you turned on and wrote it into your notes, here on this Mac. Deciding what needs you and drafting replies take a brain — “This Mac only” needs no key and nothing leaves. Settings → Brain." : (m.lastRun == nil ? "Press Analyze now. The first read looks at everything you've enabled, so it takes a while." : "Cards appear here when something is waiting on you — a reply, a promise, a renewal, a meeting to prep.")).foregroundStyle(t.ink2)
             }.frame(maxWidth: .infinity, alignment: .leading)
         }
     }
