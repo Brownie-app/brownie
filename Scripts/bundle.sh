@@ -44,6 +44,9 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>NSContactsUsageDescription</key><string>To show names instead of phone numbers in your chats.</string>
   <key>NSMicrophoneUsageDescription</key><string>Hold-to-talk for Hands. Speech is recognised on this Mac.</string>
   <key>NSSpeechRecognitionUsageDescription</key><string>Hold-to-talk for Hands, and reading your Voice Memos and recordings. Speech is recognised on this Mac; audio never leaves.</string>
+  <key>NSDocumentsFolderUsageDescription</key><string>To read your documents on this Mac. Brownie reads them here; nothing is uploaded.</string>
+  <key>NSDesktopFolderUsageDescription</key><string>To read what is on your Desktop on this Mac. Brownie reads it here; nothing is uploaded.</string>
+  <key>NSDownloadsFolderUsageDescription</key><string>To read what you have downloaded on this Mac. Brownie reads it here; nothing is uploaded.</string>
   <key>NSCalendarsUsageDescription</key><string>To time cards against your calendar.</string>
   <key>NSCalendarsFullAccessUsageDescription</key><string>To read your events for the last week and the next day, on this Mac, so morning cards know what is coming up.</string>
 </dict></plist>

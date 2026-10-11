@@ -29,6 +29,10 @@ public enum Door: String, Codable, Sendable {
 
 public enum Permission: String, Codable, Sendable, CaseIterable {
     case fullDiskAccess, accessibility, screenRecording, microphone, speech, contacts, calendar, automation
+    /// Documents, Desktop and Downloads. macOS asks per folder, on first touch, and never asks twice — so a
+    /// prompt that was declined needs a row the user can see and a button into the right pane. Without one,
+    /// the only source that is on by default dies in the first ten seconds with no way back.
+    case filesAndFolders
 }
 
 public struct SourceDescriptor: Sendable, Hashable {

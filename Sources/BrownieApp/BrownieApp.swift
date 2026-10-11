@@ -8,7 +8,11 @@ import Platform
 
 struct BrownieApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
-    @StateObject private var model = AppModel()
+    // No default value here. A stored property's default is evaluated even when init() overwrites the
+    // wrapper, so `= AppModel()` built a second model whose own init kicked off a second bootstrap: a second
+    // store, a second downloader, a second source discovery, a second scheduler. The app log showed the whole
+    // discovery pass twice, milliseconds apart.
+    @StateObject private var model: AppModel
     @StateObject private var hands: HandsController
 
     init() {
@@ -31,7 +35,11 @@ struct BrownieApp: App {
             .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
             .onReceive(NotificationCenter.default.publisher(for: .brownieAsk)) { n in if let g = n.object as? String, !g.isEmpty { NSApp.activate(ignoringOtherApps: true); if CommandIntent.isQuestion(g) { model.overlay = .none; model.screen = .ask; model.ask(g) } else { hands.run(g) } } else { hands.showCommandBar = true } }
             .onAppear {
-                hands.start(); Notifier.requestPermission(); NSApp.setActivationPolicy(.regular); NSApp.activate(ignoringOtherApps: true)
+                // Speech and Notifications are asked for only once onboarding is done. They used to be asked
+                // here, on the root window appearing — which is behind step 1 — so the first thing a stranger
+                // saw was a Speech Recognition dialog over a screen that reads "Nothing to sign up for".
+                if model.onboardingDone { hands.start(); Notifier.requestPermission() }
+                NSApp.setActivationPolicy(.regular); NSApp.activate(ignoringOtherApps: true)
                 Notifier.install(model: model)
                 if let i = CommandLine.arguments.firstIndex(of: "--screen"), i + 1 < CommandLine.arguments.count {   // dev: open on a screen
                     let name = CommandLine.arguments[i + 1]

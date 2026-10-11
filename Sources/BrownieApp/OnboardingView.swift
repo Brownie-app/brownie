@@ -15,6 +15,7 @@ struct OnboardingView: View {
         VStack(spacing: 0) {
             HStack(spacing: 6) { ForEach(1...7, id: \.self) { i in Capsule().fill(i == step ? t.accent : (i < step ? t.ink3 : t.ctl2)).frame(width: i == step ? 18 : 6, height: 6) } }.frame(height: 48)
             ScrollView { VStack(spacing: 14) { content }.padding(.horizontal, 64).padding(.top, 20).frame(maxWidth: .infinity) }
+                .overlay(alignment: .top) { if let a = m.announcement { Banner(text: a) { m.announcement = nil } } }
             HStack {
                 Text("Step \(step) of 7 · \(labels[step - 1])").font(.system(size: 11)).foregroundStyle(t.ink2); Spacer()
                 BButton(title: step == 1 ? "Quit" : "Back", kind: .quiet) { if step == 1 { NSApp.terminate(nil) } else { step -= 1 } }
@@ -25,8 +26,14 @@ struct OnboardingView: View {
     }
 
     func next() {
-        if step == 7 { m.onboardingDone = true; m.set(SettingKey.onboardingDone, "true"); return }
+        if step == 7 {
+            m.onboardingDone = true; m.set(SettingKey.onboardingDone, "true")
+            m.startScheduler()                     // held back until now: a daytime run used to fire mid-walk
+            Notifier.requestPermission()           // and these were asked before Brownie had said anything
+            return
+        }
         if step == 2, m.modelPath == nil, case .idle = m.modelState { Task { await m.download.start() } }
+        if step == 3 { m.saveBrain() }   // Continue without tapping a tile used to store nothing at all
         if step == 6 { Task { await m.refreshPermissions(); await m.refreshSources() } }
         step += 1
         if step == 7, !m.isRunning { m.analyzeNow(trigger: .firstRun) }
@@ -58,16 +65,25 @@ struct OnboardingView: View {
             } }.frame(width: 560)
         case 3:
             h1("Then, the brain.")
-            lead("Reading and filtering happen on your Mac. Deciding what matters and drafting takes a bigger model. Use your own key — only short, scrubbed summaries ever reach it.")
+            lead("Reading and filtering always happen on your Mac. Deciding what matters and drafting can stay here too, or go to a bigger model on a key of your own. Either way, only short, scrubbed summaries ever leave.")
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible())], spacing: 10) {
                 ForEach(BrainEngine.allCases, id: \.self) { e in
                     Button { m.brainConfig.engine = e; m.brainConfig.model = e.defaultModel; m.saveBrain() } label: {
                         HStack(alignment: .top, spacing: 12) {
                             Circle().stroke(m.brainConfig.engine == e ? t.accent : t.ink3, lineWidth: 1.5).background(Circle().fill(m.brainConfig.engine == e ? t.accent : .clear)).frame(width: 16, height: 16).padding(.top, 1)
-                            VStack(alignment: .leading, spacing: 2) { Text(e.displayName).fontWeight(.semibold); Text(e == .none ? "Notes only for now." : (e == .custom ? "Fully offline · simpler cards" : "Your own API key")).font(.system(size: 11)).foregroundStyle(t.ink2) }; Spacer()
+                            VStack(alignment: .leading, spacing: 2) { Text(e.displayName).fontWeight(.semibold); Text(e.caption).font(.system(size: 11)).foregroundStyle(t.ink2) }; Spacer()
                         }.padding(12).background(RoundedRectangle(cornerRadius: 10).fill(t.card)).overlay(RoundedRectangle(cornerRadius: 10).stroke(m.brainConfig.engine == e ? t.accent : t.cardBorder))
                     }.buttonStyle(.plain)
                 }
+            }
+            if m.brainConfig.engine == .local {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(m.brainStatus).font(.system(size: 12)).foregroundStyle(t.ink)
+                    Text("Cards get fewer and plainer, drafts shorter, and Hands is off. “What left your Mac” reads 0 bytes, every night.").font(.system(size: 11)).foregroundStyle(t.ink2)
+                }.frame(maxWidth: .infinity, alignment: .leading)
+            } else if m.brainConfig.engine == .none {
+                Text("Brownie will read and write notes, and leave the deciding to you. You can add a brain later in Settings; everything read before then is kept, and the next run works through it.")
+                    .font(.system(size: 11)).foregroundStyle(t.ink2).frame(maxWidth: .infinity, alignment: .leading)
             }
             if let k = m.brainConfig.engine.keyName, m.brainConfig.engine != .custom {
                 HStack { SecureField(BrainFactory.hasKey(m.brainConfig.engine) ? "•••••••• (saved)" : "Paste your \(m.brainConfig.engine.displayName) key", text: $key).textFieldStyle(.roundedBorder).frame(width: 360)
@@ -87,6 +103,7 @@ struct OnboardingView: View {
             h1("macOS will ask you a few things.")
             lead("Each one is a switch in System Settings. Brownie opens the right pane; you flip it. Nothing is granted without you.")
             VStack(spacing: 10) {
+                permRow(.filesAndFolders, "Files and Folders", "To read Documents, Desktop and Downloads. This is the one source that is on by default, and macOS asks the first time Brownie looks.")
                 permRow(.fullDiskAccess, "Full Disk Access", "To read Messages, WhatsApp and Notes databases.")
                 permRow(.accessibility, "Accessibility", "So Hands can click and type in your apps when you ask it to.")
                 permRow(.screenRecording, "Screen Recording · optional", "Lets Hands see the window it's working in. Skip it and it works from text alone.")
@@ -101,6 +118,15 @@ struct OnboardingView: View {
                 SettingRow(title: "Allow it to wake this Mac", detail: "macOS asks for your password once. A tiny helper holds the Mac awake and lets go the moment the run ends — or if Brownie crashes.") { if m.helperInstalled { Image(systemName: "checkmark.circle.fill").foregroundStyle(t.ok) } else { BButton(title: "Allow") { m.installHelper() } } }.padding(.horizontal, 16)
             } }.frame(width: 560)
         default:
+            if m.modelPath == nil {
+                // Nothing is reading yet and there is no honest progress to show, so show the download's.
+                h1("The reader is still coming.")
+                lead("It is a 3.7 GB download, once. The first read starts by itself the moment it lands — you can open Brownie now and watch it come down.")
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack { Text(modelLine).fontWeight(.semibold); Spacer() }
+                    ProgressView(value: modelFraction).tint(t.accent)
+                }.frame(width: 600)
+            } else {
             HStack(spacing: 12) { Pulse(); h1("Reading, for the first time.") }
             lead("This one runs while you watch. It's catching up on everything, not just last night, so it takes a while. You can open Brownie now; it keeps going.")
             let p = m.progress
@@ -109,8 +135,8 @@ struct OnboardingView: View {
                 ProgressView(value: p.itemCount > 0 ? Double(p.itemIndex) / Double(p.itemCount) : 0).tint(t.accent)
                 HStack(spacing: 10) { stat("Kept", p.stats.kept, t.ok); stat("Not worth keeping", p.stats.dropped, t.ink); stat("Sensitive · erased", p.stats.sensitive, t.bad) }
                 if let s = p.lastSummary { CardBox(padding: 12) { Text(s).font(.system(size: 12.5)).foregroundStyle(t.ink2).frame(maxWidth: .infinity, alignment: .leading) } }
-                if m.modelPath == nil { CautionBanner(text: "The reader hasn't finished downloading. The first read starts once it's here.") }
             }.frame(width: 600)
+            }
         }
     }
 

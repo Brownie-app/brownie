@@ -34,7 +34,8 @@ final class AppModel: ObservableObject {
     private var coordinator: RunCoordinator?
     private(set) var scheduler: OvernightScheduler?
     private(set) var hands: Hands?
-    let download: ModelDownload
+    /// Rebuilt when the reader is switched, so the Download button fetches the reader the control names.
+    var download: ModelDownload
 
     // ── state the views read ───────────────────────────────────────────────────────
     enum Screen: Hashable { case forYou, ask, loops, recipes, sendLog, notes, graph, excluded, settings }
@@ -64,7 +65,9 @@ final class AppModel: ObservableObject {
     @Published var modelState: ModelDownload.State = .idle
     @Published var modelPath: URL?
     @Published var readerChoice: String = "E4B"      // E4B | E2B
-    @Published var brainConfig = BrainConfig(engine: .openai, model: BrainEngine.openai.defaultModel)
+    // No brain until someone picks one. The old default was .openai, which meant a Mac with no key still
+    // believed it had a brain, called OpenAI with an empty token and reported the 401 as the user's fault.
+    @Published var brainConfig = BrainConfig(engine: .none, model: BrainEngine.none.defaultModel)
     @Published var brainStatus: String = "Not checked"
     @Published var lastUsage: Usage?
     @Published var enabledSources: Set<SourceID> = ["files"]
@@ -184,7 +187,12 @@ final class AppModel: ObservableObject {
                                 result: { id, back in try? await st.setSendResult(id, cameBack: back) })
         knowledge = try! FileKnowledgeStore(root: Paths.knowledgeBase, indexPath: Paths.applicationSupport.appendingPathComponent("knowledge-index.sqlite").path)
         allSources = [FilesSource(roots: FilesSource.defaultRoots), NotesSource(), iMessageSource(), WhatsAppSource(), CalendarSource(), GmailSource(), TelegramSource(), VoiceMemosSource(), RecordingsSource(), SlackSource(), TeamsSource()]
-        download = ModelDownload(info: ModelCatalog.info(for: UserDefaults.standard.string(forKey: "reader.model")))
+        // Which reader this Mac wants, decided once, before anything downloads. It used to be decided twice:
+        // the downloader read UserDefaults (nil on a fresh install, so E4B) while the locator derived it from
+        // memory (under 12 GB, so E2B). An 8 GB Mac therefore downloaded E4B and then looked for E2B for ever.
+        let chosen = UserDefaults.standard.string(forKey: "reader.model") ?? (ModelCatalog.physicalMemoryGB < 12 ? "E2B" : "E4B")
+        UserDefaults.standard.set(chosen, forKey: "reader.model")
+        download = ModelDownload(info: ModelCatalog.info(for: chosen))
         Task { await bootstrap() }
     }
 
@@ -210,13 +218,19 @@ final class AppModel: ObservableObject {
         await reload()
         rebuildBrain()
         rebuildReader()
-        Task { await refreshSources() }   // discovery can be slow (Telegram, 300+ chats); the UI must not wait for it
+        let walked = onboardingDone
+        Task { await refreshSources(probingLocalFolders: walked) }   // discovery can be slow (Telegram, 300+ chats); the UI must not wait for it
         let mp = modelPath
-        _ = await download.observe { [weak self] s in Task { @MainActor in self?.modelState = s; if case .done(let u) = s { self?.modelPath = u; self?.rebuildReader() } } }
-        if mp == nil, case .idle = modelState { /* onboarding prompts the download */ }
+        observeDownload()
+        // A download that was interrupted is picked up again, but only once the walk is over — during
+        // onboarding step 2 owns it, and starting it twice from two places is how it used to race itself.
+        if mp == nil, onboardingDone, case .idle = modelState { Task { await download.start() } }
         helperInstalled = WakeHelper.Client().isInstalled
         loginItem = OvernightScheduler.isLoginItem
-        startScheduler()
+        // Not before the walk is over. The daytime loop fires after a minute on AC with no run on record —
+        // true on every fresh install — and that run has no reader guard, so it stamped a failed run, set
+        // isRunning, and made step 7 skip the first read while showing a progress bar that never moved.
+        if onboardingDone { startScheduler() }
         startBriefs(); startRecipeSchedule(); startTriggers(); startSyncTimer(); startVaultWatcher()
         if TelegramSource.isConfigured { watchTelegram() }
         if CommandLine.arguments.contains("--request-permissions") { await requestAllPermissions() }
@@ -251,8 +265,8 @@ final class AppModel: ObservableObject {
         }
         if let r = await v(SettingKey.fileRoots), let d = r.data(using: .utf8), let ps = try? JSONDecoder().decode([String].self, from: d) { fileRoots = ps.map { URL(fileURLWithPath: $0) } }
         if let r = await v(SettingKey.recordingsFolder), !r.isEmpty { recordingsFolder = URL(fileURLWithPath: r, isDirectory: true) }
-        brainConfig = BrainConfig(engine: BrainEngine(rawValue: await v(SettingKey.brainEngine) ?? "openai") ?? .openai,
-                                  model: await v(SettingKey.brainModel) ?? BrainEngine.openai.defaultModel,
+        brainConfig = BrainConfig(engine: BrainEngine(rawValue: await v(SettingKey.brainEngine) ?? "none") ?? .none,
+                                  model: await v(SettingKey.brainModel) ?? BrainEngine.none.defaultModel,
                                   customBaseURL: await v(SettingKey.customBaseURL) ?? "http://127.0.0.1:1234/v1")
         if brainConfig.model.isEmpty { brainConfig.model = brainConfig.engine.defaultModel }
         cardsPerMorning = Int(await v(SettingKey.cardsPerMorning) ?? "5") ?? 5
@@ -276,7 +290,8 @@ final class AppModel: ObservableObject {
         var done = Set<String>()
         for k in ["foryou", "card", "knowledge", "graph", "excluded", "sources", "hands"] where (await v(SettingKey.walkthrough(k))) == "true" { done.insert(k) }
         walkthroughDone = done
-        readerChoice = await v(SettingKey.localModel) ?? (ModelCatalog.physicalMemoryGB < 12 ? "E2B" : "E4B")
+        readerChoice = await v(SettingKey.localModel) ?? UserDefaults.standard.string(forKey: "reader.model") ?? "E4B"
+        set(SettingKey.localModel, readerChoice)
         modelPath = ModelCatalog.locate(ModelCatalog.info(for: readerChoice))
         if let j = await v("sources.mcp"), let d = j.data(using: .utf8), let ms = try? JSONDecoder().decode([MCPManifest].self, from: d) { mcpManifests = ms }
         showSendLine = (await v(SettingKey.showSendLine) ?? "true") == "true"
@@ -318,8 +333,13 @@ final class AppModel: ObservableObject {
         Keychain.set("mcp.\(id).token", nil)
     }
 
-    func refreshSources() async {
+    /// `probingLocalFolders: false` leaves the Files source alone. Asking it whether it is available means
+    /// listing Documents, Desktop and Downloads, and listing them is what makes macOS put up its consent
+    /// prompts — three of them, over whatever is on screen. During onboarding that is the welcome screen,
+    /// before Brownie has said what it reads or why, so the walk asks for itself on step 4 instead.
+    func refreshSources(probingLocalFolders: Bool = true) async {
         for s in allSources + workSources {
+            if !probingLocalFolders, s.id == "files" { continue }
             let src: any Source = s.id == "recordings" ? RecordingsSource(folder: recordingsFolder) : s
             let a = await src.availability(); availability[s.id] = a
             if s.id == "voicememos" || s.id == "recordings" {
@@ -470,10 +490,30 @@ final class AppModel: ObservableObject {
         catch { brainStatus = "Couldn't reach \(brain.descriptor.name): \(error)" }
     }
 
+    /// Watch the download, and when the reader finally lands, read for the first time. Nothing used to do
+    /// that: step 7 fired `analyzeNow` the moment it appeared, `analyzeNow` refused because the 3.7 GB was
+    /// still coming, and no one asked again — so the first read happened only if the user found the button.
+    func observeDownload() {
+        Task { [weak self] in
+            guard let self else { return }
+            _ = await self.download.observe { [weak self] s in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.modelState = s
+                    guard case .done(let u) = s else { return }
+                    self.modelPath = u; self.rebuildReader()
+                    if self.lastRun == nil, !self.isRunning { self.analyzeNow(trigger: .firstRun) }
+                }
+            }
+        }
+    }
+
     func chooseReader(_ choice: String) {
         readerChoice = choice; set(SettingKey.localModel, choice); UserDefaults.standard.set(choice, forKey: "reader.model")
+        download = ModelDownload(info: ModelCatalog.info(for: choice))   // so Download fetches what the control says
+        observeDownload()
         modelPath = ModelCatalog.locate(ModelCatalog.info(for: choice)); rebuildReader()
-        announcement = modelPath == nil ? "Relaunch Brownie to download \(ModelCatalog.info(for: choice).name)." : nil
+        announcement = modelPath == nil ? "\(ModelCatalog.info(for: choice).name) isn't on this Mac yet — press Download." : nil
     }
 
     func rebuildReader() {
@@ -530,6 +570,9 @@ final class AppModel: ObservableObject {
         guard modelPath != nil else { announcement = "The reader isn't downloaded yet — Settings → Brain → On this Mac."; return }
         guard freeGB > 1 else { announcement = String(format: "Only %.1f GB free on this Mac. Brownie needs about 1 GB to run — free some space first.", freeGB); return }
         guard !sourcesForRun.isEmpty else { announcement = "No sources are turned on, so there is nothing to read. Pick some in Settings → Sources."; openSettings(.sources); return }
+        // Not a guard: a run with no brain is a real run that writes real notes. It is only worth saying so
+        // first, rather than letting someone wait twenty minutes for cards that were never going to come.
+        if brain == nil { announcement = "No brain is set up, so this is notes only — Brownie reads and writes notes, but no cards and no drafts. Settings → Brain." }
         rebuildCoordinator()
         guard let coordinator else { return }
         isRunning = true; overlay = .processing; thoughts = []; progress = RunProgress()
