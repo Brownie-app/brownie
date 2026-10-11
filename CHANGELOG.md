@@ -2,6 +2,25 @@
 
 All notable changes. Brownie follows semantic versioning once 1.0 ships; before that, minor versions may change behaviour.
 
+## 0.2 — 11 October 2026
+
+The first build that can update itself. 0.1 shipped with no update feed and no signing key, so it never asks for one — if you are on 0.1, this is the last version you have to download by hand.
+
+**It no longer needs an API key to be worth opening.** Choosing "This Mac only" was labelled "Your own API key" by a caption bug, and a Mac with no key believed it had one anyway: it called OpenAI with an empty token and reported the refusal as your fault. Now no key means no brain, the two options that cost nothing are offered first, and a run without a brain writes real notes — one per day under `Read/`, in the reader's own words, with the questions people are waiting on you for at the top. What it reads is kept unjudged, so adding a brain later still builds the proper notes out of it.
+
+**The first ten seconds are quieter.** Brownie used to ask for Speech Recognition and Notifications before it had said anything, and touched Documents, Desktop and Downloads behind the welcome screen, which made macOS ask three more times with no reason given. Those prompts now arrive on the screens that explain them, carry a reason, and "Files and Folders" is a permission you can see and re-grant instead of a dead end.
+
+**Fixes to what Brownie believes about your conversations**, found by replaying twenty invented weeks through the real rules:
+
+- A card you turned down no longer comes back the next morning, or the fifty mornings after that.
+- "Sorry, can't this week" is a refusal, not a promise to do it later.
+- A sympathetic "oh no" about something else no longer closes a question you never answered.
+- Saying "by Friday" no longer marks the Friday promise done.
+- Mail, group chats and Slack threads reach the ask ledger at all now — a request emailed to you, or made to you by name in a group, or answered in a thread, used to be invisible.
+- Two people who share a first name keep their own loops and their own cards.
+
+**Also:** on a Mac with under 12 GB the reader that downloaded was not the reader the app then looked for, so it never found one. The first read now starts by itself when the download lands, an interrupted download resumes, and the app no longer starts itself twice at launch.
+
 ## 0.1 — 23 September 2026
 
 The first build, signed and notarised, for anyone with an Apple-silicon Mac. It carries no update feed yet, so a later version has to be downloaded by hand.
