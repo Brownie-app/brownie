@@ -7,7 +7,10 @@ cd "$(dirname "$0")/.."
 if [ -z "$DEVELOPER_DIR" ] && ! xcodebuild -version >/dev/null 2>&1 && [ -d /Library/Developer/CommandLineTools ]; then export DEVELOPER_DIR=/Library/Developer/CommandLineTools; fi
 CONFIG=${1:-debug}
 VERSION=${BROWNIE_VERSION:-0.1}
-BUILD=$(git -C "$(dirname "$0")/.." rev-list --count HEAD 2>/dev/null || echo 1)
+# CFBundleVersion, which is what Sparkle compares. The commit count is fine for a local build, but this
+# repo starts from one commit and squash-merges, so it climbs slowly and two releases cut from the same
+# commit would look identical to an updater. release.sh therefore passes a UTC minute stamp instead.
+BUILD=${BROWNIE_BUILD:-$(git -C "$(dirname "$0")/.." rev-list --count HEAD 2>/dev/null || echo 1)}
 [ -f .secrets/brownie.env ] && { set -a; source .secrets/brownie.env; set +a; }
 swift build -c $CONFIG --product Brownie
 BIN=$(swift build -c $CONFIG --show-bin-path)
