@@ -12,8 +12,11 @@ import Support
 @Suite struct RunCoordinatorTests {
     /// A plain brain (no tools): the builder's single-shot path writes one note per part, the judge finds
     /// nothing, the letter is a line. Any call can be told to hit a usage limit. Records the judge's inputs.
-    final class Fake: Brain, @unchecked Sendable {
-        let descriptor = BrainDescriptor(id: "fake", name: "Fake", capabilities: [.json], costLine: "")
+    final class Fake: AgenticBrain, @unchecked Sendable {
+        var descriptor: BrainDescriptor {
+            BrainDescriptor(id: "fake", name: "Fake", capabilities: appleShaped ? [.json, .tools, .files] : [.json], costLine: "")
+        }
+        var corpusBudget: Int { appleShaped ? 6 * 1024 : BrainLimits.corpusPartBudget }
         private let lock = NSLock()
         private var parts = 0
         private var inputs: [String] = []
@@ -22,6 +25,9 @@ import Support
         /// Answer the file-map request with prose, the way a small model does when the prompt tells it to call
         /// tools it has not got.
         var badFileMap = false
+        /// Declare what `AppleBrain` declares: file tools and a small window. The capability set is what decides
+        /// which path the knowledge builder takes, so a stand-in that gets it wrong tests the wrong thing.
+        var appleShaped = false
         /// What the judge answers, when a test wants loops back rather than nothing.
         var judgeReply = #"{"action_items":[],"loops":[],"loop_updates":[]}"#
         func validate() async throws {}
@@ -39,6 +45,15 @@ import Support
             }
             return BrainResult(text: "A letter.", usage: .zero)
         }
+        /// The tool loop, as a small model works it: one note written per part through `write_file`.
+        func run(_ task: AgentTask, tools: [Tool], onEvent: @escaping @Sendable (AgentEvent) -> Void) async throws -> AgentResult {
+            let n: Int = lock.withLock { parts += 1; return parts }
+            if let write = tools.first(where: { $0.name == "write_file" }) {
+                _ = try? await write.run(Data(#"{"path":"Life/Loop \#(n).md","content":"- Something happened (2026-09-16)"}"#.utf8))
+            }
+            return AgentResult(finalText: "ok", usage: Usage(inputTokens: 10, outputTokens: 1), turns: 1)
+        }
+        var toolLoopParts: Int { lock.withLock { parts } }
         var judged: [String] { lock.withLock { inputs } }
     }
     struct Reader: LocalModel {
@@ -115,6 +130,28 @@ import Support
         let brain = Fake(); brain.failPart = 1          // a usage limit, not a bad reply
         #expect(await Self.night(w, brain) == .failedBrain(.usageLimit),
                 "a rejected key or an exhausted quota is the user's to fix, and must not be papered over")
+    }
+
+    // MARK: - SYSTEM · a whole night on a brain shaped like Apple's
+
+    /// The question the whole Apple Intelligence exercise exists to answer: does a free, local, tool-capable
+    /// brain get a person all the way to a morning? This drives a full night — read, notes, judge, prepare —
+    /// with a brain declaring Apple's exact capability set and window, and asserts the chain the user cares
+    /// about: notes absorb the rows, so the judge is owed something, so cards can exist.
+    ///
+    /// It is the counterpart to `aReplyThatCannotBeParsedCostsTheNotesAndNotTheNight`, which pins the opposite:
+    /// with no notes, the judge is owed nothing and there are no cards however far the night runs.
+    @Test func aToolCapableLocalBrainGetsAllTheWayToAMorning() async throws {
+        let w = try Self.world()
+        try await w.seed(4, tag: "ai")
+        let brain = Fake(); brain.appleShaped = true
+        let outcome = await Self.night(w, brain)
+        #expect(outcome == .ran(cards: 0) || { if case .partial = outcome { return true } else { return false } }(), "\(outcome)")
+        let merged = try await w.rows().filter { $0.mergedAt != nil }
+        #expect(merged.count == 4, "the notes absorbed every row, which is what makes a morning possible at all")
+        #expect(brain.judged.count == 1, "so the judge was owed something and ran — the step cards come from")
+        #expect(brain.toolLoopParts >= 1, "and it got there through the tool loop, not the single-shot path that cannot work")
+        #expect(try await w.kb.note(at: "Life/Loop 1.md") != nil, "and the note it wrote through the tool is in the vault")
     }
 
     @Test func theJudgeSeesRowsOnTheNightTheNotesAbsorbThemAndNeverAgain() async throws {
