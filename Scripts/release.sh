@@ -6,7 +6,15 @@ set -e
 cd "$(dirname "$0")/.."
 set -a; source .secrets/brownie.env; set +a
 VERSION=${1:-0.1}
+# Not a secret: this is the public half of the update-signing key, and it is in the repo on purpose so
+# that what signs an update is a matter of record. The private half lives only in the maintainer's
+# login Keychain and is never printed, committed or sent anywhere.
+SPARKLE_PUBLIC_KEY=${SPARKLE_PUBLIC_KEY:-hhb3CF73da4iuI4tk3tBgHh4KV8PcdTxygelG4CxYwU=}
+APPCAST_URL=${APPCAST_URL:-https://www.usebrownie.com/appcast.xml}
 export BROWNIE_VERSION=$VERSION
+# A UTC minute stamp: always larger than the last release's, and larger than the commit counts used
+# before this existed, so an older copy always sees a newer one as newer.
+export BROWNIE_BUILD=${BROWNIE_BUILD:-$(date -u +%Y%m%d%H%M)}
 [ -n "$APPLE_SIGNING_IDENTITY" ] || { echo "APPLE_SIGNING_IDENTITY missing"; exit 1; }
 ./Scripts/bundle.sh release
 APP=dist/Brownie.app
@@ -27,6 +35,11 @@ hdiutil create -volname Brownie -srcfolder "$APP" -ov -format UDZO "$DMG" >/dev/
 codesign --sign "$APPLE_SIGNING_IDENTITY" "$DMG"
 xcrun notarytool submit "$DMG" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" --wait
 xcrun stapler staple "$DMG"
-SIGN=$(find .build -name sign_update -type f | head -1)
-[ -n "$SIGN" ] && "$SIGN" "$DMG" | tee dist/sparkle-signature.txt
-echo "shipped $DMG — upload it and add the signature line to your appcast.xml"
+# The appcast entry, signed and written into the website repo. Until this runs a release exists but
+# nothing running tells anyone about it, which is the whole point of shipping one.
+./Scripts/appcast.sh "$VERSION" "$DMG" "${RELEASE_NOTES_HTML:-}"
+echo
+echo "shipped $DMG"
+echo "  1. gh release create v$VERSION $DMG --title \"Brownie $VERSION\" --notes-file <notes>"
+echo "  2. deploy the website so ${APPCAST_URL:-the appcast} carries the new entry"
+echo "  (order matters: Sparkle follows the appcast to the GitHub download, so publish the release first)"
