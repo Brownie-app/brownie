@@ -29,15 +29,19 @@ import Domain
     }
 
     @Test func theTwoThatCostNothingAreOfferedFirst() {
-        #expect(BrainEngine.allCases.prefix(2).map(\.rawValue) == ["local", "none"],
+        #expect(BrainEngine.allCases.prefix(2).map(\.rawValue) == ["none", "local"],
                 "the grid is rendered in this order, and a stranger should meet a choice they can make")
+        #expect(BrainEngine.allCases.firstIndex(of: .none)! < BrainEngine.allCases.firstIndex(of: .local)!,
+                "and \"no brain\" comes before \"this Mac only\" while it is the one that does more: it writes the day's note and the status block, and this Mac's model cannot build notes at all")
     }
 
     @Test func everyEngineCarriesItsOwnCaptionSoNoScreenWritesItsOwn() {
         for e in BrainEngine.allCases { #expect(!e.caption.isEmpty) }
         #expect(BrainEngine.local.caption.contains("No key"), "the one that needs no key must say so — it used to say the opposite")
         #expect(!BrainEngine.local.caption.contains("API key"))
-        #expect(BrainEngine.none.caption.contains("Notes only"))
+        #expect(BrainEngine.none.caption.contains("note each day"))
+        #expect(BrainEngine.local.caption.contains("no notes or cards yet"),
+                "the caption must not promise notes this engine has never once produced")
     }
 
     @Test func theLocalAndNoBrainEnginesAreBuiltElsewhereOrNotAtAll() {
