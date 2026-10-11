@@ -51,15 +51,15 @@ public enum AppleIntelligence {
 #if canImport(FoundationModels)
 @available(macOS 26, *)
 struct AppleBrain: AgenticBrain {
-    /// `.json` only, for now, and deliberately NOT `.tools` or `.files`.
+    /// A capability is a promise about `run`, not a boast about the model: the knowledge builder takes its
+    /// agentic path on `.files` and the preparer takes its own on `.tools`, and both then call `run`.
+    /// `capabilitiesMatchWhatIsImplemented` fails the moment this line gets ahead of the loop below.
     ///
-    /// A capability is a promise about `run`, not about the model: the knowledge builder takes its agentic path
-    /// on `.files`, and the preparer takes its own on `.tools`, and both then call `run`. Until the tool loop
-    /// below is written, declaring either would route real work into a method that throws — which is exactly
-    /// the shape of the bug this whole branch exists to fix, reintroduced one layer up. The loop is the next
-    /// piece of work; `capabilitiesMatchWhatIsImplemented` fails the moment this line gets ahead of it.
+    /// `.files` is the one that matters. It is what stops the builder asking this model for a whole vault as
+    /// one JSON string — the request that cannot be satisfied at any size — and makes it write one note per
+    /// turn instead. Not `.vision` or `.computerUse`: Hands needs a model that can be trusted with a screen.
     let descriptor = BrainDescriptor(id: "apple", name: "Apple Intelligence",
-                                     capabilities: [.json],
+                                     capabilities: [.json, .tools, .files],
                                      costLine: "Free · nothing leaves this Mac")
     private let log = Log("brain.apple")
 
@@ -82,11 +82,44 @@ struct AppleBrain: AgenticBrain {
         } catch { throw Self.translate(error) }
     }
 
-    /// Not written yet. Nothing reaches it, because the descriptor claims neither `.tools` nor `.files` — the
-    /// two capabilities that are the only routes here. Bridging `Domain.Tool` to `FoundationModels.Tool` means
-    /// a `GenerationSchema` per tool, which is the next piece of work and the one that makes notes possible.
+    /// The tool loop. Apple's session runs it: the tools are handed over once, and the framework decides when
+    /// to call them and feeds the results back itself, so there is no turn-by-turn message history to resend —
+    /// which is the thing that would otherwise exhaust a small window after two or three reads.
+    ///
+    /// A turn cap is still honoured, because a model that keeps calling `read_file` and never writes is a night
+    /// that never ends. `finish` is Brownie's own signal; when a tool says the run is over, so is this.
     func run(_ task: AgentTask, tools: [Domain.Tool], onEvent: @escaping @Sendable (AgentEvent) -> Void) async throws -> AgentResult {
-        throw BrainError.badResponse("the Apple brain has no tool loop yet")
+        let done = Done()
+        let bridged: [any FoundationModels.Tool] = try tools.map { tool in
+            try BridgedTool(tool, finished: { done.set() })
+        }
+        let session = LanguageModelSession(tools: bridged, instructions: task.system)
+        let started = Date()
+        var text = "", turns = 0
+        var input = task.input
+        do {
+            while turns < max(1, task.maxTurns) {
+                turns += 1
+                let r = try await session.respond(to: input)
+                text = r.content
+                if done.isSet { break }
+                // Apple's session returns once it has finished calling tools and produced prose. If Brownie's
+                // own `finish` was never called, nudge once rather than assuming — a small model can stop early.
+                onEvent(.message("Writing the notes"))
+                input = "Carry on. Call finish when every note is written."
+            }
+            log.info("apple brain: \(turns) turn(s), \(text.utf8.count) B out, \(String(format: "%.0f", Date().timeIntervalSince(started)))s")
+            return AgentResult(finalText: text, usage: Usage(inputTokens: task.input.utf8.count / 4, outputTokens: text.utf8.count / 4), turns: turns)
+        } catch { throw Self.translate(error) }
+    }
+
+    /// Whether a tool has said the run is over. A reference so the bridged tools, which are values handed to
+    /// Apple's session, can report back into this call.
+    final class Done: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value = false
+        func set() { lock.withLock { value = true } }
+        var isSet: Bool { lock.withLock { value } }
     }
 
     /// Apple's errors, in the vocabulary the rest of the app already speaks, so one brain's failure reads the
