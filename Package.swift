@@ -93,6 +93,8 @@ let package = Package(
         .testTarget(name: "BrainTests", dependencies: ["Brain", "Domain"]),
         .testTarget(name: "PipelineTests", dependencies: ["Pipeline", "Domain", "Platform", "Knowledge", "Privacy", "Support"]),
         .testTarget(name: "SchedulingTests", dependencies: ["Scheduling"]),
+        // Whole nights, replayed: invented people over invented days, through the real pieces in the real order.
+        .testTarget(name: "ScenarioTests", dependencies: ["Domain", "LocalSources", "CloudSources", "Proactive", "Knowledge", "Platform", "Support"]),
         .testTarget(name: "Eval", dependencies: ["Domain", "Inference", "Ingest", "Privacy"], path: "Tests/Eval", resources: [.copy("Corpus")]),
     ]
 )

@@ -77,8 +77,12 @@ import Domain
 
 @Suite struct RecentReplyTests {
     let now = Date(timeIntervalSince1970: 1_758_000_000)
-    func card(_ id: String, to person: String, state: CardState = .ready, resolvedAgo: TimeInterval? = nil, due: Date? = nil, cameBack: Bool? = nil) -> Card {
-        var c = Card(id: id, title: "Update \(person)", sourceLabel: "WhatsApp", why: "", actionLabel: "", dueLine: "", urgency: .medium, draftLabel: "", draft: "hi", recipe: .whatsapp(chat: person, body: "hi"), evidence: [], verification: .verified, verifiedLine: "", state: state, createdAt: now.addingTimeInterval(-600), cameBack: cameBack)
+    /// Each card is about its own thing unless a test says otherwise, so two cards to one person are two errands —
+    /// which is the whole point of the recent-reply rule: you wrote to them, so the other thing can wait its turn.
+    /// Two cards that really are one card share an `about`.
+    func card(_ id: String, to person: String, state: CardState = .ready, resolvedAgo: TimeInterval? = nil, due: Date? = nil, cameBack: Bool? = nil, about: String? = nil) -> Card {
+        let topic = about ?? id
+        var c = Card(id: id, title: "Update \(person) about \(topic)", sourceLabel: "WhatsApp", why: "", actionLabel: "", dueLine: "", urgency: .medium, draftLabel: "", draft: "hi, about \(topic)", recipe: .whatsapp(chat: person, body: "hi, about \(topic)"), evidence: [], verification: .verified, verifiedLine: "", state: state, createdAt: now.addingTimeInterval(-600), cameBack: cameBack)
         if let r = resolvedAgo { c.resolvedAt = now.addingTimeInterval(-r) }; c.dueDate = due; return c
     }
     func run(_ cards: [Card], past: [Card]) -> QuietCheck.Result { QuietCheck.run(cards: cards, loops: [], past: past, noteUpdated: { _ in nil }, fileExists: { _ in true }, now: now, staleDays: 7) }
@@ -91,6 +95,52 @@ import Domain
         #expect(run([card("new", to: "Lalita Pathak")], past: [sent]).kept.count == 1, "someone else")
         #expect(run([card("new", to: "Lokesh")], past: [card("old", to: "Lokesh", state: .dismissed, resolvedAgo: 120)]).kept.count == 1, "only a card you fired counts as writing")
     }
+    @Test func aCardYouTurnedDownDoesNotComeBack() {
+        let dismissed = card("mon", to: "Lokesh", state: .dismissed, resolvedAgo: 40 * 3600, about: "the deposit")
+        let r = run([card("tue", to: "Lokesh", about: "the deposit")], past: [dismissed])
+        #expect(r.kept.isEmpty && r.dropped.first?.why == "you turned this down yesterday")
+        #expect(run([card("tue", to: "Lokesh", about: "the flat viewing")], past: [dismissed]).kept.count == 1, "a different thing to say still gets through")
+        #expect(run([card("tue", to: "Lalita", about: "the deposit")], past: [dismissed]).kept.count == 1, "someone else")
+        #expect(run([card("tue", to: "Lokesh", about: "the deposit")], past: [card("mon", to: "Lokesh", state: .dismissed, resolvedAgo: 15 * 86400, about: "the deposit")]).kept.count == 1, "after a fortnight it may be raised again")
+        #expect(run([card("tue", to: "Lokesh", cameBack: true, about: "the deposit")], past: [dismissed]).kept.count == 1, "a came-back card is news")
+    }
+
+    @Test func aCardYouAlreadyDidDoesNotComeBack() {
+        #expect(run([card("tue", to: "Lokesh", about: "the deposit")], past: [card("mon", to: "Lokesh", state: .fired, resolvedAgo: 30 * 3600, about: "the deposit")]).kept.isEmpty, "you did this yesterday")
+        #expect(run([card("tue", to: "Lokesh", about: "the deposit")], past: [card("mon", to: "Lokesh", state: .fired, resolvedAgo: 3 * 86400, about: "the deposit")]).kept.count == 1, "past the card's lifetime the same errand is fair again")
+    }
+
+    /// A card that chases an answer carries no loop id, so nothing above catches it. This is the backstop for a
+    /// judge that proposed the chase from a summary written before the reply arrived — which is exactly what
+    /// happens when the answer was written in a Slack thread the night's read has only just started seeing.
+    @Test func aCardChasingSomethingAlreadyAnsweredIsDropped() {
+        func ask(_ q: String, from: String, answeredAgo: TimeInterval?, outcome: AskOutcome? = nil) -> Ask {
+            var a = Ask(id: q, person: from, bucket: BucketID("slack:D1"), askedAt: now.addingTimeInterval(-3 * 86400), question: q,
+                        answeredAt: answeredAgo.map { now.addingTimeInterval(-$0) })
+            if let outcome { a.settle(outcome, at: now.addingTimeInterval(-(answeredAgo ?? 0)), by: "rules") }
+            return a
+        }
+        func run(_ c: [Card], _ asks: [Ask]) -> QuietCheck.Result {
+            QuietCheck.run(cards: c, loops: [], past: [], asks: asks, noteUpdated: { _ in nil }, fileExists: { _ in true }, now: now, staleDays: 7)
+        }
+        // a real chase card, titled the way the preparer titles one — not the helper's "Update <person> about …",
+        // whose extra words would make any share-of-words rule read lower than it should
+        let chase = Card(id: "chase", title: "Review Noor's pricing PR", sourceLabel: "Slack", why: "He asked on Monday and you have not replied",
+                         actionLabel: "Send", dueLine: "", urgency: .medium, draftLabel: "Draft", draft: "",
+                         recipe: .whatsapp(chat: "Noor Qureshi", body: "reviewing now"), evidence: [], verification: .verified, verifiedLine: "",
+                         state: .ready, createdAt: now.addingTimeInterval(-600))
+        let answered = ask("can you review the pricing PR today or tomorrow?", from: "Noor Qureshi", answeredAgo: 3600)
+        #expect(run([chase], [answered]).kept.isEmpty, "they wrote back about it — nobody should be chased")
+        #expect(run([chase], []).kept.count == 1, "with no ask behind it the card stands")
+        #expect(run([chase], [ask("can you review the pricing PR today?", from: "Noor Qureshi", answeredAgo: nil)]).kept.count == 1, "no reply, still a fair chase")
+        #expect(run([chase], [ask("can you review the pricing PR today?", from: "Noor Qureshi", answeredAgo: 3600, outcome: .promised)]).kept.count == 1,
+                "a promise is not an answer")
+        #expect(run([chase], [ask("can you review the pricing PR today?", from: "Meena Pillai", answeredAgo: 3600)]).kept.count == 1, "someone else answered something else")
+        #expect(run([chase], [ask("are you coming to the offsite?", from: "Noor Qureshi", answeredAgo: 3600)]).kept.count == 1, "a different question of theirs")
+        #expect(run([chase], [ask("can you review the pricing PR today?", from: "Noor Qureshi", answeredAgo: 20 * 86400)]).kept.count == 1,
+                "an answer three weeks old is not why this card was made")
+    }
+
     @Test func aDueOrCameBackCardStays() {
         let sent = card("old", to: "Lokesh", state: .fired, resolvedAgo: 60)
         #expect(run([card("due", to: "Lokesh", due: now.addingTimeInterval(86400))], past: [sent]).kept.count == 1)
