@@ -443,6 +443,17 @@ final class AppModel: ObservableObject {
 
     // MARK: brain + reader
 
+    /// Start Hands once the walk is known to be over, from wherever notices it first — the initial render if
+    /// settings were already loaded, or the moment `onboardingDone` flips. Idempotent, because both can fire:
+    /// starting twice would install a second set of global key monitors and run every hotkey press twice.
+    private var handsStarted = false
+    func startHandsOnce(_ hands: HandsController) {
+        guard !handsStarted else { return }
+        handsStarted = true
+        hands.start()
+        Notifier.requestPermission()
+    }
+
     func rebuildBrain() {
         if brainConfig.engine == .apple {
             // Nothing is logged: the model is Apple's, on this Mac, and no request leaves to be logged.

@@ -1,4 +1,5 @@
 import SwiftUI
+import Support
 import Proactive
 import AppKit
 import Speech
@@ -28,8 +29,11 @@ final class HandsController: ObservableObject {
     private var keyMonitor: Any?
     @Published var recentGoals: [String] = UserDefaults.standard.stringArray(forKey: "hands.recentGoals") ?? []
 
+    private let log = Log("hands.hotkey")
+
     func start() {
         SFSpeechRecognizer.requestAuthorization { _ in }
+        log.info("listening for the hotkey · \(m.handsHotkey) · accessibility \(AXIsProcessTrusted())")
         let mask: NSEvent.EventTypeMask = .flagsChanged
         monitor = NSEvent.addGlobalMonitorForEvents(matching: mask) { [weak self] e in Task { @MainActor in self?.flags(e) } }
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: mask) { [weak self] e in Task { @MainActor in self?.flags(e) }; return e }
@@ -50,6 +54,9 @@ final class HandsController: ObservableObject {
 
     private func flags(_ e: NSEvent) {
         guard m.handsHotkey != "off" else { return }
+        // Logged because "nothing happens" used to be indistinguishable from three different causes: the
+        // monitor never installed, the key reporting another code, or speech being refused further down.
+        if Int(e.keyCode) == 54 || Int(e.keyCode) == 61 { log.info("hotkey \(e.keyCode) \(e.modifierFlags.contains(.command) || e.modifierFlags.contains(.option) ? "down" : "up")") }
         // Right ⌘ keycode 54, right ⌥ 61
         let code = m.handsHotkey == "rightOption" ? 61 : 54
         guard Int(e.keyCode) == code else { return }
@@ -61,7 +68,10 @@ final class HandsController: ObservableObject {
     private func beginListening() {
         transcript = ""; m.handsState = .listening("")
         showPanel()
-        guard SFSpeechRecognizer.authorizationStatus() == .authorized, let recognizer, recognizer.isAvailable else { transcript = "(speech not available — use the command bar)"; return }
+        guard SFSpeechRecognizer.authorizationStatus() == .authorized, let recognizer, recognizer.isAvailable else {
+            log.warn("speech unavailable · authorisation \(SFSpeechRecognizer.authorizationStatus().rawValue) · recognizer \(recognizer == nil ? "nil" : "present")")
+            transcript = "(speech not available — use the command bar)"; return
+        }
         let req = SFSpeechAudioBufferRecognitionRequest(); req.shouldReportPartialResults = true
         if recognizer.supportsOnDeviceRecognition { req.requiresOnDeviceRecognition = true }   // never the server
         request = req
