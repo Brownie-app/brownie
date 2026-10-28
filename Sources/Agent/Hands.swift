@@ -75,6 +75,12 @@ public actor Hands {
 
         FIRST, always: call `plan` with 2–6 short steps in the user's own words ("Open Chrome", "Go to amazon.com", "Search for iPhone", "Open the first result", "Add it to the cart — then stop for you"). The user watches this list. When a step is complete, call `step_done` with its number and a few words on what you saw. Never skip the plan.
 
+        WHEN THE REQUEST POINTS AT SOMETHING. "Handle this", "reply to her", "deal with it" — the thing meant is
+        whatever is in front of the user. You are usually given it above the request; if you are not, call
+        `screen` BEFORE `plan` and work out what it is: which app, which conversation or message, who it is with.
+        Then plan in those terms ("Reply to Lalita about the deposit"), never "Tell me what you want handled".
+        Asking the user to repeat what is on their screen is a failure, not a clarification.
+
         HOW TO ACT. Reach for the tools that do a whole step in one call, in this order:
         1. `open_url` for any web page, `search_web` for a search on a site (amazon, google, youtube, flipkart, wikipedia, github, linkedin, x, reddit, maps — or any other site), `open_chat` for a WhatsApp or Messages conversation, `type_message` for a chat's message box. These open, act and wait for the page themselves.
         2. `press_text` to press anything by its words, and `type_into` to put text in a field by its label. One call finds the element, acts on it and checks what happened — you never need `find` before them.
@@ -94,7 +100,15 @@ public actor Hands {
         var turns: Int?
         let outcome: Outcome
         do {
-            let r = try await brain.run(AgentTask(system: system, input: goal, effort: effort, maxTurns: policy.maxSteps, timeout: policy.timeout), tools: tools) { e in
+            // A goal that points at something ("handle this") cannot be planned without knowing what is in
+            // front of the user, and `screen` is a tool the model has to think to call. So the header comes
+            // free with the first turn. An explicit goal ("open amazon") pays nothing for it.
+            var input = goal
+            if ScreenContext.needsScreen(goal), let header = ScreenContext.header(session.snapshot()) {
+                input = header + "\nWHAT THEY ASKED: " + goal
+                log.info("screen context: \(header.split(separator: "\n").count) lines of \(session.snapshot()?.app ?? "?")")
+            }
+            let r = try await brain.run(AgentTask(system: system, input: input, effort: effort, maxTurns: policy.maxSteps, timeout: policy.timeout), tools: tools) { e in
                 switch e {
                 case .toolCall(let name, let summary):
                     self.log.info("→ \(name) \(summary.prefix(80))")

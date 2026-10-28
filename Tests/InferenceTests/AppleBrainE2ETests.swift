@@ -2,6 +2,9 @@ import Testing
 import Foundation
 import Domain
 @testable import Inference
+#if canImport(FoundationModels)
+import FoundationModels
+#endif
 
 /// E2E. The real Apple on-device model, on the machine the test is running on.
 ///
@@ -31,6 +34,12 @@ import Domain
         // Always runs. It asserts nothing about Apple's model — only that the question has a sane answer and
         // that the answer is one a person could act on, which is the thing that reaches the UI.
         print("Apple Intelligence on this Mac: \(Self.state) — \(Self.state.line)")
+        #if canImport(FoundationModels)
+        // The decisive number for everything the knowledge builder asks of this model: prompt and answer
+        // share it. Printed because nothing else in the app knows it, and a budget guessed against it is
+        // how a night ends in exceededContextWindowSize.
+        if #available(macOS 26.4, *), Self.state.isUsable { print("  context window: \(SystemLanguageModel.default.contextSize) tokens") }
+        #endif
         #expect(!Self.state.line.isEmpty)
         #expect(Self.state.isUsable == (Self.state == .available))
         if !Self.state.isUsable {
