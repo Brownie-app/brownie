@@ -25,6 +25,10 @@ jobs:
       - name: Build TDLib
         if: steps.tdlib.outputs.cache-hit != 'true'
         run: ./Scripts/build-tdlib.sh
+      # Also after a cache hit: what the cache holds was correct when it was filled, and stops being
+      # correct the next time Homebrew bumps openssl — the Cellar path baked into it is then gone.
+      - name: Point vendored dylibs at each other
+        run: ./Scripts/rpath-tdlib.sh
       - name: Build
         run: swift build
       - name: Test

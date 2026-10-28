@@ -16,10 +16,7 @@ cp "$SRC/td/telegram/td_json_client.h" Vendor/tdlib/include/td/telegram/
 # tdjson_export.h is generated into the build tree
 cp "$SRC/build/td/telegram/tdjson_export.h" Vendor/tdlib/include/td/telegram/ 2>/dev/null || cp "$SRC/td/telegram/tdjson_export.h" Vendor/tdlib/include/td/telegram/ 2>/dev/null || echo "tdjson_export.h not regenerated; keeping the vendored copy"
 cp "$OPENSSL/lib/libssl.3.dylib" "$OPENSSL/lib/libcrypto.3.dylib" Vendor/tdlib/lib/
-chmod u+w Vendor/tdlib/lib/*.dylib
-# @rpath install names so the dylibs can live in Brownie.app/Contents/Frameworks
-for f in libtdjson libssl.3 libcrypto.3; do install_name_tool -id "@rpath/$f.dylib" "Vendor/tdlib/lib/$f.dylib"; done
-install_name_tool -change "$OPENSSL/lib/libcrypto.3.dylib" @rpath/libcrypto.3.dylib Vendor/tdlib/lib/libssl.3.dylib
-for dep in libssl.3 libcrypto.3; do install_name_tool -change "$OPENSSL/lib/$dep.dylib" "@rpath/$dep.dylib" Vendor/tdlib/lib/libtdjson.dylib; done
-codesign -fs - Vendor/tdlib/lib/*.dylib
+# @rpath install names so the dylibs can live in Brownie.app/Contents/Frameworks. Its own script
+# because CI restores these from a cache and never gets here — see the note at the top of it.
+./Scripts/rpath-tdlib.sh
 echo "TDLib ready in Vendor/tdlib/lib"
