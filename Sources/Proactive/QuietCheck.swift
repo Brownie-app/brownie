@@ -107,13 +107,32 @@ public enum QuietCheck {
     /// where near-identical wording really is one errand — while this one reaches back over days, and two
     /// different things to say to the same person must both still get through.
     static let twinOverlap = 0.8
-    /// The same card as one you already answered: the same loop, or the same person and almost the same words.
+    /// The share two cards with nobody on them must have in common. Higher than `twinOverlap`, because without a
+    /// person or a loop the only thing keeping two errands apart is their wording, and a near miss here silences
+    /// a card the user never saw.
+    static let namelessOverlap = 0.9
+
+    /// The same card as one you already answered: the same loop, or the same person and almost the same words —
+    /// and, failing both, almost exactly the same words.
+    ///
+    /// That last clause is the one that matters in practice. `CardDedupe.person` only answers for a card whose
+    /// recipe is a message; a card that drives the screen, opens a browser or has no recipe at all returns nil,
+    /// and only three of one real ledger's twenty-three cards carried a `loopID`. So every card about a bill, a
+    /// renewal or a setting — exactly the kind nobody is messaging about — fell straight through both tests and
+    /// could never match anything the user had turned down. The ledger had four cards about one
+    /// subscription, three about turning on two-factor somewhere, and two identically titled payment cards, all of them still arriving
+    /// after the user had dismissed one.
     static func twin(_ a: Card, _ b: Card) -> Bool {
         if let l = a.loopID, let m = b.loopID { return l == m }
-        guard let pa = CardDedupe.person(a), let pb = CardDedupe.person(b), PersonKey.sameKey(pa, pb) else { return false }
         let wa = LoopLedger.words(a.title + " " + a.why + " " + a.draft), wb = LoopLedger.words(b.title + " " + b.why + " " + b.draft)
         guard !wa.isEmpty, !wb.isEmpty else { return false }
-        return Double(wa.intersection(wb).count) / Double(min(wa.count, wb.count)) >= twinOverlap
+        let overlap = Double(wa.intersection(wb).count) / Double(min(wa.count, wb.count))
+        if let pa = CardDedupe.person(a), let pb = CardDedupe.person(b) {
+            return PersonKey.sameKey(pa, pb) && overlap >= twinOverlap
+        }
+        // One of them is about nobody in particular. Two cards can only be the same errand if they say so.
+        guard CardDedupe.person(a) == nil, CardDedupe.person(b) == nil else { return false }
+        return overlap >= namelessOverlap && LoopLedger.words(a.title).intersection(LoopLedger.words(b.title)).count >= 2
     }
 
     /// One matcher for the whole app: "Lokesh (+919000000111)" and "Lokesh" are one person, by `PersonKey`.

@@ -33,16 +33,24 @@ public actor RunCoordinator {
         /// What the sources' profiles prove about each direct chat, by handle: a Slack email, a Teams phone. The app
         /// keeps what discovery found, so the night asks nothing of the network for it.
         public var bucketProofs: @Sendable () async -> [String: [String]] = { [:] }
+        /// Reads a conversation back, so what the night says about it can be checked against it. The sources
+        /// already do this for the evidence sheet; this is the same read, used before a claim is written down
+        /// rather than after the user asks where it came from. Nothing it returns is stored.
+        ///
+        /// The default returns nothing, and a night with the default simply checks nothing — every loop is kept
+        /// and no card is downgraded, exactly as before this existed.
+        public var sourceLines: SourceLineLookup = { _, _ in [] }
         /// How long one source may take before the night moves on without it. Long enough for a first read of a big
         /// mailbox, short enough that a hung request or a prompt nobody answers costs a fraction of the night.
         public var sourceDeadline: TimeInterval = 30 * 60
         public init(store: any RunStore, knowledge: any KnowledgeStore, sources: [any Source], reader: (any LocalModel)?, brain: (any Brain)?,
                     policy: any SensitivityPolicy, clock: Clock = SystemClock(), calendarText: @escaping @Sendable () async -> String? = { nil },
                     stage: @escaping @Sendable (String, String) -> Void = { _, _ in }, selfNames: [String] = [], contacts: @escaping @Sendable () async -> [ContactCard] = { [] },
-                    bucketProofs: @escaping @Sendable () async -> [String: [String]] = { [:] }) {
+                    bucketProofs: @escaping @Sendable () async -> [String: [String]] = { [:] },
+                    sourceLines: @escaping SourceLineLookup = { _, _ in [] }) {
             self.store = store; self.knowledge = knowledge; self.sources = sources; self.reader = reader; self.brain = brain
             self.policy = policy; self.clock = clock; self.calendarText = calendarText; self.stage = stage; self.selfNames = SelfNames.clean(selfNames); self.contacts = contacts
-            self.bucketProofs = bucketProofs
+            self.bucketProofs = bucketProofs; self.sourceLines = sourceLines
         }
     }
 
@@ -230,9 +238,16 @@ public actor RunCoordinator {
                 let spoken = recent.filter { $0.kind == .transcript }.flatMap { TranscriptPromises.parse(summary: $0.text, recording: $0.title.isEmpty ? $0.bucketName : $0.title, date: $0.itemDate ?? $0.createdAt, now: deps.clock.now()) }
                 if !spoken.isEmpty { deps.stage("Promises said out loud", "\(spoken.count) from \(recent.filter { $0.kind == .transcript }.count) recording(s)"); log.info("\(spoken.count) spoken promise(s) found") }
                 let already = await LoopLedger.load(store)
+                // Before the bar, the facts. The judge wrote these from summaries and has not seen a message since
+                // ingest; this reads the conversations back and checks the parts that are either right or wrong —
+                // the amounts, the dates, the ids. A clause nothing said is cut, a promise that is nothing but such
+                // a clause is refused, and what survives carries the line it came from.
+                // Deliberately not a `stage`: that line is the "What left your Mac" log, and nothing here leaves
+                // it. The whole check is a substring comparison against messages read on this machine.
+                let proved = await LoopGate.apply(findings.newLoops + spoken.map(\.loop), lookup: deps.sourceLines, log: log)
                 // The bar, before anything enters the ledger: a deliverable, owed to someone other than the user, once —
                 // a sentiment, a loop with the user as the other party, or the mirror of a loop admitted tonight is turned away and logged.
-                let gate = LoopQuality.admit(findings.newLoops + spoken.map(\.loop), selfNames: deps.selfNames, existing: already)
+                let gate = LoopQuality.admit(proved.kept, selfNames: deps.selfNames, existing: already)
                 for r in gate.rejected { log.info("loop not opened (\(r.reason)): \(r.loop.direction == .mine ? "the user → \(r.loop.person)" : "\(r.loop.person) → the user") · \(r.loop.what)") }
                 let admittedIDs = Set(gate.kept.map(\.id))
                 let newSpoken = spoken.filter { f in admittedIDs.contains(f.loop.id) && !already.contains { $0.id == f.loop.id || ($0.status == .open && LoopLedger.same($0, f.loop)) } }
@@ -286,6 +301,13 @@ public actor RunCoordinator {
                 let checked = QuietCheck.run(cards: fresh, loops: loopsNow, past: kept, asks: asks, noteUpdated: { noteDates[$0] }, fileExists: { FileManager.default.fileExists(atPath: $0) }, now: deps.clock.now(), staleDays: staleDays)
                 for d in checked.dropped { log.info("quiet check dropped “\(d.card.title)”: \(d.why)") }
                 fresh = checked.kept
+                // Last: the word `verified` on a card. It arrives as whatever the preparer's model put in its own
+                // JSON, so nothing has ever failed itself. A card whose figures are in no message, or whose whole
+                // case is writing of Brownie's own, keeps its place in the morning and loses the claim to have
+                // been checked — the user is told what it is, which is a guess.
+                let signed = await CardGate.apply(fresh, lookup: deps.sourceLines, log: log)
+                if !signed.downgraded.isEmpty { log.info("\(signed.downgraded.count) card(s) no longer call themselves verified") }
+                fresh = signed.cards
                 try await Self.saveCards(kept + fresh, store: store)
                 try await store.setValue("brain.lastUsage", String(data: JSONEncoder().encode(usage), encoding: .utf8))
 
