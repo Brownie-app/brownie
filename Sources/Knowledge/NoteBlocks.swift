@@ -8,7 +8,7 @@ import Domain
 public enum NoteBlocks {
     public enum Inline: Equatable, Sendable {
         case text(String), code(String)
-        /// Emphasis wraps whatever sits inside it: `**[[Meera]]**` is a bold link, and a code span inside `_…_` keeps its face.
+        /// Emphasis wraps whatever sits inside it: `**[[Meena]]**` is a bold link, and a code span inside `_…_` keeps its face.
         case bold([Inline]), italic([Inline])
         /// `[[target]]`, `[[target|label]]`, `[[target#heading]]`: the note named, the heading within it, the words shown.
         case wikilink(target: String, heading: String?, label: String)
@@ -225,7 +225,7 @@ public enum NoteFacts {
     /// A person's note this many days without its substance changing is "quiet" on the header.
     public static let quietAfter = 30
 
-    /// "Updated 16 Sep · sources: WhatsApp · Nitesh, Slack": the front-matter's day (the year added only when it is
+    /// "Updated 16 Sep · sources: WhatsApp · Lokesh, Slack": the front-matter's day (the year added only when it is
     /// not this one) and its sources; a note with no day yet falls back to the store's date.
     public static func metaLine(_ n: Note, now: Date = Date(), calendar: Calendar = .current) -> String {
         var parts: [String] = []

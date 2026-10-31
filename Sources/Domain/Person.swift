@@ -2,11 +2,11 @@ import Foundation
 
 /// One person is one identity, everywhere. Every place that asks "is this the same person" — the loops
 /// ledger, the asks ledger, card dedupe, the quiet check, the household ledger — compares through here,
-/// so "Kanika Pandey Loadmill" and "Kanika Pandey" are one person in all of them at once.
+/// so "Lalita Pathak Tideline" and "Lalita Pathak" are one person in all of them at once.
 public enum PersonKey {
     /// The comparable core of a chat name: the parenthesised suffix and any phone number go, diacritics
-    /// fold, case folds, and the first two alphabetic words remain. "Nitesh (+919540752593)" → "nitesh";
-    /// "Kanika Pandey Loadmill" → "kanika pandey"; "Zoë Müller" → "zoe muller". A name with no letters
+    /// fold, case folds, and the first two alphabetic words remain. "Lokesh (+919000000111)" → "lokesh";
+    /// "Lalita Pathak Tideline" → "lalita pathak"; "Zoë Müller" → "zoe muller". A name with no letters
     /// at all (a bare number) has no key, and an empty key never matches anything.
     public static func normalise(_ label: String) -> String {
         var t = label
@@ -19,7 +19,7 @@ public enum PersonKey {
         return t.split(whereSeparator: { !$0.isLetter }).prefix(2).joined(separator: " ")
     }
 
-    /// Equal keys, or one side is a single word equal to the other's first word ("Arjun" and "Arjun Mehta").
+    /// Equal keys, or one side is a single word equal to the other's first word ("Kiran" and "Kiran Bose").
     /// The forgiving comparison the ledgers use among themselves; it is not enough to pick a person's
     /// note — the registry decides that, because two people can share a first name.
     public static func same(_ a: String, _ b: String) -> Bool {
@@ -38,7 +38,7 @@ public enum PersonKey {
     }
 
     /// The label as a name: the parenthesised suffix and any phone number dropped, spacing tidied.
-    /// "Nitesh (+919540752593)" → "Nitesh". Falls back to the label itself when nothing is left.
+    /// "Lokesh (+919000000111)" → "Lokesh". Falls back to the label itself when nothing is left.
     public static func displayName(_ label: String) -> String {
         var t = label
         while let open = t.range(of: "(") {
@@ -54,7 +54,7 @@ public enum PersonKey {
 /// The user's own names — the Mac's full user name, the account name, the household member marked `isMe` — and
 /// the one question every ledger and every People rule asks of a label: is this the user? The user is never a
 /// person in the vault: no People note, no registry record, no loop with themselves as the other party. A note the
-/// brain titled after them ("Vivek Upreti — Career Materials") is about the user, and what is about the user lives
+/// brain titled after them ("Ishan Shirke — Career Materials") is about the user, and what is about the user lives
 /// in README.md or in a topic note, never under People/.
 public enum SelfNames {
     /// The names as they will be compared: trimmed, empty ones dropped, none twice.
@@ -63,10 +63,10 @@ public enum SelfNames {
         for n in names.compactMap({ $0?.trimmingCharacters(in: .whitespacesAndNewlines) }) where !n.isEmpty && !PersonKey.normalise(n).isEmpty && !out.contains(where: { $0.caseInsensitiveCompare(n) == .orderedSame }) { out.append(n) }
         return out
     }
-    /// True when the label is the user under any spelling — `PersonKey.same` against a full self name, so "Vivek"
-    /// alone is the user when the user is Vivek Upreti — or is a title that opens with a self name and a dash
-    /// ("Vivek Upreti — Career Materials"). A self name that is one word (the account name, "vivek") claims only
-    /// that one word: another Vivek with a surname of his own is somebody else.
+    /// True when the label is the user under any spelling — `PersonKey.same` against a full self name, so "Ishan"
+    /// alone is the user when the user is Ishan Shirke — or is a title that opens with a self name and a dash
+    /// ("Ishan Shirke — Career Materials"). A self name that is one word (the account name, "ishan") claims only
+    /// that one word: another Ishan with a surname of his own is somebody else.
     public static func isSelf(_ label: String, among names: [String]) -> Bool {
         guard !names.isEmpty else { return false }
         return names.contains { n in
@@ -74,7 +74,7 @@ public enum SelfNames {
             return (oneWord ? PersonKey.sameKey(label, n) : PersonKey.same(label, n)) || prefixed(label, by: n) != nil
         }
     }
-    /// True when a line speaks to the user by name — "Vivek, can you send the deck?" — matching any of their names
+    /// True when a line speaks to the user by name — "Ishan, can you send the deck?" — matching any of their names
     /// on its first word, as a whole word. This is what lets a request made in a group count as a request, while a
     /// question thrown at the room does not. Names shorter than three letters are ignored: too much else matches them.
     public static func addressed(_ text: String, among names: [String]) -> Bool {
@@ -88,7 +88,7 @@ public enum SelfNames {
         }
     }
 
-    /// The title without the self name and its " — ": "Vivek Upreti — Career Materials (Jul–Aug 2026)" → "Career
+    /// The title without the self name and its " — ": "Ishan Shirke — Career Materials (Jul–Aug 2026)" → "Career
     /// Materials (Jul–Aug 2026)". Nil when the title does not open that way, or when nothing would be left.
     public static func stripped(_ title: String, among names: [String]) -> String? {
         for n in names { if let rest = prefixed(title, by: n), !rest.isEmpty { return rest } }
@@ -107,7 +107,7 @@ public enum SelfNames {
 /// A stable handle for a person as a source knows them — a phone, a user id, a chat id — spelled one way
 /// so the registry can recognise someone whose chat name changed.
 /// What proves two chats are one person, as opposed to a name that merely looks alike: a phone number or an email
-/// address, spelled one way — "phone:919540752593" (digits only, no leading zeros or plus), "email:nitesh@loopsy.in"
+/// address, spelled one way — "phone:919000000111" (digits only, no leading zeros or plus), "email:lokesh@harbour.test"
 /// (lower case, trimmed). A source reads them off a profile (Slack, Teams), the handle itself (WhatsApp is a phone,
 /// iMessage a phone or an address), or a Contacts card that holds both.
 public enum PersonProof {
@@ -153,18 +153,18 @@ public struct ContactCard: Sendable, Equatable {
 }
 
 public enum PersonHandle {
-    /// "whatsapp:+919540752593" — digits only, any spacing or punctuation dropped.
+    /// "whatsapp:+919000000111" — digits only, any spacing or punctuation dropped.
     public static func whatsapp(phoneDigits: String) -> String {
         "whatsapp:+" + phoneDigits.filter(\.isNumber)
     }
-    /// "imessage:+919540752593" for a number, "imessage:someone@icloud.com" for an address.
+    /// "imessage:+919000000111" for a number, "imessage:someone@icloud.com" for an address.
     public static func imessage(_ handle: String) -> String {
         let h = handle.trimmingCharacters(in: .whitespaces)
         if h.contains("@") { return "imessage:" + h.lowercased() }
         let digits = h.filter(\.isNumber)
         return digits.isEmpty ? "imessage:" + h.lowercased() : "imessage:+" + digits
     }
-    /// "email:devika@raghavan-co.in" — the address, lowercased. Mail knows people by address, not by number.
+    /// "email:rhea@chhabra-co.test" — the address, lowercased. Mail knows people by address, not by number.
     public static func mail(_ address: String) -> String { "email:" + address.trimmingCharacters(in: .whitespaces).lowercased() }
     public static func slack(userID: String) -> String { "slack:" + userID }
     public static func teams(userID: String) -> String { "teams:" + userID }

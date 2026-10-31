@@ -5,9 +5,9 @@ import Domain
 
 /// Windowing itself keeps the future out and says the year when it matters, so every chat source gets both.
 @Suite struct WindowDateTests {
-    let chat = ChatInfo(id: "c", name: "Nitesh", isGroup: false, memberCount: 2)
+    let chat = ChatInfo(id: "c", name: "Lokesh", isGroup: false, memberCount: 2)
     let now = Date(timeIntervalSince1970: 1_789_500_000)   // 16 Sep 2026
-    func m(_ t: Double, _ text: String = "hi") -> ChatMessage { ChatMessage(rowID: Int64(t), date: Date(timeIntervalSince1970: t), sender: "Nitesh", isMe: false, text: text) }
+    func m(_ t: Double, _ text: String = "hi") -> ChatMessage { ChatMessage(rowID: Int64(t), date: Date(timeIntervalSince1970: t), sender: "Lokesh", isMe: false, text: text) }
 
     @Test func futureMessagesNeverReachAWindow() {
         let msgs = [m(1_789_400_000), m(1_789_499_000), m(1_789_500_000 + 3600), m(2_001_513_725, "a 2033 row")]
@@ -20,7 +20,7 @@ import Domain
     @Test func linesCarryTheYearWhenTheWindowIsNotFromThisYear() {
         let thisYear = ChatWindowing.windows([m(1_789_400_000)], chat: chat, now: now)[0].text
         let f = DateFormatter(); f.dateFormat = "d MMM HH:mm"
-        #expect(thisYear.contains("[\(f.string(from: Date(timeIntervalSince1970: 1_789_400_000)))] Nitesh: hi"))
+        #expect(thisYear.contains("[\(f.string(from: Date(timeIntervalSince1970: 1_789_400_000)))] Lokesh: hi"))
         #expect(!thisYear.contains("2026"), "this year's lines stay short")
         let old = ChatWindowing.windows([m(1_694_000_000, "plan for the trip")], chat: chat, now: now)[0].text   // Sep 2023
         #expect(old.contains(" 2023 "), "a 2023 plan says so on every line")

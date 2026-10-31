@@ -8,7 +8,7 @@ import Support
     var cal: Calendar { var c = Calendar(identifier: .gregorian); c.timeZone = TimeZone(identifier: "Asia/Kolkata")!; return c }
     func day(_ y: Int, _ m: Int, _ d: Int, hour: Int = 9) -> Date { cal.date(from: DateComponents(year: y, month: m, day: d, hour: hour))! }
     func loop(_ due: Date?, status: LoopStatus = .open, nudged: Bool? = nil) -> Loop {
-        var l = Loop(direction: .theirs, person: "Priya", what: "answer", quote: "q", sourceLabel: "WhatsApp", due: "Tuesday", dueDate: due, status: status, openedAt: day(2026, 9, 17)); l.nudgedForDue = nudged; return l
+        var l = Loop(direction: .theirs, person: "Tanvi", what: "answer", quote: "q", sourceLabel: "WhatsApp", due: "Tuesday", dueDate: due, status: status, openedAt: day(2026, 9, 17)); l.nudgedForDue = nudged; return l
     }
     @Test func testDueWithinWindow() {
         let now = day(2026, 9, 21, hour: 3)   // Monday 3 AM

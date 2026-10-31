@@ -6,12 +6,12 @@ import Domain
 /// The brain's JSON is untrusted input: every parser fails closed.
 @Suite struct ParsingTests {
     @Test func testPreparerCardCarriesLoopAndCameBack() {
-        let d: [String: Any] = ["title": "Nudge Priya", "why": "w", "actionLabel": "Send", "dueLine": "3 days", "urgency": "high", "draftLabel": "Draft", "draft": "hi",
-                                "recipe": ["kind": "whatsapp", "chat": "Priya", "phone": "919999", "body": "hi"], "evidence": [["source": "WhatsApp", "when": "Thu", "text": "asked"]],
+        let d: [String: Any] = ["title": "Nudge Tanvi", "why": "w", "actionLabel": "Send", "dueLine": "3 days", "urgency": "high", "draftLabel": "Draft", "draft": "hi",
+                                "recipe": ["kind": "whatsapp", "chat": "Tanvi", "phone": "919999", "body": "hi"], "evidence": [["source": "WhatsApp", "when": "Thu", "text": "asked"]],
                                 "verification": "verified", "verifiedLine": "ok", "loopID": "ABC", "cameBack": true]
         let c = Preparer.card(from: d, now: Date())
         #expect(c != nil); #expect(c?.loopID == "ABC"); #expect(c?.isComeBack == true)
-        if case .whatsapp(let chat, let body, let phone) = c!.recipe { #expect(chat == "Priya"); #expect(body == "hi"); #expect(phone == "919999") } else { Issue.record("failed") }
+        if case .whatsapp(let chat, let body, let phone) = c!.recipe { #expect(chat == "Tanvi"); #expect(body == "hi"); #expect(phone == "919999") } else { Issue.record("failed") }
     }
     @Test func testPreparerCardWithoutRecipeIsDropped() {
         #expect(Preparer.card(from: ["title": "x"], now: Date()) == nil)
@@ -35,9 +35,9 @@ import Domain
         #expect(w.action_items.count == 1); #expect(w.loops == nil); #expect(w.action_items[0].cameBack == nil)
     }
     @Test func testJudgeWrapperDecodesLoopsAndUpdates() throws {
-        let json = #"{"action_items":[],"loops":[{"person":"Karan","direction":"theirs","what":"villa share","quote":"tonight","source":"WhatsApp · Fri","due":null}],"loop_updates":[{"id":"ABCD1234","status":"closed","how":"paid"}]}"#
+        let json = #"{"action_items":[],"loops":[{"person":"Devan","direction":"theirs","what":"villa share","quote":"tonight","source":"WhatsApp · Fri","due":null}],"loop_updates":[{"id":"ABCD1234","status":"closed","how":"paid"}]}"#
         let w = try JSONDecoder().decode(Judge.Wrapper.self, from: Data(json.utf8))
-        #expect(w.loops?.first?.person == "Karan"); #expect(w.loop_updates?.first?.status == "closed")
+        #expect(w.loops?.first?.person == "Devan"); #expect(w.loop_updates?.first?.status == "closed")
         #expect(w.ask_updates == nil, "a judge that says nothing about asks is fine")
     }
     @Test func testJudgeWrapperReadsAskUpdatesTolerantly() throws {
@@ -65,7 +65,7 @@ import Domain
         c.day = 21; #expect(WeeklyWriter.isoWeek(Calendar(identifier: .iso8601).date(from: c)!) == "2026-W39")
     }
     @Test func testAskerAnswerRoundTrips() throws {
-        let a = Asker.Answer(question: "q", answer: "A [1] B", citations: [.init(n: 1, kind: "note", label: "People/Karan", ref: "People/Karan.md")], actions: [.init(label: "Open", kind: "loops", ref: "")], at: Date())
+        let a = Asker.Answer(question: "q", answer: "A [1] B", citations: [.init(n: 1, kind: "note", label: "People/Devan", ref: "People/Devan.md")], actions: [.init(label: "Open", kind: "loops", ref: "")], at: Date())
         let back = try JSONDecoder().decode(Asker.Answer.self, from: JSONEncoder().encode(a))
         #expect(back == a)
     }

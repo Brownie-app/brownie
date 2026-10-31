@@ -184,7 +184,7 @@ public enum NoteLint {
     ].map { try! NSRegularExpression(pattern: $0, options: .caseInsensitive) }
     /// Where one clause ends and the next begins: a semicolon, a spaced dash, a full stop before a capital, or a comma
     /// with a conjunction. The break belongs to the clause before it.
-    /// A full stop that ends an abbreviation ("Mr. Taragi", "e.g. Slack", an initial) ends no sentence.
+    /// A full stop that ends an abbreviation ("Mr. Vartak", "e.g. Slack", an initial) ends no sentence.
     static let abbreviation = #"(?<!\b[Mm]r|\b[Mm]rs|\b[Mm]s|\b[Dd]r|\b[Jj]r|\b[Ss]r|\b[Ss]t|\bvs|\betc|\be\.g|\bi\.e|\bcf|\bno|\b[A-Z])"#
     static let clauseBreak = try! NSRegularExpression(pattern: #";\s+|\s+[—–]\s+|"# + abbreviation + #"\.\s+(?=[A-Z\[("“])|,\s+(?:but|though|although|and|so|while|which|yet)\s+"#)
     static let aside = try! NSRegularExpression(pattern: #"\s*\(([^()]*)\)"#)
@@ -199,7 +199,7 @@ public enum NoteLint {
     /// its own, the ones that hedge gone and the rest joined by the breaks that led into them, the end tidied (a
     /// dangling break off, the full stop back) and the first word given its capital when the clause that had it went.
     /// Sentences that are hedges from their first word to their full stop, whatever commas and "and"s they hold:
-    /// the sentence goes whole, so no half of it is left as a fragment ("References to calls involving Arif.").
+    /// the sentence goes whole, so no half of it is left as a fragment ("References to calls involving Noor.").
     static let sentencePatterns: [NSRegularExpression] = [
         #"^\s*(?:\w+\s+)?these materials concern\b"#,
         #"^\s*(?:individual |the )?(?:recurring )?(?:contacts|people|members) now have (?:their own |separate )notes\b"#,
@@ -263,7 +263,7 @@ public enum NoteLint {
 
     /// A bullet that only says nothing happened or holds a place, matched whole, case-insensitively, its end
     /// punctuation off. "No pending request or unresolved obligation is established by this exchange.", "Nothing
-    /// new.", "Standing facts about Kanika.", "No standing facts yet.", "TBD".
+    /// new.", "Standing facts about Lalita.", "No standing facts yet.", "TBD".
     static let fillerPatterns: [NSRegularExpression] = [
         #"^no (?:pending|open|new|outstanding|unresolved|further|other|remaining|specific|additional|explicit) (?:\w+ ){0,3}(?:requests?|actions?|items?|asks?|obligations?|tasks?|commitments?|plans?|facts?|updates?|changes?|details?|information|info)\b[^.,;:—–]*$"#,
         #"^no standing facts\b[^.,;:—–]*$"#,
@@ -352,7 +352,7 @@ public enum NoteLint {
             for j in entries.indices where j > i && !gone[j] && !gone[i] {
                 let a = entries[i], b = entries[j]
                 // one fact twice (six words in ten shared), or one thread told twice under Now/Context (the same four
-                // opening content words — "Arif's request for a perpetual licence option remains…" and "…was discussed"):
+                // opening content words — "Noor's request for a perpetual licence option remains…" and "…was discussed"):
                 // the newer telling is the state, the older one is history the newer already holds
                 let sameThread = a.slot.section != .about && b.slot.section != .about && !a.thread.isEmpty && a.thread == b.thread
                 guard sameThread || (min(a.words.count, b.words.count) >= 3 && jaccard(a.words, b.words) >= 0.6) else { continue }

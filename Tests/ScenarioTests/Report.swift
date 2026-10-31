@@ -22,14 +22,14 @@ import Proactive
             _ = await w.night(1)
             w.say("whatsapp:1", "sent it to your email just now", mine: true, day: 2, at: 9)
             return await w.night(2)
-        } chats: { [.direct("whatsapp:1", "Priya Sharma", handle: "whatsapp:+919810000001")] }
+        } chats: { [.direct("whatsapp:1", "Tanvi Rege", handle: "whatsapp:+919000000701")] }
 
         // 2 ── WhatsApp · the user says no, with a week in the sentence
         out += await report(2, "WhatsApp", "a refusal that names a week — the one that used to read as a promise") { w in
             w.say("whatsapp:2", "can you take the Thursday standup this week?", day: 1, at: 11)
             w.say("whatsapp:2", "sorry, can't this week", mine: true, day: 1, at: 12)
             return await w.night(1)
-        } chats: { [.direct("whatsapp:2", "Karan Mehta", handle: "whatsapp:+919810000002")] }
+        } chats: { [.direct("whatsapp:2", "Devan Mehra", handle: "whatsapp:+919000000702")] }
 
         // 3 ── WhatsApp · sympathy about something else, in the middle of a waiting question
         out += await report(3, "WhatsApp", "\u{201C}oh no\u{201D} about her train — not an answer, and not a refusal") { w in
@@ -38,16 +38,16 @@ import Proactive
             w.say("whatsapp:3", "my train got cancelled, what a morning", day: 2, at: 8)
             w.say("whatsapp:3", "oh no", mine: true, day: 2, at: 9)
             return await w.night(2)
-        } chats: { [.direct("whatsapp:3", "Farah Siddiqui", handle: "whatsapp:+919810000003")] }
+        } chats: { [.direct("whatsapp:3", "Farah Siddiqui", handle: "whatsapp:+919000000703")] }
 
         // 4 ── WhatsApp · a promise dated by a weekday
         out += await report(4, "WhatsApp", "\u{201C}by Friday\u{201D} — a promise, not an answer") { w in
             w.say("whatsapp:4", "when do I get the Q3 numbers?", day: 1, at: 9)
             w.say("whatsapp:4", "by Friday", mine: true, day: 1, at: 9.5)
             return await w.night(1, judge: JudgeScript(loops: [
-                .proposed("Send Kanika the Q3 numbers", .mine, with: "Kanika Pandey", openedAt: w.at(1, 9.5), id: "L-q3"),
+                .proposed("Send Lalita the Q3 numbers", .mine, with: "Lalita Pathak", openedAt: w.at(1, 9.5), id: "L-q3"),
             ]))
-        } chats: { [.direct("whatsapp:4", "Kanika Pandey", handle: "whatsapp:+919810000004")] }
+        } chats: { [.direct("whatsapp:4", "Lalita Pathak", handle: "whatsapp:+919000000704")] }
 
         // 5 ── iMessage · they say themselves that it is settled
         out += await report(5, "Messages", "they close it themselves") { w in
@@ -55,7 +55,7 @@ import Proactive
             w.say("imessage:5", "checking", mine: true, day: 1, at: 16.2)
             w.say("imessage:5", "got it, thanks", day: 1, at: 18)
             return await w.night(1)
-        } chats: { [.direct("imessage:5", "Amma", handle: "imessage:+919810000005")] }
+        } chats: { [.direct("imessage:5", "Amma", handle: "imessage:+919000000705")] }
 
         // 6 ── iMessage · ordinary chatter with nothing owed
         out += await report(6, "Messages", "nothing is being asked of anyone") { w in
@@ -63,13 +63,13 @@ import Proactive
             w.say("imessage:6", "no way, we were there in May", mine: true, day: 1, at: 13.2)
             w.say("imessage:6", "haha yes. anyway, see you Sunday", day: 1, at: 13.4)
             return await w.night(1)
-        } chats: { [.direct("imessage:6", "Rohan Desai", handle: "imessage:+919810000006")] }
+        } chats: { [.direct("imessage:6", "Zubin Patel", handle: "imessage:+919000000706")] }
 
         // 7 ── Telegram · a channel that asks nobody anything
         out += await report(7, "Telegram", "a channel posting into the void") { w in
             for (i, line) in ["Applications for the Feb cohort are open.", "Reminder: demo night is on the 14th.",
                               "We are hiring a community lead.", "New writeup: shipping on-device models on Apple silicon.",
-                              "Anyone hiring? Post in the thread.", "Venue changed to Indiranagar."].enumerated() {
+                              "Anyone hiring? Post in the thread.", "Venue changed to Lakeside."].enumerated() {
                 w.say("telegram:-1001", from: "Bengaluru Build Weekly", line, day: 1, at: 9 + Double(i))
             }
             return await w.night(1)
@@ -86,10 +86,10 @@ import Proactive
         // 9 ── Slack · the answer is written in a thread
         out += await report(9, "Slack", "answered in a thread — invisible until this week") { w in
             w.say("slack:D9", "can you review the pricing PR today or tomorrow?", day: 1, at: 11)
-            _ = await w.night(1, judge: JudgeScript(cards: [.proposed("Review Arif's pricing PR", to: "Arif Qureshi", on: .slack, why: "He asked today")]))
+            _ = await w.night(1, judge: JudgeScript(cards: [.proposed("Review Noor's pricing PR", to: "Noor Qureshi", on: .slack, why: "He asked today")]))
             w.say("slack:D9", "reviewed — two comments on the tiering, rest looks good", mine: true, day: 2, at: 10, inThread: true)
-            return await w.night(2, judge: JudgeScript(cards: [.proposed("Review Arif's pricing PR", to: "Arif Qureshi", on: .slack, why: "He asked on Monday and you have not replied")]))
-        } chats: { [.direct("slack:D9", "Arif Qureshi", handle: "slack:U0ARIF")] }
+            return await w.night(2, judge: JudgeScript(cards: [.proposed("Review Noor's pricing PR", to: "Noor Qureshi", on: .slack, why: "He asked on Monday and you have not replied")]))
+        } chats: { [.direct("slack:D9", "Noor Qureshi", handle: "slack:U0NOOR")] }
 
         // 10 ── Slack · a question thrown at a channel
         out += await report(10, "Slack", "a question to the room, not to you") { w in
@@ -100,17 +100,17 @@ import Proactive
 
         // 11 ── WhatsApp group · a request to the user by name
         out += await report(11, "WhatsApp group", "named in a group — an ask like any other") { w in
-            w.say("whatsapp:111", from: "Sneha Kulkarni", "Vivek, can you send the deck before the meeting?", day: 1, at: 9)
+            w.say("whatsapp:111", from: "Sneha Kulkarni", "Ishan, can you send the deck before the meeting?", day: 1, at: 9)
             w.say("whatsapp:111", from: "Deepak Iyer", "same question about the pricing sheet", day: 1, at: 9.2)
             return await w.night(1)
-        } chats: { [.group("whatsapp:111", "Loadmill — Launch")] }
+        } chats: { [.group("whatsapp:111", "Tideline — Launch")] }
 
         // 12 ── Gmail · the request is one sentence inside a long mail
         out += await report(12, "Gmail", "a request buried in a long mail") { w in
             w.say("gmail:t12", """
-            Hi Vivek,
+            Hi Ishan,
 
-            Thanks for the time on Tuesday — the team found the walkthrough genuinely useful, and Devika has \
+            Thanks for the time on Tuesday — the team found the walkthrough genuinely useful, and Rhea has \
             circulated the notes internally. We are close to a decision on the vendor, and the finance committee \
             meets on the 14th, which is sooner than we expected when we last spoke about timelines.
 
@@ -120,10 +120,10 @@ import Proactive
             by name, and everything else can follow once they have met and come back to us with questions.
 
             Best,
-            Devika
+            Rhea
             """, day: 1, at: 10)
             return await w.night(1)
-        } chats: { [.direct("gmail:t12", "Devika Ranganathan", handle: "email:devika@raghavan-co.in")] }
+        } chats: { [.direct("gmail:t12", "Rhea Chhabra", handle: "email:rhea@chhabra-co.test")] }
 
         // 13 ── Gmail · answered from a phone two days later
         out += await report(13, "Gmail", "answered two days later, from a phone") { w in
@@ -131,27 +131,27 @@ import Proactive
             _ = await w.night(1)
             w.say("gmail:t13", "Attaching the signed MoU — sent from my iPhone", mine: true, day: 3, at: 7)
             return await w.night(3)
-        } chats: { [.direct("gmail:t13", "Anand Krishnan", handle: "email:anand@krishnanpartners.in")] }
+        } chats: { [.direct("gmail:t13", "Yusuf Krishnan", handle: "email:yusuf@meridianpartners.test")] }
 
         // 14 ── WhatsApp · a card the user turned down, proposed again
         out += await report(14, "WhatsApp", "a card you turned down last night") { w in
             w.say("whatsapp:14", "still waiting on that intro to the Blume partner", day: 1, at: 12)
-            _ = await w.night(1, judge: JudgeScript(cards: [.proposed("Introduce Nikhil to the Blume partner", to: "Nikhil Rao", why: "He asked today")]),
+            _ = await w.night(1, judge: JudgeScript(cards: [.proposed("Introduce Farid to the Blume partner", to: "Farid Sethi", why: "He asked today")]),
                               did: [])
-            return await w.night(2, judge: JudgeScript(cards: [.proposed("Introduce Nikhil to the Blume partner", to: "Nikhil Rao", why: "He asked on Monday")]),
-                                 did: [.dismissed(card: "Introduce Nikhil to the Blume partner")])
-        } chats: { [.direct("whatsapp:14", "Nikhil Rao", handle: "whatsapp:+919810000014")] }
+            return await w.night(2, judge: JudgeScript(cards: [.proposed("Introduce Farid to the Blume partner", to: "Farid Sethi", why: "He asked on Monday")]),
+                                 did: [.dismissed(card: "Introduce Farid to the Blume partner")])
+        } chats: { [.direct("whatsapp:14", "Farid Sethi", handle: "whatsapp:+919000000707")] }
 
         // 15 ── two apps, one first name, possibly two people
         out += await report(15, "WhatsApp + Slack", "one first name, two spellings") { w in
             w.say("whatsapp:15", "can you send the wiring diagram?", day: 1, at: 10)
             w.say("slack:D15", "and the wiring diagram when you get a moment?", day: 1, at: 11)
             return await w.night(1, judge: JudgeScript(loops: [
-                .proposed("Send the wiring diagram", .mine, with: "Nitesh", openedAt: w.at(1, 10), id: "L-a"),
-                .proposed("Send the wiring diagram", .mine, with: "Nitesh Kumar", openedAt: w.at(1, 11), id: "L-b"),
+                .proposed("Send the wiring diagram", .mine, with: "Lokesh", openedAt: w.at(1, 10), id: "L-a"),
+                .proposed("Send the wiring diagram", .mine, with: "Lokesh Kadri", openedAt: w.at(1, 11), id: "L-b"),
             ]))
-        } chats: { [.direct("whatsapp:15", "Nitesh", handle: "whatsapp:+919810000015"),
-                    .direct("slack:D15", "Nitesh Kumar", handle: "slack:U0NIT")] }
+        } chats: { [.direct("whatsapp:15", "Lokesh", handle: "whatsapp:+919000000708"),
+                    .direct("slack:D15", "Lokesh Kadri", handle: "slack:U0NIT")] }
 
         // 16 ── WhatsApp · Hinglish, and a line of the user's own that looks like an instruction
         out += await report(16, "WhatsApp", "Hinglish, and the user's own line that reads like an order") { w in
@@ -159,7 +159,7 @@ import Proactive
             w.say("whatsapp:16", "email me tha which he was sending to others", mine: true, day: 1, at: 14.5)
             w.say("whatsapp:16", "theek hai, dekh leta hoon", day: 1, at: 15)
             return await w.night(1)
-        } chats: { [.direct("whatsapp:16", "Kanika Pandey", handle: "whatsapp:+919810000004")] }
+        } chats: { [.direct("whatsapp:16", "Lalita Pathak", handle: "whatsapp:+919000000704")] }
 
         out.append(String(repeating: "═", count: 92))
         print(out.joined(separator: "\n"))

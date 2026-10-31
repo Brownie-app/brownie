@@ -342,7 +342,7 @@
           <div class="card note" style="width: 640px; padding: 36px 44px; font-size: 14.5px; line-height: 1.6;">
             <h3 style="font-size: 20px; margin-bottom: 16px;">Hello. I spent last night reading.</h3>
             <p>Not everything, and nothing I shouldn't have. 214 things came in since you installed me; I kept 31 and forgot the rest on the spot.</p>
-            <p>Here's what I think I know. You run a small company from Bengaluru and most of your working day happens in three WhatsApp groups and one Linear board. You reply to Rohan fast and to everyone else slowly. Your mother sends you things to read and you rarely read them, which is fine, but you did promise her the scan report.</p>
+            <p>Here's what I think I know. You run a small company from Bengaluru and most of your working day happens in three WhatsApp groups and one Linear board. You reply to Zubin fast and to everyone else slowly. Your mother sends you things to read and you rarely read them, which is fine, but you did promise her the scan report.</p>
             <p>There are two subscriptions you probably forgot about, a form due at the end of the month, and a trip to Goa that four people are waiting on you to confirm. None of that is urgent today. All of it will be in a week.</p>
             <p>I got things wrong, certainly. Open Notes and fix me. I only get better when you do.</p>
             <p style="margin-top: 20px;">— Brownie</p>
@@ -438,18 +438,18 @@
           </g>
           <g font-size="12" fill="var(--ink)" text-anchor="middle">
             <circle cx="610" cy="400" r="34" fill="var(--accent)"></circle><text x="610" y="405" fill="#1a1205" font-weight="600">You</text>
-            <circle cx="380" cy="250" r="26" fill="var(--card)" stroke="{{graph.ring}}" stroke-width="{{graph.ringW}}" style="cursor: pointer;" onClick="{{graph.pickRohan}}"></circle><text x="380" y="292" style="cursor: pointer;" onClick="{{graph.pickRohan}}">Rohan</text>
+            <circle cx="380" cy="250" r="26" fill="var(--card)" stroke="{{graph.ring}}" stroke-width="{{graph.ringW}}" style="cursor: pointer;" onClick="{{graph.pickZubin}}"></circle><text x="380" y="292" style="cursor: pointer;" onClick="{{graph.pickZubin}}">Zubin</text>
             <circle cx="850" cy="230" r="22" fill="var(--card)" stroke="var(--cardb)"></circle><text x="850" y="268">Amma</text>
-            <circle cx="300" cy="520" r="20" fill="var(--card)" stroke="var(--cardb)"></circle><text x="300" y="556">Priya</text>
+            <circle cx="300" cy="520" r="20" fill="var(--card)" stroke="var(--cardb)"></circle><text x="300" y="556">Tanvi</text>
             <circle cx="900" cy="560" r="24" fill="var(--card)" stroke="var(--cardb)"></circle><text x="900" y="600">Goa trip</text>
             <circle cx="640" cy="680" r="18" fill="var(--card)" stroke="var(--cardb)"></circle><text x="640" y="714">Linear · Q4</text>
             <circle cx="1020" cy="330" r="14" fill="var(--card)" stroke="var(--cardb)"></circle><text x="1020" y="360">Dr. Menon</text>
-            <circle cx="180" cy="380" r="14" fill="var(--card)" stroke="var(--cardb)"></circle><text x="180" y="410">Karan</text>
+            <circle cx="180" cy="380" r="14" fill="var(--card)" stroke="var(--cardb)"></circle><text x="180" y="410">Devan</text>
           </g>
         </svg>
         <sc-if value="{{graph.selected}}" hint-placeholder-val="{{ true }}">
         <div class="card" style="position: absolute; right: 24px; bottom: 24px; width: 280px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px;">
-          <div style="font-weight: 600;">Rohan</div>
+          <div style="font-weight: 600;">Zubin</div>
           <div class="tiny">Co-founder · 3 threads · 41 mentions this month</div>
           <div style="font-size: 12.5px;">Runs product. You two decided on Tuesday to ship the pricing page before the 4 PM review today.</div>
           <div class="btn q" style="align-self: flex-start; padding-left: 0;" onClick="{{goKnowledge}}"><span>Open note</span></div>
@@ -479,12 +479,12 @@
             <tbody>
               <tr><td>3:04 AM</td><td>WhatsApp · Family</td><td style="color: var(--bad); font-weight: 500;">Sensitive</td><td>Looked like a medical report</td><td>Nothing</td></tr>
               <tr><td>3:07 AM</td><td>Files · Downloads</td><td style="color: var(--bad); font-weight: 500;">Sensitive</td><td>Matched a card-number pattern</td><td>Nothing</td></tr>
-              <tr><td>3:11 AM</td><td>iMessage · Karan</td><td>Not worth keeping</td><td>Only reactions and “ok”</td><td>Nothing</td></tr>
+              <tr><td>3:11 AM</td><td>iMessage · Devan</td><td>Not worth keeping</td><td>Only reactions and “ok”</td><td>Nothing</td></tr>
               <tr><td>3:12 AM</td><td>Files · Downloads</td><td>Not worth keeping</td><td>Installer</td><td>Nothing</td></tr>
               <tr><td>3:17 AM</td><td>Slack · #random</td><td>Not worth keeping</td><td>Lunch plans and reactions</td><td>Nothing</td></tr>
               <tr><td>3:19 AM</td><td>WhatsApp · Founders group</td><td>Not worth keeping</td><td>Other people's intros, you only reacted</td><td>Nothing</td></tr>
               <tr><td>3:22 AM</td><td>Gmail</td><td style="color: var(--bad); font-weight: 500;">Sensitive</td><td>Bank statement</td><td>Nothing</td></tr>
-              <tr><td>3:26 AM</td><td>WhatsApp · Priya</td><td>Kept, trimmed</td><td>Useful plan, private figure left out</td><td>A summary without the amount</td></tr>
+              <tr><td>3:26 AM</td><td>WhatsApp · Tanvi</td><td>Kept, trimmed</td><td>Useful plan, private figure left out</td><td>A summary without the amount</td></tr>
             </tbody>
           </table>
         </div>
@@ -753,7 +753,7 @@ class Component extends DCLogic {
       foryou:    { title: 'This is your morning.', body: 'Everything here was prepared overnight, on this Mac. Nothing has been sent.', action: 'Tap the first card to see why it’s here', left: '28px', top: '352px', right: 'auto', ax: '24px', ay: '-7px', ar: 'auto' },
       card:      { title: 'Nothing goes out until you tap.', body: 'The draft is in your voice and the evidence is on the right. Hands will do the steps and stop at Send.', action: 'Press the button to watch it go', left: 'auto', top: '62px', right: '20px', ax: 'auto', ay: '-7px', ar: '40px' },
       knowledge: { title: 'These are plain files.', body: 'Your knowledge base is Markdown on disk. Fix anything that’s wrong; it only gets better when you do.', action: 'Pick a folder on the left', left: '292px', top: '80px', right: 'auto', ax: '-7px', ay: '20px', ar: 'auto' },
-      graph:     { title: 'People, sized by how often they come up.', body: 'Click anyone to see what Brownie knows about them.', action: 'Click Rohan', left: '430px', top: '250px', right: 'auto', ax: '-7px', ay: '20px', ar: 'auto' },
+      graph:     { title: 'People, sized by how often they come up.', body: 'Click anyone to see what Brownie knows about them.', action: 'Click Zubin', left: '430px', top: '250px', right: 'auto', ax: '-7px', ay: '20px', ar: 'auto' },
       excluded:  { title: 'Here’s what it chose not to keep.', body: 'The reason is recorded, never the content. Widen the window to see a week.', action: 'Switch to 7 days', left: 'auto', top: '62px', right: '20px', ax: 'auto', ay: '-7px', ar: '40px' },
       sources:   { title: 'You decide what it reads.', body: 'Turn a source off and its notes stay; nothing new is read. Chats are off until you pick them one by one.', action: 'Flip any switch', left: '810px', top: '150px', right: 'auto', ax: '-7px', ay: '20px', ar: 'auto' }
     };
@@ -771,9 +771,9 @@ class Component extends DCLogic {
 
     const urg = { high: '#d94f45', medium: '#c9853a', low: '#8e8e93' };
     const allCards = [
-      { title: 'Reply to Priya about Goa', source: 'WhatsApp', urgency: 'high', why: 'Four people in the Goa trip group proposed 3–6 Oct on Wednesday. You haven’t answered, and your calendar is clear those days.', actionLabel: 'Send a reply', due: 'Waiting 3 days', fireLabel: 'Send to Priya', draftLabel: 'Draft reply', channel: 'WhatsApp · Priya', draft: 'Hey! 3–6 Oct works for me. Booking my flight tonight. Are we doing the Anjuna place again or trying somewhere new?', recipe: ['Open the WhatsApp chat with Priya', 'Paste the draft into the message field', 'Stop and show you the Send button — you press it'], evidence: [{ src: 'WhatsApp · Goa trip', when: 'Wed 9:14 PM', text: 'Priya, Karan and two others proposed 3–6 Oct; asked you to confirm.' }, { src: 'Calendar', when: 'live', text: 'No events 3–6 Oct.' }, { src: 'Knowledge', when: 'note', text: 'You went to Goa with this group last October.' }], verified: 'Re-read the thread this morning — still unanswered.' },
+      { title: 'Reply to Tanvi about Goa', source: 'WhatsApp', urgency: 'high', why: 'Four people in the Goa trip group proposed 3–6 Oct on Wednesday. You haven’t answered, and your calendar is clear those days.', actionLabel: 'Send a reply', due: 'Waiting 3 days', fireLabel: 'Send to Tanvi', draftLabel: 'Draft reply', channel: 'WhatsApp · Tanvi', draft: 'Hey! 3–6 Oct works for me. Booking my flight tonight. Are we doing the Anjuna place again or trying somewhere new?', recipe: ['Open the WhatsApp chat with Tanvi', 'Paste the draft into the message field', 'Stop and show you the Send button — you press it'], evidence: [{ src: 'WhatsApp · Goa trip', when: 'Wed 9:14 PM', text: 'Tanvi, Devan and two others proposed 3–6 Oct; asked you to confirm.' }, { src: 'Calendar', when: 'live', text: 'No events 3–6 Oct.' }, { src: 'Knowledge', when: 'note', text: 'You went to Goa with this group last October.' }], verified: 'Re-read the thread this morning — still unanswered.' },
       { title: 'Amma is waiting for the scan report', source: 'iMessage', urgency: 'high', why: 'You told her “tonight” on Tuesday. The PDF is in Downloads since Monday. She asked again yesterday.', actionLabel: 'Send the file', due: 'Promised 4 days ago', fireLabel: 'Send to Amma', draftLabel: 'Draft message', channel: 'iMessage · Amma', draft: 'Sorry Amma, here it is. Nothing to worry about — Dr. Menon said it’s all normal. Will call you Sunday.', recipe: ['Open Messages to Amma', 'Attach “scan-report-sep.pdf” from Downloads', 'Paste the draft and stop at Send'], evidence: [{ src: 'iMessage · Amma', when: 'Tue 8:02 PM', text: 'You wrote “will send tonight”.' }, { src: 'Files · Downloads', when: 'Mon', text: 'A PDF that looks like a scan report arrived. Contents were not kept.' }, { src: 'iMessage · Amma', when: 'Fri', text: 'She asked again.' }], verified: 'File still in Downloads; no reply sent since Tuesday.' },
-      { title: 'Prep for 4 PM with Rohan', source: 'Calendar', urgency: 'medium', why: 'You two agreed on Tuesday to ship the pricing page before this review. Three Linear tickets are still open. Tuesday’s Granola transcript lists what he expects.', actionLabel: 'Open a brief', due: 'Today, 4:00 PM', fireLabel: 'Open the brief', draftLabel: 'One-page brief', channel: 'Notes', draft: 'Pricing page review · 4 PM\n\nAgreed Tuesday: ship before review.\nOpen: BUD-231 copy, BUD-234 annual toggle, BUD-240 mobile layout.\nRohan will ask about: launch date, the ₹ vs $ switch, and whether the free tier stays.', recipe: ['Create a note in your knowledge base', 'Open it beside your calendar at 3:45 PM'], evidence: [{ src: 'WhatsApp · Rohan', when: 'Tue', text: 'Decision to ship pricing before the review.' }, { src: 'Calendar', when: 'live', text: '4:00–4:45 PM, Rohan, “Pricing review”.' }, { src: 'Linear', when: 'live', text: 'BUD-231, BUD-234, BUD-240 still open, all assigned to you.' }, { src: 'Granola', when: 'Tue', text: 'Last transcript with Rohan lists his three questions.' }], verified: 'Event still on the calendar; not cancelled.' },
+      { title: 'Prep for 4 PM with Zubin', source: 'Calendar', urgency: 'medium', why: 'You two agreed on Tuesday to ship the pricing page before this review. Three Linear tickets are still open. Tuesday’s Granola transcript lists what he expects.', actionLabel: 'Open a brief', due: 'Today, 4:00 PM', fireLabel: 'Open the brief', draftLabel: 'One-page brief', channel: 'Notes', draft: 'Pricing page review · 4 PM\n\nAgreed Tuesday: ship before review.\nOpen: BUD-231 copy, BUD-234 annual toggle, BUD-240 mobile layout.\nZubin will ask about: launch date, the ₹ vs $ switch, and whether the free tier stays.', recipe: ['Create a note in your knowledge base', 'Open it beside your calendar at 3:45 PM'], evidence: [{ src: 'WhatsApp · Zubin', when: 'Tue', text: 'Decision to ship pricing before the review.' }, { src: 'Calendar', when: 'live', text: '4:00–4:45 PM, Zubin, “Pricing review”.' }, { src: 'Linear', when: 'live', text: 'BUD-231, BUD-234, BUD-240 still open, all assigned to you.' }, { src: 'Granola', when: 'Tue', text: 'Last transcript with Zubin lists his three questions.' }], verified: 'Event still on the calendar; not cancelled.' },
       { title: 'Adobe renews on Friday', source: 'Gmail', urgency: 'medium', why: 'A renewal notice arrived Thursday. You last opened Photoshop in March, according to your files.', actionLabel: 'Decide', due: 'Renews in 6 days', fireLabel: 'Open the cancel page', draftLabel: 'What you’d lose', channel: 'Browser', draft: 'Cancelling stops the yearly charge. Your files stay on disk. You would lose cloud sync and Photoshop, which you haven’t opened since March.', recipe: ['Open the Adobe account page in your browser', 'Navigate to Plans → Cancel', 'Stop and show you the final button'], evidence: [{ src: 'Gmail', when: 'Thu', text: 'Renewal notice; the amount was left out of the summary.' }, { src: 'Files', when: 'Mar', text: 'Last edited .psd file.' }], verified: 'Renewal date confirmed in the email this morning.' },
       { title: 'Form 16 upload due 30 Sep', source: 'Files', urgency: 'low', why: 'Your accountant’s email asked for it; the file landed in Downloads on Tuesday, unopened.', actionLabel: 'Send the file', due: 'Due in 17 days', fireLabel: 'Email it to Sunil', draftLabel: 'Draft email', channel: 'Gmail', draft: 'Hi Sunil, Form 16 attached. Let me know if you need anything else for the filing.', recipe: ['Compose an email to Sunil with the PDF attached', 'Stop at Send'], evidence: [{ src: 'Gmail', when: 'Mon', text: 'Sunil asked for Form 16 before the 30th.' }, { src: 'Files · Downloads', when: 'Tue', text: 'A file named like Form 16 arrived.' }], verified: 'No reply to Sunil yet.' }
     ];
@@ -794,8 +794,8 @@ class Component extends DCLogic {
     ].map(s => ({ ...s, color: s.done ? '#2f9e5a' : 'var(--ctl2)', ink: s.done ? 'inherit' : 'var(--ink2)' }));
 
     const folderData = [
-      { name: 'README — who you are', n: 1, note: 'README', paras: ['Founder of a small software company in Bengaluru. Works mostly from WhatsApp, Linear and Gmail. Replies quickly to close collaborators and slowly to everyone else.', 'Family: mother (Amma), a sister in Pune. Close friends: Priya, Karan.', 'Recurring: a Goa trip with the same group each October.'] },
-      { name: 'People', n: 14, note: 'Rohan', paras: ['Co-founder, runs product. Decisions with him tend to happen in WhatsApp late in the evening and are rarely written down elsewhere.', 'Tuesday: agreed to ship the pricing page before Saturday’s 4 PM review.', 'Prefers short messages; dislikes voice notes.'] },
+      { name: 'README — who you are', n: 1, note: 'README', paras: ['Founder of a small software company in Bengaluru. Works mostly from WhatsApp, Linear and Gmail. Replies quickly to close collaborators and slowly to everyone else.', 'Family: mother (Amma), a sister in Pune. Close friends: Tanvi, Devan.', 'Recurring: a Goa trip with the same group each October.'] },
+      { name: 'People', n: 14, note: 'Zubin', paras: ['Co-founder, runs product. Decisions with him tend to happen in WhatsApp late in the evening and are rarely written down elsewhere.', 'Tuesday: agreed to ship the pricing page before Saturday’s 4 PM review.', 'Prefers short messages; dislikes voice notes.'] },
       { name: 'Work', n: 22, note: 'Pricing page', paras: ['Three tickets open: copy, annual toggle, mobile layout.', 'Open question: whether the free tier survives.'] },
       { name: 'Money', n: 9, note: 'Subscriptions', paras: ['Adobe renews yearly in September. Photoshop unused since March.', 'Amounts are deliberately not recorded here.'] },
       { name: 'Health', n: 3, note: 'Appointments', paras: ['Saw Dr. Menon in early September. Details were not kept.'] },
@@ -832,9 +832,9 @@ class Component extends DCLogic {
     ];
     const workSources = workList.map(([k, name, detail, pickerLabel]) => ({ name, detail, hasPicker: !!pickerLabel, pickerLabel: pickerLabel ?? '', togCls: workOn[k] ? 'on' : '', flip: () => this.setState({ workOn: { ...workOn, [k]: !workOn[k] } }) }));
 
-    const chatDefault = { fam: true, goa: true, rohan: true, founders: false, cricket: false };
+    const chatDefault = { fam: true, goa: true, zubin: true, founders: false, cricket: false };
     const chatOn = this.state.chatOn ?? chatDefault;
-    const chatList = [['fam', 'Family', 'Group · 5 people', 'F'], ['goa', 'Goa trip', 'Group · 6 people', 'G'], ['rohan', 'Rohan', 'Direct', 'R'], ['founders', 'Founders BLR', 'Group · 212 people', 'FB'], ['cricket', 'Cricket', 'Group · 48 people', 'C']];
+    const chatList = [['fam', 'Family', 'Group · 5 people', 'F'], ['goa', 'Goa trip', 'Group · 6 people', 'G'], ['zubin', 'Zubin', 'Direct', 'R'], ['founders', 'Founders BLR', 'Group · 212 people', 'FB'], ['cricket', 'Cricket', 'Group · 48 people', 'C']];
     const chats = chatList.map(([k, name, kind, ini]) => ({ name, kind, ini, togCls: chatOn[k] ? 'on' : '', flip: () => this.setState({ chatOn: { ...chatOn, [k]: !chatOn[k] } }) }));
 
     const brainList = [
@@ -848,7 +848,7 @@ class Component extends DCLogic {
     const brainConnectors = this.state.brain === 'ChatGPT Plus' ? 'Connected through ChatGPT' : (this.state.brain === 'Claude subscription' ? 'Sign in with Google to connect' : 'Not available on this engine');
 
     const graphSel = this.state.graphSel;
-    const graph = { selected: graphSel === 'rohan', ring: ftueKey === 'graph' ? 'var(--accent)' : (graphSel === 'rohan' ? 'var(--accent)' : 'var(--cardb)'), ringW: ftueKey === 'graph' || graphSel === 'rohan' ? 3 : 1, pickRohan: () => this.setState({ graphSel: 'rohan', ftueDone: mark('graph') }) };
+    const graph = { selected: graphSel === 'zubin', ring: ftueKey === 'graph' ? 'var(--accent)' : (graphSel === 'zubin' ? 'var(--accent)' : 'var(--cardb)'), ringW: ftueKey === 'graph' || graphSel === 'zubin' ? 3 : 1, pickZubin: () => this.setState({ graphSel: 'zubin', ftueDone: mark('graph') }) };
     const exTab = this.state.exTab;
     const exTabs = { night: exTab === 'night' ? 'on' : '', week: exTab === 'week' ? 'on' : '' };
 

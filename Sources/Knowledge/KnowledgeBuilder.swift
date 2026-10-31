@@ -395,7 +395,7 @@ enum FileTools {
     static func isToday(_ p: String) -> Bool { same(p, TodayNote.path) }
 
     /// A path whose folder is spelled in another case than the one on disk — or than the vault's own People/, Groups/ and
-    /// README.md — is refused naming the spelling to use. The file system would fold "people/Arif.md" onto People/Arif.md,
+    /// README.md — is refused naming the spelling to use. The file system would fold "people/Noor.md" onto People/Noor.md,
     /// and every rule keyed on the folder (one file per person, never deleted, the caps, the note's kind) would look the other way.
     static func checkSpelling(_ p: String, parts: [String], root: URL) throws {
         guard let first = parts.first else { return }
@@ -492,7 +492,7 @@ enum FileTools {
             throw Refusal("\(p) differs from \(notePath(folder, dup)) only by case, punctuation or a date suffix; write into \(notePath(folder, dup)) instead")
         }
         // One file per person, whatever the spelling: the registry says where they are written. Two people Brownie is not
-        // sure about, or the user keeps apart, are two: the title the brain was told for the second ("Nitesh Kumar (Slack)")
+        // sure about, or the user keeps apart, are two: the title the brain was told for the second ("Lokesh Kadri (Slack)")
         // is that record's own file, never a second file for the first.
         let person = same(folder, "People") ? PersonRegistry.resolveTitle(title, among: part.people).flatMap { id in part.people.first { $0.id == id } } : nil
         if !exists, let person, let np = person.notePath, np != p, fm.fileExists(atPath: part.root.appendingPathComponent(np).path) {

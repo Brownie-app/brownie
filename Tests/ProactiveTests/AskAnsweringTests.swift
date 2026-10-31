@@ -11,14 +11,14 @@ import Domain
     func verdict(_ q: String, _ w: [AskLine]) -> AskOutcome? { AskAnswering.rules(question: q, window: w)?.outcome }
 
     @Test func sharedWordsMeanAnswered() {
-        #expect(verdict("Dude postgres ka url kaise milega ye bata do", [you("Hi Nitesh, I'm still checking how to obtain the PostgreSQL URL needed for the first test.")]) == .answered)
+        #expect(verdict("Dude postgres ka url kaise milega ye bata do", [you("Hi Lokesh, I'm still checking how to obtain the PostgreSQL URL needed for the first test.")]) == .answered)
         #expect(verdict("Can you send the estimates for the three tasks?", [you("here are the estimates for the three tasks")]) == .answered)
     }
     @Test func acknowledgementsAreAnswers() {
         for r in ["ok", "Done.", "sure", "haan", "ho gaya", "👍", "ok done", "sent"] { #expect(verdict("can you send the file?", [you(r)]) == .answered, Comment(rawValue: r)) }
     }
     @Test func aRealMessageAboutSomethingElseLeavesItOpen() {
-        #expect(verdict("Brownie would you like to have a beer", [you("Hi Nitesh, I'm still checking how to obtain the PostgreSQL URL needed for the first test. I'll share the exact steps once confirmed.")]) == .promised, "a promise in it is read as one, whatever it is about")
+        #expect(verdict("Brownie would you like to have a beer", [you("Hi Lokesh, I'm still checking how to obtain the PostgreSQL URL needed for the first test. I'll share the exact steps once confirmed.")]) == .promised, "a promise in it is read as one, whatever it is about")
         #expect(verdict("can you list down all the tasks that you have in pipeline", [you("Also I think the approach wont work as their network is secure, so the feature you sent is out")]) == .open)
         #expect(verdict("beer tonight?", []) == nil, "nothing after it: nothing to judge")
         #expect(verdict("beer tonight?", [them("hello?")]) == .open, "nothing from the user and no receipt: open, no reader needed")
@@ -27,7 +27,7 @@ import Domain
         for r in ["thanks", "thank you", "got it", "received", "works now", "done", "perfect", "great", "mil gaya", "ho gaya", "thik hai", "shukriya", "ok done", "sorted", "resolved", "thanks, works now", "Thanks a lot bhai!"] {
             #expect(verdict("can you send the url?", [you("https://db.example.internal/5432"), them(r)]) == .confirmedByThem, Comment(rawValue: r))
         }
-        #expect(verdict("can you send the url?", [you("let me see"), them("thanks, works now")]) == .confirmedByThem, "Nitesh: thanks, works now — the strongest word there is")
+        #expect(verdict("can you send the url?", [you("let me see"), them("thanks, works now")]) == .confirmedByThem, "Lokesh: thanks, works now — the strongest word there is")
         #expect(verdict("did you get my file?", [them("oh got it, found it in spam")]) == .confirmedByThem, "a receipt needs no line from the user: they found it themselves")
         #expect(verdict("can you send the url?", [them("thanks")]) == .open, "thanks with nothing from the user is politeness, not a receipt")
         #expect(verdict("can you send the url?", [you("will do tomorrow"), them("thanks!")]) == .promised, "thanks for a promise close nothing")
@@ -73,7 +73,7 @@ import Domain
         func unload() async {}
     }
     func ask(_ id: String, q: String, window: [AskLine]) -> Ask {
-        Ask(id: id, person: "Nitesh", bucket: BucketID("w:1"), askedAt: t0, question: q, answeredAt: window.first(where: \.mine)?.at, reply: window.first(where: \.mine)?.text, window: window)
+        Ask(id: id, person: "Lokesh", bucket: BucketID("w:1"), askedAt: t0, question: q, answeredAt: window.first(where: \.mine)?.at, reply: window.first(where: \.mine)?.text, window: window)
     }
     @Test func theReaderSeesTheExchangeAndAnswersOneWord() async {
         let seen = OneWordReader.Seen()
@@ -124,7 +124,7 @@ import Domain
             #expect(m.answeredAt == was.answeredAt && m.reply == was.reply, "the reply the verdict rests on is kept")
             #expect(m.window?.count == 3, "but the window is the newest")
         }
-        var legacy = Ask(id: "L", person: "Nitesh", bucket: BucketID("w:1"), askedAt: t0, question: "q?", answeredAt: t0.addingTimeInterval(60), reply: "r"); legacy.addressed = true
+        var legacy = Ask(id: "L", person: "Lokesh", bucket: BucketID("w:1"), askedAt: t0, question: "q?", answeredAt: t0.addingTimeInterval(60), reply: "r"); legacy.addressed = true
         let again = AskLedger.merge(existing: [legacy], found: [ask("L", q: "q?", window: [you("r"), you("something else", mins: 50)])], now: t0.addingTimeInterval(86400))[0]
         #expect(again.addressed == true && again.outcome == nil && again.isAnswered && again.window?.count == 2, "settled before there were verdicts: settled still")
     }
@@ -142,14 +142,14 @@ import Domain
     }
     @Test func theBlockSaysWhenYouWroteButNotAboutIt() {
         let now = Date(timeIntervalSince1970: 1_758_000_000)
-        var a = Ask(id: "a", person: "Nitesh", bucket: BucketID("w:1"), askedAt: now.addingTimeInterval(-600), question: "beer?", answeredAt: now.addingTimeInterval(-300), reply: "about postgres"); a.addressed = false
-        let b = StatusBlock.render(person: "Nitesh", asks: [a], loops: [], now: now)
+        var a = Ask(id: "a", person: "Lokesh", bucket: BucketID("w:1"), askedAt: now.addingTimeInterval(-600), question: "beer?", answeredAt: now.addingTimeInterval(-300), reply: "about postgres"); a.addressed = false
+        let b = StatusBlock.render(person: "Lokesh", asks: [a], loops: [], now: now)
         #expect(b.contains("⏳") && b.contains("but not about this; still open"))
         #expect(AskLedger.judgeLines([a], now: now).contains("but NOT about it — still unanswered"))
-        #expect(AskLedger.closures(loops: [Loop(id: "L", direction: .mine, person: "Nitesh", what: "answer Nitesh", quote: "", sourceLabel: "s", due: nil, openedAt: now.addingTimeInterval(-500))], asks: [a], now: now)[0].status == .open, "an off-topic reply closes nothing")
+        #expect(AskLedger.closures(loops: [Loop(id: "L", direction: .mine, person: "Lokesh", what: "answer Lokesh", quote: "", sourceLabel: "s", due: nil, openedAt: now.addingTimeInterval(-500))], asks: [a], now: now)[0].status == .open, "an off-topic reply closes nothing")
     }
     @Test func oldLedgersDecodeAndBehaveAsBefore() throws {
-        let json = #"[{"id":"a","person":"Nitesh","bucket":{"rawValue":"whatsapp:1"},"askedAt":1758000000,"question":"beer?","answeredAt":1758000600,"reply":"sure","addressed":true},{"id":"b","person":"Nitesh","bucket":{"rawValue":"whatsapp:1"},"askedAt":1758000000,"question":"x?"}]"#
+        let json = #"[{"id":"a","person":"Lokesh","bucket":{"rawValue":"whatsapp:1"},"askedAt":1758000000,"question":"beer?","answeredAt":1758000600,"reply":"sure","addressed":true},{"id":"b","person":"Lokesh","bucket":{"rawValue":"whatsapp:1"},"askedAt":1758000000,"question":"x?"}]"#
         let d = JSONDecoder(); d.dateDecodingStrategy = .secondsSince1970
         let asks = try d.decode([Ask].self, from: Data(json.utf8))
         #expect(asks[0].window == nil && asks[0].outcome == nil && asks[0].isAnswered && asks[0].isSettled && !asks[0].isOpen)

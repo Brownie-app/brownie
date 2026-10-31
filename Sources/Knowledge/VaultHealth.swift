@@ -147,7 +147,7 @@ public struct VaultHealth: Codable, Sendable, Equatable {
     }
 
     /// Two notes in the same folder (People, or Groups) whose titles share a PersonKey, or whose first word matches when
-    /// one title is a single word: "Arjun" and "Arjun Mehta" may be one person; "Arjun Mehta" and "Arjun Rao" are two.
+    /// one title is a single word: "Kiran" and "Kiran Bose" may be one person; "Kiran Bose" and "Kiran Sethi" are two.
     /// Each title is normalised once and only notes sharing a first word are compared — `PersonKey.same` needs that
     /// much anyway — so the scan is linear in the folder; a pair the user has answered "Keep separate" is skipped.
     /// Pairs come out sorted by path, the earlier path first.

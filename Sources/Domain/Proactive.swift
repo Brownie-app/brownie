@@ -99,7 +99,7 @@ public struct Card: Codable, Sendable, Identifiable, Equatable {
     public var staleLine: String?
     /// Household cards: "me", a member's first name, or "either". Nil for the user's own cards.
     public var owner: String?
-    /// Set when another member's Brownie reports the same loop closed — the card shows dimmed, "Priya did this".
+    /// Set when another member's Brownie reports the same loop closed — the card shows dimmed, "Tanvi did this".
     public var handledBy: String?
     public var isHousehold: Bool { owner != nil }
     public var isComeBack: Bool { cameBack ?? false }

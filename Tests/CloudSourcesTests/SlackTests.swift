@@ -4,14 +4,14 @@ import Foundation
 import LocalSources
 import Domain
 
-let slackUsers = #"{"ok":true,"members":[{"id":"U1","name":"vivek","real_name":"Vivek Upreti","profile":{"display_name":"vivek","real_name":"Vivek Upreti"}},{"id":"U2","name":"meera","profile":{"display_name":"","real_name":"Meera Nair"}},{"id":"U3","name":"rohan","real_name":"Rohan"}]}"#
+let slackUsers = #"{"ok":true,"members":[{"id":"U1","name":"ishan","real_name":"Ishan Shirke","profile":{"display_name":"ishan","real_name":"Ishan Shirke"}},{"id":"U2","name":"meena","profile":{"display_name":"","real_name":"Meena Pillai"}},{"id":"U3","name":"zubin","real_name":"Zubin"}]}"#
 let slackList = #"""
 {"ok":true,"channels":[
  {"id":"C1","name":"design","is_channel":true,"num_members":12,"is_private":false},
  {"id":"C2","name":"secret","is_channel":true,"num_members":3,"is_private":true},
  {"id":"C9","name":"old","is_channel":true,"is_archived":true,"num_members":3},
  {"id":"D1","is_im":true,"user":"U2"},
- {"id":"G1","is_mpim":true,"name":"mpdm-vivek--meera--rohan-1"}],
+ {"id":"G1","is_mpim":true,"name":"mpdm-ishan--meena--zubin-1"}],
  "response_metadata":{"next_cursor":""}}
 """#
 let slackHistory = #"""
@@ -46,12 +46,12 @@ let slackThreadReplies = #"""
 
     @Test func usersPreferDisplayThenRealName() {
         let n = SlackParsing.users(json(slackUsers))
-        #expect(n == ["U1": "vivek", "U2": "Meera Nair", "U3": "Rohan"])
+        #expect(n == ["U1": "ishan", "U2": "Meena Pillai", "U3": "Zubin"])
     }
 
     @Test func channelsDMsAndGroupDMsGetReadableNames() {
         let c = SlackParsing.channels(json(slackList), names: SlackParsing.users(json(slackUsers)))
-        #expect(c.map(\.name) == ["#design", "#secret", "Meera Nair", "Group DM · vivek, meera, rohan"], "archived channels are gone")
+        #expect(c.map(\.name) == ["#design", "#secret", "Meena Pillai", "Group DM · ishan, meena, zubin"], "archived channels are gone")
         #expect(c[0].detail == "Channel · 12 members" && c[1].detail == "Private channel · 3 members" && c[2].detail == "Direct")
         #expect(c[2].isGroup == false && c[3].isGroup == true && c[3].members == 3)
     }
@@ -59,18 +59,18 @@ let slackThreadReplies = #"""
     @Test func messagesAreOldestFirstReadableAndMine() {
         let m = SlackParsing.messages(json(slackHistory), me: "U1", names: SlackParsing.users(json(slackUsers)))
         #expect(m.count == 3, "the join is dropped")
-        #expect(m.map(\.text) == ["[file: pricing.pdf]", "I'll send it by Thursday, see the doc & the deck in #design", "Did you send the pricing notes? @vivek"])
+        #expect(m.map(\.text) == ["[file: pricing.pdf]", "I'll send it by Thursday, see the doc & the deck in #design", "Did you send the pricing notes? @ishan"])
         #expect(m.map(\.isMe) == [false, true, false])
-        #expect(m[1].sender == "vivek" && m[0].sender == "Meera Nair")
+        #expect(m[1].sender == "ishan" && m[0].sender == "Meena Pillai")
         #expect(m[1].date == Date(timeIntervalSince1970: 1757590000.0001))
         #expect(m[1].rowID == 1757590000000100)
     }
 
     @Test(arguments: [
-        ("<@U2> ping", "@Meera Nair ping"), ("<@U7|guest> hi", "@guest hi"), ("<#C1|design>", "#design"), ("<!channel> all", "@channel all"),
+        ("<@U2> ping", "@Meena Pillai ping"), ("<@U7|guest> hi", "@guest hi"), ("<#C1|design>", "#design"), ("<!channel> all", "@channel all"),
         ("see <https://a.b/c>", "see https://a.b/c"), ("a &lt; b &amp; c &gt; d", "a < b & c > d"), ("plain", "plain"), ("<unterminated", "<unterminated"),
     ]) func unescape(_ pair: (String, String)) {
-        #expect(SlackParsing.unescape(pair.0, names: ["U2": "Meera Nair"]) == pair.1)
+        #expect(SlackParsing.unescape(pair.0, names: ["U2": "Meena Pillai"]) == pair.1)
     }
 }
 
@@ -79,13 +79,13 @@ let slackThreadReplies = #"""
         SlackSource(transport: t, token: { token }, now: { now })
     }
     func wired() -> FakeTransport {
-        FakeTransport().on("auth.test", #"{"ok":true,"user_id":"U1","user":"vivek"}"#).on("users.list", slackUsers).on("conversations.list", slackList).on("conversations.history", slackHistory)
+        FakeTransport().on("auth.test", #"{"ok":true,"user_id":"U1","user":"ishan"}"#).on("users.list", slackUsers).on("conversations.list", slackList).on("conversations.history", slackHistory)
     }
 
     /// The answer to a question is often written in a thread, and a thread reply the app never reads is a chase
     /// card for something the user already did. Each thread is fetched once; the parent is not counted twice.
     @Test func aThreadsRepliesAreReadAndMergedInOrder() async throws {
-        let t = FakeTransport().on("auth.test", #"{"ok":true,"user_id":"U1","user":"vivek"}"#).on("users.list", slackUsers)
+        let t = FakeTransport().on("auth.test", #"{"ok":true,"user_id":"U1","user":"ishan"}"#).on("users.list", slackUsers)
             .on("conversations.list", slackList).on("conversations.history", slackThreadHistory).on("conversations.replies", slackThreadReplies)
         let m = try await source(t).messages(in: BucketID("slack:D1"), from: Date(timeIntervalSince1970: 1_757_000_000), to: Date(timeIntervalSince1970: 1_757_700_000))
         #expect(m.map(\.text) == ["can you review the pricing PR today or tomorrow?",
@@ -94,14 +94,14 @@ let slackThreadReplies = #"""
         #expect(m.map(\.isMe) == [false, true, false])
         #expect(t.count("conversations.replies") == 1, "one call per thread")
 
-        let quiet = FakeTransport().on("auth.test", #"{"ok":true,"user_id":"U1","user":"vivek"}"#).on("users.list", slackUsers)
+        let quiet = FakeTransport().on("auth.test", #"{"ok":true,"user_id":"U1","user":"ishan"}"#).on("users.list", slackUsers)
             .on("conversations.list", slackList).on("conversations.history", slackHistory)
         _ = try await source(quiet).messages(in: BucketID("slack:D1"), from: Date(timeIntervalSince1970: 1_757_000_000), to: Date(timeIntervalSince1970: 1_757_700_000))
         #expect(quiet.count("conversations.replies") == 0, "a channel with no threads is read exactly as before")
     }
 
     @Test func aThreadThatCannotBeReadDoesNotLoseTheChannel() async throws {
-        let t = FakeTransport().on("auth.test", #"{"ok":true,"user_id":"U1","user":"vivek"}"#).on("users.list", slackUsers)
+        let t = FakeTransport().on("auth.test", #"{"ok":true,"user_id":"U1","user":"ishan"}"#).on("users.list", slackUsers)
             .on("conversations.list", slackList).on("conversations.history", slackThreadHistory)
             .on("conversations.replies", #"{"ok":false,"error":"thread_not_found"}"#)
         let m = try await source(t).messages(in: BucketID("slack:D1"), from: Date(timeIntervalSince1970: 1_757_000_000), to: Date(timeIntervalSince1970: 1_757_700_000))
@@ -118,7 +118,7 @@ let slackThreadReplies = #"""
     @Test func discoverListsConversationsWithBucketIDs() async throws {
         let b = try await source(wired()).discoverBuckets()
         #expect(b.map(\.id.rawValue) == ["slack:C1", "slack:C2", "slack:D1", "slack:G1"])
-        #expect(b[2].name == "Meera Nair" && b[2].isGroup == false)
+        #expect(b[2].name == "Meena Pillai" && b[2].isGroup == false)
     }
 
     @Test func bucketsReadOnlyChosenChatsAndWindowThem() async throws {
@@ -130,7 +130,7 @@ let slackThreadReplies = #"""
         let hist = t.calls.first { $0.absoluteString.contains("conversations.history") }!.absoluteString
         #expect(hist.contains("channel=D1") && hist.contains("oldest=1749924000.000000"), "first read: the policy's 90 days")
         let c = try #require(out[0].items.first)
-        #expect(c.kind == .directMessage && c.metadata["chat"] == "Meera Nair" && c.isGroup == false)
+        #expect(c.kind == .directMessage && c.metadata["chat"] == "Meena Pillai" && c.isGroup == false)
         #expect(c.itemDate == Date(timeIntervalSince1970: 1757600000.0002))
         #expect(Double(c.metadata["firstDate"]!)! == 1757580000.0001)
         #expect(try await s.buckets(since: [:], enabled: []).isEmpty, "nothing chosen → nothing read")
@@ -164,7 +164,7 @@ let slackThreadReplies = #"""
 
     @Test func aFirstReadStoppedByThePageCapIsReportedNotSwallowed() async throws {
         let endless = slackHistory.replacingOccurrences(of: #""next_cursor":""}"#, with: #""next_cursor":"more"}"#)
-        let t = FakeTransport().on("auth.test", #"{"ok":true,"user_id":"U1","user":"vivek"}"#).on("users.list", slackUsers).on("conversations.list", slackList).on("conversations.history", endless)
+        let t = FakeTransport().on("auth.test", #"{"ok":true,"user_id":"U1","user":"ishan"}"#).on("users.list", slackUsers).on("conversations.list", slackList).on("conversations.history", endless)
         let out = try await source(t).buckets(since: [:], enabled: [BucketID("slack:C1")])
         #expect(t.count("conversations.history") == SlackSource.pageCap, "a first read stops at the cap")
         #expect(out[0].deferred == 1, "and the run is told there was more")
@@ -179,7 +179,7 @@ let slackThreadReplies = #"""
             let next = k < pages ? "p\(k + 1)" : ""
             return #"{"ok":true,"messages":[{"type":"message","user":"U2","text":"page \#(k)","ts":"\#(ts).000100"}],"response_metadata":{"next_cursor":"\#(next)"}}"#
         }
-        let t = FakeTransport().on("auth.test", #"{"ok":true,"user_id":"U1","user":"vivek"}"#).on("users.list", slackUsers).on("conversations.list", slackList).on("conversations.history", page(1))
+        let t = FakeTransport().on("auth.test", #"{"ok":true,"user_id":"U1","user":"ishan"}"#).on("users.list", slackUsers).on("conversations.list", slackList).on("conversations.history", page(1))
         for k in 2...pages { t.on("history?channel=C1&cursor=p\(k)", page(k)) }
         let out = try await source(t).buckets(since: [BucketID("slack:C1"): ItemKey(order: 1_757_000_000, tiebreak: "x")], enabled: [BucketID("slack:C1")])
         #expect(t.count("conversations.history") == pages, "every page down to the mark, one more than the cap")
@@ -196,7 +196,7 @@ let slackThreadReplies = #"""
         let text = try #require(a.text)
         #expect(text.hasPrefix("Chat: #design · GROUP (12 members) · 3 messages, 1 of them sent by Me (the user)."))
         #expect(text.contains("Me: I'll send it by Thursday"))
-        #expect(text.contains("Meera Nair: Did you send the pricing notes? @vivek"))
+        #expect(text.contains("Meena Pillai: Did you send the pricing notes? @ishan"))
         let hist = t.calls.last { $0.absoluteString.contains("conversations.history") }!.absoluteString
         #expect(hist.contains("latest=1757600000.001200") && hist.contains("inclusive=true"))
     }

@@ -11,13 +11,13 @@ import Domain
 
     @Test func everyBlockKind() {
         let body = """
-        # Nayan
+        # Nayra
         Friend from Pune; **owes** you a _book_.
         Second line of the same paragraph.
 
         ## Recently
         - met at `Koregaon`
-        - [[Meera]] came too
+        - [[Meena]] came too
           - nested
         1. first
         2. second
@@ -35,10 +35,10 @@ import Domain
         ```
         """
         let blocks = NoteBlocks.parse(body)
-        #expect(blocks[0] == .heading(level: 1, inlines: [.text("Nayan")]))
+        #expect(blocks[0] == .heading(level: 1, inlines: [.text("Nayra")]))
         #expect(blocks[1] == .paragraph([.text("Friend from Pune; "), .bold([.text("owes")]), .text(" you a "), .italic([.text("book")]), .text(". Second line of the same paragraph.")]))
         #expect(blocks[2] == .heading(level: 2, inlines: [.text("Recently")]))
-        #expect(blocks[3] == .list([.init(indent: 0, ordinal: nil, inlines: [.text("met at "), .code("Koregaon")]), .init(indent: 0, ordinal: nil, inlines: [.wikilink(target: "Meera", heading: nil, label: "Meera"), .text(" came too")]),
+        #expect(blocks[3] == .list([.init(indent: 0, ordinal: nil, inlines: [.text("met at "), .code("Koregaon")]), .init(indent: 0, ordinal: nil, inlines: [.wikilink(target: "Meena", heading: nil, label: "Meena"), .text(" came too")]),
                                      .init(indent: 1, ordinal: nil, inlines: [.text("nested")]), .init(indent: 0, ordinal: 1, inlines: [.text("first")]), .init(indent: 0, ordinal: 2, inlines: [.text("second")])]))
         #expect(blocks[4] == .heading(level: 3, inlines: [.text("Open")]))
         #expect(blocks[5] == .checklist([.init(checked: false, inlines: [.text("return the book")], cardID: nil), .init(checked: true, inlines: [.text("lunch")], cardID: nil)]))
@@ -62,24 +62,24 @@ import Domain
 
     @Test func emphasisWrapsWhatIsInsideIt() {
         // the brain bolds a linked name; Obsidian draws it as a bold link, so must the note view
-        #expect(NoteBlocks.inlines("**[[Meera Iyer]]** promised") == [.bold([.wikilink(target: "Meera Iyer", heading: nil, label: "Meera Iyer")]), .text(" promised")])
+        #expect(NoteBlocks.inlines("**[[Meena Iyer]]** promised") == [.bold([.wikilink(target: "Meena Iyer", heading: nil, label: "Meena Iyer")]), .text(" promised")])
         #expect(NoteBlocks.inlines("**bold, then `code` inside**") == [.bold([.text("bold, then "), .code("code"), .text(" inside")])])
         #expect(NoteBlocks.inlines("_see [the site](https://x.y) and **both**_") == [.italic([.text("see "), .url(label: "the site", url: "https://x.y"), .text(" and "), .bold([.text("both")])])])
-        #expect(NoteBlocks.plain(NoteBlocks.inlines("**[[Meera Iyer|Meera]]** and _`x`_")) == "Meera and x", "the words alone, however deep")
+        #expect(NoteBlocks.plain(NoteBlocks.inlines("**[[Meena Iyer|Meena]]** and _`x`_")) == "Meena and x", "the words alone, however deep")
     }
 
     @Test func theNoteAsDrawnIsPlainText() {
-        let body = "# Arif\n\n<!-- brownie:status -->\n## Between you\n_Kept by Brownie from the chats and the loops ledger._\n- ⏳ 3 Sep — they asked: “lunch?” — no reply yet\n<!-- /brownie:status -->\n\n## Recently\n- **Promised** the [[Meera|deck]] <!-- secret -->\n- [ ] call `mum` <!-- card:c1 -->\n\n> not before Diwali\n\n---\n```\nraw\n```\n"
+        let body = "# Noor\n\n<!-- brownie:status -->\n## Between you\n_Kept by Brownie from the chats and the loops ledger._\n- ⏳ 3 Sep — they asked: “lunch?” — no reply yet\n<!-- /brownie:status -->\n\n## Recently\n- **Promised** the [[Meena|deck]] <!-- secret -->\n- [ ] call `mum` <!-- card:c1 -->\n\n> not before Diwali\n\n---\n```\nraw\n```\n"
         let plain = NoteBlocks.plainText(body)
-        #expect(plain == "Arif\n⏳ 3 Sep — they asked: “lunch?” — no reply yet\nRecently\nPromised the deck\ncall mum\nnot before Diwali\nraw", Comment(rawValue: plain))
+        #expect(plain == "Noor\n⏳ 3 Sep — they asked: “lunch?” — no reply yet\nRecently\nPromised the deck\ncall mum\nnot before Diwali\nraw", Comment(rawValue: plain))
         #expect(!plain.contains("<!--") && !plain.contains("# ") && !plain.contains("Brownie") && !plain.contains("secret") && !plain.contains("c1"), "nothing the screen hides")
     }
 
     @Test func theThreeWikilinkForms() {
-        #expect(NoteBlocks.inlines("[[Meera]]") == [.wikilink(target: "Meera", heading: nil, label: "Meera")])
-        #expect(NoteBlocks.inlines("[[Meera Iyer|Meera]]") == [.wikilink(target: "Meera Iyer", heading: nil, label: "Meera")])
-        #expect(NoteBlocks.inlines("[[Meera#Open loops]]") == [.wikilink(target: "Meera", heading: "Open loops", label: "Meera › Open loops")])
-        #expect(NoteBlocks.inlines("[[Meera#Open|her loops]]") == [.wikilink(target: "Meera", heading: "Open", label: "her loops")])
+        #expect(NoteBlocks.inlines("[[Meena]]") == [.wikilink(target: "Meena", heading: nil, label: "Meena")])
+        #expect(NoteBlocks.inlines("[[Meena Iyer|Meena]]") == [.wikilink(target: "Meena Iyer", heading: nil, label: "Meena")])
+        #expect(NoteBlocks.inlines("[[Meena#Open loops]]") == [.wikilink(target: "Meena", heading: "Open loops", label: "Meena › Open loops")])
+        #expect(NoteBlocks.inlines("[[Meena#Open|her loops]]") == [.wikilink(target: "Meena", heading: "Open", label: "her loops")])
         #expect(NoteBlocks.inlines("[[unclosed") == [.text("[[unclosed")])
     }
 
@@ -91,14 +91,14 @@ import Domain
     }
 
     @Test func statusBlockIsItsOwnBlock() {
-        let body = "# Arif\n\n<!-- brownie:status -->\n## Between you\n_Kept by Brownie from the chats and the loops ledger. Not written by the brain._\n- ⏳ 3 Sep — they asked: “lunch?” — no reply yet\n- ✅ 1 Sep — they asked: “call?” — you replied 1 Sep 10:00\n- ⌛ you promised (1 Jul): the book — no news in 90 days; no longer tracked (lapsed 29 Sep)\n<!-- /brownie:status -->\n\nA friend.\n"
+        let body = "# Noor\n\n<!-- brownie:status -->\n## Between you\n_Kept by Brownie from the chats and the loops ledger. Not written by the brain._\n- ⏳ 3 Sep — they asked: “lunch?” — no reply yet\n- ✅ 1 Sep — they asked: “call?” — you replied 1 Sep 10:00\n- ⌛ you promised (1 Jul): the book — no news in 90 days; no longer tracked (lapsed 29 Sep)\n<!-- /brownie:status -->\n\nA friend.\n"
         let blocks = NoteBlocks.parse(body)
-        #expect(blocks[0] == .heading(level: 1, inlines: [.text("Arif")]))
+        #expect(blocks[0] == .heading(level: 1, inlines: [.text("Noor")]))
         #expect(blocks[1] == .status(lines: ["⏳ 3 Sep — they asked: “lunch?” — no reply yet", "✅ 1 Sep — they asked: “call?” — you replied 1 Sep 10:00", "⌛ you promised (1 Jul): the book — no news in 90 days; no longer tracked (lapsed 29 Sep)"]))
         #expect(blocks[2] == .paragraph([.text("A friend.")]))
         #expect(NoteBlocks.openItems(in: body) == 1)
-        #expect(NoteBlocks.openItems(in: "# Arif\nno block\n") == 0)
-        let legacy = "# Arif\n<!-- brownie:between-you -->\n## Between you\n- ⏳ open\n<!-- /brownie:between-you -->\n"
+        #expect(NoteBlocks.openItems(in: "# Noor\nno block\n") == 0)
+        let legacy = "# Noor\n<!-- brownie:between-you -->\n## Between you\n- ⏳ open\n<!-- /brownie:between-you -->\n"
         #expect(NoteBlocks.parse(legacy).contains(.status(lines: ["⏳ open"])))
     }
 
@@ -116,26 +116,26 @@ import Domain
     }
 
     @Test func linksResolveByTitleFileNameOrAlias() {
-        let meera = Note(relativePath: "People/Meera Iyer.md", title: "Meera Iyer", body: "# Meera Iyer\n", meta: NoteMeta(brownie: "person", aliases: ["Meera", "MI"], created: "", updated: ""), updatedAt: Date())
-        let arif = Note(relativePath: "People/Arif.md", title: "Arif Khan", body: "# Arif Khan\n", meta: NoteMeta(brownie: "person", created: "", updated: ""), updatedAt: Date())
-        let index = LinkIndex(folders: [KnowledgeFolder(name: "People", notes: [meera, arif])])
-        #expect(index.path(for: "meera iyer") == "People/Meera Iyer.md")
-        #expect(index.path(for: "Meera") == "People/Meera Iyer.md", "an alias from the front-matter")
-        #expect(index.path(for: "Arif") == "People/Arif.md", "the file name")
-        #expect(index.path(for: "ARIF KHAN") == "People/Arif.md", "the title, any case")
-        #expect(index.path(for: "People/Arif") == "People/Arif.md", "a path-style link")
+        let meena = Note(relativePath: "People/Meena Iyer.md", title: "Meena Iyer", body: "# Meena Iyer\n", meta: NoteMeta(brownie: "person", aliases: ["Meena", "MI"], created: "", updated: ""), updatedAt: Date())
+        let noor = Note(relativePath: "People/Noor.md", title: "Noor Khan", body: "# Noor Khan\n", meta: NoteMeta(brownie: "person", created: "", updated: ""), updatedAt: Date())
+        let index = LinkIndex(folders: [KnowledgeFolder(name: "People", notes: [meena, noor])])
+        #expect(index.path(for: "meena iyer") == "People/Meena Iyer.md")
+        #expect(index.path(for: "Meena") == "People/Meena Iyer.md", "an alias from the front-matter")
+        #expect(index.path(for: "Noor") == "People/Noor.md", "the file name")
+        #expect(index.path(for: "NOOR KHAN") == "People/Noor.md", "the title, any case")
+        #expect(index.path(for: "People/Noor") == "People/Noor.md", "a path-style link")
         #expect(index.path(for: "Ravi") == nil)
     }
 
     @Test func theMetaLineReadsTheFrontMatterNotTheFile() {
         var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "UTC")!
         let now = Date(timeIntervalSince1970: 1_789_560_000)   // 2026-09-16
-        let meta = NoteMeta(brownie: "person", sources: ["WhatsApp · Nitesh", "Slack"], created: "2026-09-01", updated: "2026-09-10")
-        let n = Note(relativePath: "People/Nitesh.md", title: "Nitesh", body: "# Nitesh\n", meta: meta, updatedAt: now)
-        #expect(NoteFacts.metaLine(n, now: now, calendar: cal) == "Updated 10 Sep · sources: WhatsApp · Nitesh, Slack")
+        let meta = NoteMeta(brownie: "person", sources: ["WhatsApp · Lokesh", "Slack"], created: "2026-09-01", updated: "2026-09-10")
+        let n = Note(relativePath: "People/Lokesh.md", title: "Lokesh", body: "# Lokesh\n", meta: meta, updatedAt: now)
+        #expect(NoteFacts.metaLine(n, now: now, calendar: cal) == "Updated 10 Sep · sources: WhatsApp · Lokesh, Slack")
         #expect(NoteFacts.quietDays(n, now: now, calendar: cal) == 6)
         var old = meta; old.updated = "2025-03-02"; old.sources = []
-        let o = Note(relativePath: "People/Nitesh.md", title: "Nitesh", body: "", meta: old, updatedAt: now)
+        let o = Note(relativePath: "People/Lokesh.md", title: "Lokesh", body: "", meta: old, updatedAt: now)
         #expect(NoteFacts.metaLine(o, now: now, calendar: cal) == "Updated 2 Mar 2025", "another year says so; no sources, no sources part")
         #expect(NoteFacts.quietDays(o, now: now, calendar: cal)! > NoteFacts.quietAfter)
         var none = meta; none.updated = ""; none.sources = []
@@ -147,20 +147,20 @@ import Domain
     @Test func editingStripsTheBlockAndSavingPutsItBack() async throws {
         let w = try FileKnowledgeStoreTests.world()
         let block = "<!-- brownie:status -->\n## Between you\n_Kept by Brownie from the chats and the loops ledger. Not written by the brain._\n- ⏳ 3 Sep — they asked: “lunch?” — no reply yet\n<!-- /brownie:status -->"
-        let body = "# Arif\n\n" + block + "\n\nA friend.\n"
-        try w.put("People/Arif.md", FileKnowledgeStoreTests.owned(body, path: "People/Arif.md", extra: "tags: [friend]"))
-        let n = try #require(try await w.kb.note(at: "People/Arif.md"))
+        let body = "# Noor\n\n" + block + "\n\nA friend.\n"
+        try w.put("People/Noor.md", FileKnowledgeStoreTests.owned(body, path: "People/Noor.md", extra: "tags: [friend]"))
+        let n = try #require(try await w.kb.note(at: "People/Noor.md"))
         let editable = NoteEdit.forEditing(n.body)
-        #expect(editable == "# Arif\n\nA friend.\n", "the editor never shows the block")
+        #expect(editable == "# Noor\n\nA friend.\n", "the editor never shows the block")
         #expect(!editable.contains("brownie:"))
         // the user edits the prose; the block comes back exactly, the front-matter (with their tag) stays
         let saved = NoteEdit.reattach(edited: editable.replacingOccurrences(of: "A friend.", with: "A friend from Pune."), original: n.body)
         try await w.kb.save(Note(relativePath: n.relativePath, title: n.title, body: saved, sources: n.sources, updatedAt: FileKnowledgeStoreTests.today, userEdited: true))
-        let raw = try #require(w.raw("People/Arif.md"))
+        let raw = try #require(w.raw("People/Noor.md"))
         #expect(raw.contains(block), "the block, byte for byte")
         #expect(raw.hasPrefix("---\nbrownie: person\n") && raw.contains("tags: [friend]\n---\n") && raw.contains("created: 2026-09-01\n") && raw.contains("user_edited: true\n"))
-        #expect(NoteStatus.extract(from: NoteMeta.parse(raw, path: "People/Arif.md").body) == block)
-        #expect(NoteStatus.strip(NoteMeta.parse(raw, path: "People/Arif.md").body) == "# Arif\n\nA friend from Pune.\n")
+        #expect(NoteStatus.extract(from: NoteMeta.parse(raw, path: "People/Noor.md").body) == block)
+        #expect(NoteStatus.strip(NoteMeta.parse(raw, path: "People/Noor.md").body) == "# Noor\n\nA friend from Pune.\n")
         // a body that never had a block gets none
         #expect(NoteEdit.reattach(edited: "# Plain\nwords\n", original: "# Plain\nold\n") == "# Plain\nwords\n")
         // pasting the block back into the editor does not double it

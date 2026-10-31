@@ -171,7 +171,7 @@ extension AppModel {
             } catch { log.warn("brief failed: \(error)") }
         }
     }
-    /// "1:1 with Rohan", "Pricing review — Meera, Rohan": capitalised words that aren't the first.
+    /// "1:1 with Zubin", "Pricing review — Meena, Zubin": capitalised words that aren't the first.
     static func namesIn(_ title: String) -> [String] {
         let stop: Set<String> = ["Meeting", "Call", "Sync", "Review", "Standup", "Weekly", "Daily", "Monthly", "Catch", "Lunch", "Dinner", "Coffee", "Planning", "Interview", "Demo", "Check", "In", "With", "And", "The", "Team", "All", "Hands"]
         return title.split(whereSeparator: { !$0.isLetter }).map(String.init).filter { $0.count > 2 && $0.first!.isUppercase && !stop.contains($0) }.prefix(4).map { $0 }

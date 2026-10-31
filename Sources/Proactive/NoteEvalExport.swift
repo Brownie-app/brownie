@@ -46,7 +46,7 @@ public enum NoteEvalExport {
             .sorted { ($0.mergedAt ?? .distantPast, $0.id) > ($1.mergedAt ?? .distantPast, $1.id) }
             .prefix(cap).map { $0 }
     }
-    /// Whether `text` names `name` as a whole word, whatever the case or accents: "Meera" is in "Meera's flight" and not in "Ameera".
+    /// Whether `text` names `name` as a whole word, whatever the case or accents: "Meena" is in "Meena's flight" and not in "Ameera".
     static func mentions(_ text: String, _ name: String) -> Bool {
         var from = text.startIndex
         while let r = text.range(of: name, options: [.caseInsensitive, .diacriticInsensitive], range: from..<text.endIndex) {
@@ -65,7 +65,7 @@ public enum NoteEvalExport {
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = timeZone; f.dateFormat = "yyyy-MM-dd"
         return "\(f.string(from: fb.at))-\(slug(fb.path)).json"
     }
-    /// Lower case, letters and digits kept, everything else one hyphen: "People/Meera Iyer.md" → "people-meera-iyer".
+    /// Lower case, letters and digits kept, everything else one hyphen: "People/Meena Iyer.md" → "people-meena-iyer".
     static func slug(_ s: String) -> String {
         let stem = s.hasSuffix(".md") ? String(s.dropLast(3)) : s
         let folded = stem.lowercased().folding(options: [.diacriticInsensitive], locale: nil)

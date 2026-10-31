@@ -2,7 +2,7 @@ import SwiftUI
 import Knowledge
 
 /// The registry's first suspect pair, at the top of the note pane. A pending pair — the same name on a second chat, with
-/// nothing but the name to join them — is Brownie's own question: "Is Nitesh Kumar on Slack the same Nitesh Kumar as on
+/// nothing but the name to join them — is Brownie's own question: "Is Lokesh Kadri on Slack the same Lokesh Kadri as on
 /// WhatsApp?", answered Same person or Different people. A pair that merely looks alike keeps the older copy: "These two
 /// look like one person", Merge or Keep separate. Either way the first is the one kept (the one with a note, the fuller
 /// name), and a No is remembered, so the pair never asks again. The words live in `PeopleQuestion`.

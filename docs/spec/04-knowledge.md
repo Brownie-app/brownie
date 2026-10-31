@@ -40,8 +40,8 @@ already places, and any delete under People/ or Groups/. A live vault is stamped
   and every place that compares people (loops, asks, the quiet check, card dedupe, the household) goes
   through it. **Proof joins, a name alone asks**: a new chat handle joins an existing person only when a
   phone or email matches (from the handle itself, a Slack or Teams profile, or one Contacts card holding
-  both); a name-only match opens its own record and its own note (`People/Nitesh Kumar (Slack).md`) and the
-  Notes screen asks "Is Nitesh Kumar on Slack the same Nitesh Kumar as on WhatsApp?" — *Same person* folds
+  both); a name-only match opens its own record and its own note (`People/Lokesh Kadri (Slack).md`) and the
+  Notes screen asks "Is Lokesh Kadri on Slack the same Lokesh Kadri as on WhatsApp?" — *Same person* folds
   the notes and ledgers, *Different people* is remembered and never asked again. Until answered, nothing
   crosses between the two. The user's own name (Settings → Your name) is never a person.
 - **The status block** (`<!-- brownie:status -->` … `<!-- /brownie:status -->`) sits under the title of a

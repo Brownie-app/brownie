@@ -46,7 +46,7 @@ final class World {
     private(set) var nights: [Night] = []
     private var nextRowID: Int64 = 1
 
-    init(_ chats: [Chat], selfNames: [String] = ["Vivek Upreti", "Vivek"]) {
+    init(_ chats: [Chat], selfNames: [String] = ["Ishan Shirke", "Ishan"]) {
         self.chats = chats
         self.selfNames = selfNames
         for c in chats where !c.isGroup { notes[c.person] = Self.blankNote(c.person) }

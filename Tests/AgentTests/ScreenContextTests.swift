@@ -23,7 +23,7 @@ import CoreGraphics
     }
 
     @Test func aGoalThatNamesWhatItWantsDoesNot() {
-        for goal in ["open amazon and search for an iphone", "open the WhatsApp chat with Kanika",
+        for goal in ["open amazon and search for an iphone", "open the WhatsApp chat with Lalita",
                      "book a table at Toit for Friday", "find the lease in Documents"] {
             #expect(!ScreenContext.needsScreen(goal), "\(goal) says what it means, so the header is not worth its tokens")
         }
@@ -40,14 +40,14 @@ import CoreGraphics
     @Test func theHeaderNamesTheAppTheWindowAndWhoIsTalking() throws {
         let snap = UISnapshot(app: "\u{200E}WhatsApp", window: "\u{200E}WhatsApp", elements: [
             element(1, "Window", "WhatsApp"),
-            element(2, "StaticText", "\u{200E}Kanika Pandey Loadmill"),
-            element(3, "StaticText", "", "Did you call Mr Taragi yet?"),
+            element(2, "StaticText", "\u{200E}Lalita Pathak Tideline"),
+            element(3, "StaticText", "", "Did you call Mr Vartak yet?"),
             element(4, "TextArea", "\u{200E}Compose message", "", actions: ["Focus"]),
         ])
         let header = try #require(ScreenContext.header(snap))
         #expect(header.contains("app: WhatsApp"), "and without the bidi marks the tree is full of")
-        #expect(header.contains("Kanika Pandey Loadmill"), "who it is with is the whole point")
-        #expect(header.contains("Did you call Mr Taragi yet?"), "and what was said")
+        #expect(header.contains("Lalita Pathak Tideline"), "who it is with is the whole point")
+        #expect(header.contains("Did you call Mr Vartak yet?"), "and what was said")
         #expect(header.contains("the cursor is in: Compose message"), "so it knows where a reply would land")
         #expect(header.contains("do not ask the user to repeat it"), "the instruction that stops it asking back")
     }

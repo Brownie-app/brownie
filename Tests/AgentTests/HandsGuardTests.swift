@@ -12,12 +12,12 @@ import Foundation
     }
 
     @Test func riskyAppsNeedTheGoalToNameThem() {
-        #expect(HandsGuard.isOffLimits(app: "Terminal", goal: "Open Kanika's WhatsApp chat and Calendar"))
+        #expect(HandsGuard.isOffLimits(app: "Terminal", goal: "Open Lalita's WhatsApp chat and Calendar"))
         #expect(HandsGuard.isOffLimits(app: "System Settings", goal: "book a table"))
-        #expect(HandsGuard.isOffLimits(app: "Terminal.app", goal: "reply to Rohan"))
+        #expect(HandsGuard.isOffLimits(app: "Terminal.app", goal: "reply to Zubin"))
         #expect(!HandsGuard.isOffLimits(app: "Terminal", goal: "open Terminal and run the tests"))
-        #expect(!HandsGuard.isOffLimits(app: "Google Chrome", goal: "reply to Rohan"))
-        #expect(!HandsGuard.isOffLimits(app: "Calendar", goal: "reply to Rohan"))
+        #expect(!HandsGuard.isOffLimits(app: "Google Chrome", goal: "reply to Zubin"))
+        #expect(!HandsGuard.isOffLimits(app: "Calendar", goal: "reply to Zubin"))
     }
 
     @Test func theThirdIdenticalStepIsCaught() {

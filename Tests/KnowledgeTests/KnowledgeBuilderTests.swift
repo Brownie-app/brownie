@@ -386,12 +386,12 @@ import Platform
         let rows = try await w.seed(1, from: 0)
         let brain = ScriptedBrain { _, tools in try await Self.write(tools, "README.md", "# x") }
         let t = Self.today
-        let people = [Person(id: "p-1", name: "Kanika Pandey", aliases: ["Kanika Pandey Loadmill"], notePath: "People/Kanika Pandey.md", firstSeen: t, lastSeen: t),
-                      Person(id: "p-2", name: "Nitesh", aliases: ["Nitesh (+919540752593)"], firstSeen: t, lastSeen: t)]
+        let people = [Person(id: "p-1", name: "Lalita Pathak", aliases: ["Lalita Pathak Tideline"], notePath: "People/Lalita Pathak.md", firstSeen: t, lastSeen: t),
+                      Person(id: "p-2", name: "Lokesh", aliases: ["Lokesh (+919000000111)"], firstSeen: t, lastSeen: t)]
         _ = try await w.builder(brain, people: { people }).sync(summaries: rows, progress: { _ in }, onEvent: { _ in })
         let input = try #require(brain.recorded.first?.input)
-        #expect(input.contains("\nPEOPLE (one file per person; write about each only in the file listed, whatever spelling the summaries use):\n  Kanika Pandey — People/Kanika Pandey.md (also: Kanika Pandey Loadmill)\n  Nitesh — no note yet\n\nWorking directory:"))
-        #expect(!input.contains("+919540752593"), "an alias is shown as a name, never as a number")
+        #expect(input.contains("\nPEOPLE (one file per person; write about each only in the file listed, whatever spelling the summaries use):\n  Lalita Pathak — People/Lalita Pathak.md (also: Lalita Pathak Tideline)\n  Lokesh — no note yet\n\nWorking directory:"))
+        #expect(!input.contains("+919000000111"), "an alias is shown as a name, never as a number")
         let none = ScriptedBrain { _, tools in _ = try await Self.call(tools, "read_file", ["path": "README.md"]); try await Self.write(tools, "README.md", "# x") }   // the second night updates: read first
         _ = try await w.builder(none).sync(summaries: try await w.seed(1, from: 5, tag: "b"), progress: { _ in }, onEvent: { _ in })
         #expect(!(try #require(none.recorded.first?.input)).contains("PEOPLE"), "no registry, no roster")
@@ -436,7 +436,7 @@ import Platform
     @Test func whatTheRatingsTaughtEndsBothPromptsAndThePlaceholderNeverShows() async throws {
         let w = try Self.world()
         try await w.seed(2, from: 0)
-        let lessons = "WHAT YOU CORRECTED IN THE NOTES (standing instructions, newest first):\n- too much hedging (about Meera, 12 Sep)"
+        let lessons = "WHAT YOU CORRECTED IN THE NOTES (standing instructions, newest first):\n- too much hedging (about Meena, 12 Sep)"
         let brain = ScriptedBrain { n, tools in try await Self.write(tools, "Notes/p\(n).md", "# \(n)") }
         let taught = try KnowledgeBuilder(brain: brain, store: w.kb, runStore: w.store, now: { Self.today }, timeZone: Self.utc, instructions: lessons)
         _ = try await taught.sync(summaries: try await w.store.unmergedSummaries(), progress: { _ in }, onEvent: { _ in })

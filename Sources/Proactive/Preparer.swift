@@ -68,7 +68,7 @@ public struct Preparer: Sendable {
                     verification: (d["verification"] as? String) == "verified" ? .verified : .unverified, verifiedLine: d["verifiedLine"] as? String ?? "", createdAt: now,
                     cameBack: d["cameBack"] as? Bool, loopID: (d["loopID"] as? String).flatMap { $0.isEmpty || $0 == "null" ? nil : $0 })
     }
-    /// Where a card's evidence came from is a fact, not the brain's to word: "Summary #1" becomes "WhatsApp · Nitesh",
+    /// Where a card's evidence came from is a fact, not the brain's to word: "Summary #1" becomes "WhatsApp · Lokesh",
     /// and the card's source label is the channel the person actually wrote in — never the place the reply is meant to go.
     static func groundSources(_ c: Card, candidates: [ActionItem], summaries: [SummaryRecord]) -> Card {
         func record(_ ref: String) -> SummaryRecord? {

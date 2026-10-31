@@ -7,7 +7,7 @@ import Knowledge
 enum NoteMarkdown {
     static let scheme = "brownie-note"
 
-    /// The link a wikilink becomes, so one openURL handler serves every note: `brownie-note://open?path=People/Meera.md&heading=Open`.
+    /// The link a wikilink becomes, so one openURL handler serves every note: `brownie-note://open?path=People/Meena.md&heading=Open`.
     static func url(path: String, heading: String?) -> URL? {
         var c = URLComponents(); c.scheme = scheme; c.host = "open"
         c.queryItems = [URLQueryItem(name: "path", value: path)] + (heading.map { [URLQueryItem(name: "heading", value: $0)] } ?? [])

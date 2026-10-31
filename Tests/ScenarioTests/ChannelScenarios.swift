@@ -16,9 +16,9 @@ import Proactive
 
     // 15 ───────────────────────────────────────────────────────────────────────────────────────────
 
-    /// EXPECTED: Devika mails asking for the audited accounts on Monday. The user answers from their phone on
+    /// EXPECTED: Rhea mails asking for the audited accounts on Monday. The user answers from their phone on
     /// Wednesday, on the same thread. Wednesday night the ask closes, credited to the reply, and the line on
-    /// Devika's note says it came from mail.
+    /// Rhea's note says it came from mail.
     ///
     /// WHAT HAPPENS: nothing at all. `GmailSource` is a `Source` and nothing more — it declares no `ChatReader`
     /// and no `AskScanning` (`Sources/CloudSources/GmailSource.swift:7`), so the nightly ask scan never asks it
@@ -29,14 +29,14 @@ import Proactive
         #expect(Self.scansAsks(GmailSource.self), "mail carries asks like any other channel")
 
         // The same thread, replayed as messages, to show the gap is the wiring and not the reading.
-        let w = World([.direct("gmail:thread-9", "Devika Ranganathan", handle: "email:devika@raghavan-co.in")])
+        let w = World([.direct("gmail:thread-9", "Rhea Chhabra", handle: "email:rhea@chhabra-co.test")])
         w.say("gmail:thread-9", "Could you send across the audited accounts for FY25 before the board call?", day: 1, at: 10)
         let n1 = await w.night(1)
         #expect(n1.openAsks.count == 1, n1.summary)
         w.say("gmail:thread-9", "Attaching the audited accounts for FY25 — sent from my iPhone", mine: true, day: 3, at: 7)
         let n3 = await w.night(3)
-        #expect(n3.ask(from: "Devika Ranganathan")?.outcome == .answered, n3.summary)
-        #expect(n3.lines("Devika Ranganathan").contains { $0.contains("✅") }, "\(n3.lines("Devika Ranganathan"))")
+        #expect(n3.ask(from: "Rhea Chhabra")?.outcome == .answered, n3.summary)
+        #expect(n3.lines("Rhea Chhabra").contains { $0.contains("✅") }, "\(n3.lines("Rhea Chhabra"))")
     }
 
     /// Which sources the ask ledger can reach at all, stated once so a new source is not quietly left out.
@@ -91,7 +91,7 @@ import Proactive
 
     // 17 ───────────────────────────────────────────────────────────────────────────────────────────
 
-    /// EXPECTED: Arif asks for a review in a Slack DM on Monday. On Tuesday the user answers him in a thread on
+    /// EXPECTED: Noor asks for a review in a Slack DM on Monday. On Tuesday the user answers him in a thread on
     /// that message. Tuesday night the ask is closed — the answer was given, and where in the conversation it
     /// was given is Slack's business, not the user's.
     ///
@@ -101,29 +101,29 @@ import Proactive
     /// user is chased for a review they wrote yesterday.
     @Test
     func slackReviewAnsweredInAThread() async {
-        let w = World([.direct("slack:D0ARIF", "Arif Qureshi", handle: "slack:U0ARIF")])
-        w.say("slack:D0ARIF", "can you review the pricing PR today or tomorrow?", day: 1, at: 11)
-        let n1 = await w.night(1, judge: JudgeScript(cards: [.proposed("Review Arif's pricing PR", to: "Arif Qureshi", on: .slack,
+        let w = World([.direct("slack:D0NOOR", "Noor Qureshi", handle: "slack:U0NOOR")])
+        w.say("slack:D0NOOR", "can you review the pricing PR today or tomorrow?", day: 1, at: 11)
+        let n1 = await w.night(1, judge: JudgeScript(cards: [.proposed("Review Noor's pricing PR", to: "Noor Qureshi", on: .slack,
                                                                       why: "He asked yesterday")]))
         #expect(n1.openAsks.count == 1 && n1.cardTitles.count == 1, n1.summary)
 
-        w.say("slack:D0ARIF", "reviewed — two comments on the tiering, rest looks good", mine: true, day: 2, at: 10, inThread: true)
+        w.say("slack:D0NOOR", "reviewed — two comments on the tiering, rest looks good", mine: true, day: 2, at: 10, inThread: true)
         // The judge still reads "NO REPLY YET" in the ask lines, so it proposes the chase again.
-        let n2 = await w.night(2, judge: JudgeScript(cards: [.proposed("Review Arif's pricing PR", to: "Arif Qureshi", on: .slack,
+        let n2 = await w.night(2, judge: JudgeScript(cards: [.proposed("Review Noor's pricing PR", to: "Noor Qureshi", on: .slack,
                                                                       why: "He asked on Monday and you have not replied")]))
-        #expect(n2.ask(from: "Arif Qureshi")?.isAnswered == true, "a thread reply is a reply — \(n2.line)")
+        #expect(n2.ask(from: "Noor Qureshi")?.isAnswered == true, "a thread reply is a reply — \(n2.line)")
         #expect(n2.cards.isEmpty, "and nobody should be chased for it — \(n2.line)")
     }
 
     // 18 ───────────────────────────────────────────────────────────────────────────────────────────
 
-    /// EXPECTED: Nikhil asks on WhatsApp for the deployment runbook; the user sends it on Slack the next day and
+    /// EXPECTED: Farid asks on WhatsApp for the deployment runbook; the user sends it on Slack the next day and
     /// never goes back to WhatsApp. On its own Brownie cannot know — the two chats share no words and no source
     /// reads the other — so the WhatsApp ask stays open and a card offers to reply. The judge, which sees both
     /// channels' summaries, can close it by id through `ask_updates`, and then the note says where it was answered.
     @Test func askedOnWhatsAppAnsweredOnSlack() async {
-        let w = World([.direct("whatsapp:181", "Nikhil Bose", handle: "whatsapp:+919810181018"),
-                       .direct("slack:D0NIKHIL", "Nikhil Bose", handle: "slack:U0NIKHIL")])
+        let w = World([.direct("whatsapp:181", "Farid Bose", handle: "whatsapp:+919000000721"),
+                       .direct("slack:D0NIKHIL", "Farid Bose", handle: "slack:U0NIKHIL")])
         w.say("whatsapp:181", "do you have the deployment runbook handy?", day: 1, at: 9)
         let n1 = await w.night(1)
         #expect(n1.openAsks.count == 1, n1.summary)
@@ -133,14 +133,14 @@ import Proactive
         w.say("slack:D0NIKHIL", "runbook is here: https://example.com/runbook, the rollback step is at the end", mine: true, day: 2, at: 14)
         let n2 = await w.night(2)
         #expect(n2.openAsks.count == 1, "without the judge, the question on WhatsApp is still waiting — \(n2.line)")
-        #expect(n2.lines("Nikhil Bose").contains { $0.contains("no reply yet") }, "\(n2.lines("Nikhil Bose"))")
+        #expect(n2.lines("Farid Bose").contains { $0.contains("no reply yet") }, "\(n2.lines("Farid Bose"))")
 
         // Day 3: the judge reads both channels and says so by id.
         let n3 = await w.night(3, judge: JudgeScript(askUpdates: [(idPrefix: askID, how: "on Slack")]))
-        #expect(n3.ask(from: "Nikhil Bose")?.outcome == .answered, n3.summary)
-        #expect(n3.ask(from: "Nikhil Bose")?.outcomeHow == "on Slack", n3.summary)
+        #expect(n3.ask(from: "Farid Bose")?.outcome == .answered, n3.summary)
+        #expect(n3.ask(from: "Farid Bose")?.outcomeHow == "on Slack", n3.summary)
         #expect(n3.openAsks.isEmpty && n3.cards.isEmpty, n3.summary)
-        #expect(n3.lines("Nikhil Bose").contains { $0.contains("answered on Slack") && $0.contains("(the judge)") }, "\(n3.lines("Nikhil Bose"))")
+        #expect(n3.lines("Farid Bose").contains { $0.contains("answered on Slack") && $0.contains("(the judge)") }, "\(n3.lines("Farid Bose"))")
     }
 
     // 19 ───────────────────────────────────────────────────────────────────────────────────────────
@@ -154,7 +154,7 @@ import Proactive
     /// proposing one keeps getting one through, every night, for forty-five days.
     @Test
     func anAskNeverAnsweredForFiftyDays() async {
-        let w = World([.direct("whatsapp:191", "Zoya Rehman", handle: "whatsapp:+919810191019")])
+        let w = World([.direct("whatsapp:191", "Zoya Rehman", handle: "whatsapp:+919000000722")])
         w.say("whatsapp:191", "can you put me in touch with your architect?", day: 1, at: 10)
         let title = "Introduce Zoya to your architect"
         var survived: [Int] = []
@@ -176,7 +176,7 @@ import Proactive
 
     // 20 ───────────────────────────────────────────────────────────────────────────────────────────
 
-    /// EXPECTED: "Nitesh" on WhatsApp and "Nitesh Kumar" on Slack, with no phone or email in common, are two
+    /// EXPECTED: "Lokesh" on WhatsApp and "Lokesh Kadri" on Slack, with no phone or email in common, are two
     /// records until the user says otherwise. Nothing crosses between them — his Slack promise is not folded
     /// into her WhatsApp one, and a card for each of them is a card for each of them — and Brownie raises the
     /// question for the user to answer.
@@ -192,20 +192,20 @@ import Proactive
         let dir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("scenario-20-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
-        let registry = PersonRegistry(vault: dir, now: { World.epoch }, selfNames: ["Vivek Upreti"])
+        let registry = PersonRegistry(vault: dir, now: { World.epoch }, selfNames: ["Ishan Shirke"])
         await registry.load()
-        let a = await registry.register(label: "Nitesh", handle: "whatsapp:+919810201020")
-        let b = await registry.register(label: "Nitesh Kumar", handle: "slack:U0NITESH")
+        let a = await registry.register(label: "Lokesh", handle: "whatsapp:+919000000723")
+        let b = await registry.register(label: "Lokesh Kadri", handle: "slack:U0LOKESH")
         #expect(a != b, "no phone, no email in common: two records")
         let raised = await registry.suspects()
         #expect(raised.count == 1, "and the question is put to the user")
 
         // What the ledgers make of the same two names, with no registry in the way.
-        let mine = Loop.proposed("Send the wiring diagram", .mine, with: "Nitesh", openedAt: World.epoch, id: "L-a")
-        let hers = Loop.proposed("Send the wiring diagram", .mine, with: "Nitesh Kumar", openedAt: World.epoch, id: "L-b")
+        let mine = Loop.proposed("Send the wiring diagram", .mine, with: "Lokesh", openedAt: World.epoch, id: "L-a")
+        let hers = Loop.proposed("Send the wiring diagram", .mine, with: "Lokesh Kadri", openedAt: World.epoch, id: "L-b")
         #expect(!LoopLedger.same(mine, hers), "two people, two promises")
-        let one = Card.proposed("Send Nitesh the wiring diagram", to: "Nitesh", draft: "Diagram attached.")
-        let two = Card.proposed("Send Nitesh Kumar the wiring diagram", to: "Nitesh Kumar", draft: "Diagram attached.")
+        let one = Card.proposed("Send Lokesh the wiring diagram", to: "Lokesh", draft: "Diagram attached.")
+        let two = Card.proposed("Send Lokesh Kadri the wiring diagram", to: "Lokesh Kadri", draft: "Diagram attached.")
         #expect(CardDedupe.dedupe([one, two]).count == 2, "two people, two messages")
     }
 }

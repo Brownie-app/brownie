@@ -92,7 +92,7 @@ extension GmailSource: ChatReader, AskScanning {
         ((t["messages"] as? [[String: Any]]) ?? []).first.map { header($0, "subject") } ?? ""
     }
 
-    /// A name and an address out of one header value: `Devika Ranganathan <devika@raghavan-co.in>`, or a bare
+    /// A name and an address out of one header value: `Rhea Chhabra <rhea@chhabra-co.test>`, or a bare
     /// address, in which case the part before the @ stands in as a name.
     static func parse(_ value: String) -> (name: String, address: String)? {
         let v = value.trimmingCharacters(in: .whitespaces)

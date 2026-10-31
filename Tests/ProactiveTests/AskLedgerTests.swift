@@ -5,7 +5,7 @@ import Domain
 
 @Suite struct AskLedgerTests {
     let now = Date(timeIntervalSince1970: 1_758_000_000)
-    func ask(_ id: String, person: String = "Nitesh (+919540752593)", askedAgo: TimeInterval, answeredAgo: TimeInterval? = nil, q: String = "postgres ka url kaise milega") -> Ask {
+    func ask(_ id: String, person: String = "Lokesh (+919000000111)", askedAgo: TimeInterval, answeredAgo: TimeInterval? = nil, q: String = "postgres ka url kaise milega") -> Ask {
         Ask(id: id, person: person, bucket: BucketID("whatsapp:507"), askedAt: now.addingTimeInterval(-askedAgo), question: q, answeredAt: answeredAgo.map { now.addingTimeInterval(-$0) })
     }
 
@@ -35,8 +35,8 @@ import Domain
     @Test func theScanIsPlannedPerChatAndNamesTheRepliesAlreadyJudged() {
         let day = 86400.0
         let deep = ask("a", askedAgo: 40 * day)   // whatsapp:507, still waiting
-        let off = Ask(id: "o", person: "Kanika", bucket: BucketID("whatsapp:9"), askedAt: now.addingTimeInterval(-5 * day), question: "q?", answeredAt: now.addingTimeInterval(-4 * day), reply: "lol", addressed: false)
-        let done = Ask(id: "d", person: "Rohan", bucket: BucketID("whatsapp:3"), askedAt: now.addingTimeInterval(-20 * day), question: "q?", answeredAt: now.addingTimeInterval(-19 * day), reply: "done", addressed: true)
+        let off = Ask(id: "o", person: "Lalita", bucket: BucketID("whatsapp:9"), askedAt: now.addingTimeInterval(-5 * day), question: "q?", answeredAt: now.addingTimeInterval(-4 * day), reply: "lol", addressed: false)
+        let done = Ask(id: "d", person: "Zubin", bucket: BucketID("whatsapp:3"), askedAt: now.addingTimeInterval(-20 * day), question: "q?", answeredAt: now.addingTimeInterval(-19 * day), reply: "done", addressed: true)
         let s = AskLedger.scan(existing: [deep, off, done], now: now)
         #expect(s.since == now.addingTimeInterval(-3 * day), "a chat with nothing waiting: three days")
         #expect(s.since(BucketID("whatsapp:507")) == now.addingTimeInterval(-40 * day - 3600), "back to its own ask")
@@ -47,9 +47,9 @@ import Domain
     }
 
     @Test func yourReplyClosesTheLoopAboutAnswering() {
-        let loop = Loop(id: "L", direction: .mine, person: "Nitesh", what: "Answer Nitesh's PostgreSQL question", quote: "", sourceLabel: "WhatsApp", due: nil, openedAt: now.addingTimeInterval(-900))
-        let promise = Loop(id: "P", direction: .mine, person: "Nitesh", what: "share the exact steps once confirmed", quote: "", sourceLabel: "WhatsApp", due: nil, openedAt: now.addingTimeInterval(-100))
-        let theirs = Loop(id: "T", direction: .theirs, person: "Nitesh", what: "answer about the URL", quote: "", sourceLabel: "WhatsApp", due: nil, openedAt: now.addingTimeInterval(-900))
+        let loop = Loop(id: "L", direction: .mine, person: "Lokesh", what: "Answer Lokesh's PostgreSQL question", quote: "", sourceLabel: "WhatsApp", due: nil, openedAt: now.addingTimeInterval(-900))
+        let promise = Loop(id: "P", direction: .mine, person: "Lokesh", what: "share the exact steps once confirmed", quote: "", sourceLabel: "WhatsApp", due: nil, openedAt: now.addingTimeInterval(-100))
+        let theirs = Loop(id: "T", direction: .theirs, person: "Lokesh", what: "answer about the URL", quote: "", sourceLabel: "WhatsApp", due: nil, openedAt: now.addingTimeInterval(-900))
         let asks = [ask("a", askedAgo: 1200, answeredAgo: 300)]
         let closed = AskLedger.closures(loops: [loop, promise, theirs], asks: asks, now: now)
         #expect(closed[0].status == .closed && closed[0].closedHow == "you replied" && closed[0].closedBy == "reply" && closed[0].closedAt == asks[0].answeredAt)
@@ -65,8 +65,8 @@ import Domain
     }
 
     @Test func theJudgeHearsDatesNotWords() {
-        let s = AskLedger.judgeLines([ask("a", askedAgo: 7200, answeredAgo: 3600), ask("b", person: "Kanika", askedAgo: 3 * 86400, q: "secret question")], now: now)
-        #expect(s.contains("- ask b · Kanika asked the user something on") && s.contains("NO REPLY YET (3 days ago)"), "an open ask carries its id, for ask_updates")
+        let s = AskLedger.judgeLines([ask("a", askedAgo: 7200, answeredAgo: 3600), ask("b", person: "Lalita", askedAgo: 3 * 86400, q: "secret question")], now: now)
+        #expect(s.contains("- ask b · Lalita asked the user something on") && s.contains("NO REPLY YET (3 days ago)"), "an open ask carries its id, for ask_updates")
         #expect(s.contains("the user replied") && s.contains("— done") && !s.contains("- ask a ·"), "a settled one needs no id")
         #expect(!s.contains("secret") && !s.contains("postgres"), "the words stay on the Mac")
         #expect(s.contains("goes in ask_updates by its id"))
@@ -75,21 +75,21 @@ import Domain
 
     @Test func theJudgeHearsEachVerdictInItsOwnWords() {
         var promised = ask("p", askedAgo: 2 * 86400, answeredAgo: 86400); promised.settle(.promised, at: promised.answeredAt!, by: "rules")
-        var theirs = ask("t", person: "Kanika", askedAgo: 7200); theirs.settle(.confirmedByThem, at: now.addingTimeInterval(-3600), by: "rules")
-        var no = ask("n", person: "Rohan", askedAgo: 7200, answeredAgo: 3600); no.settle(.declined, at: no.answeredAt!, by: "rules")
-        var slack = ask("s", person: "Meera", askedAgo: 7200); slack.settle(.answered, at: now, by: "judge", how: "on Slack"); slack.answeredAt = now
+        var theirs = ask("t", person: "Lalita", askedAgo: 7200); theirs.settle(.confirmedByThem, at: now.addingTimeInterval(-3600), by: "rules")
+        var no = ask("n", person: "Zubin", askedAgo: 7200, answeredAgo: 3600); no.settle(.declined, at: no.answeredAt!, by: "rules")
+        var slack = ask("s", person: "Meena", askedAgo: 7200); slack.settle(.answered, at: now, by: "judge", how: "on Slack"); slack.answeredAt = now
         let s = AskLedger.judgeLines([promised, theirs, no, slack], now: now)
-        #expect(s.contains("- ask p · Nitesh (+919540752593) asked the user something on") && s.contains("the user said they would get to it (") && s.contains("— still open (2 days ago)"), "a promise is still open, and listed with its id")
-        #expect(s.contains("Kanika asked the user something on") && s.contains("they said it is settled") && s.contains("Rohan asked") && s.contains("the user said no"))
-        #expect(s.contains("Meera asked the user something on") && s.contains("answered on Slack"))
+        #expect(s.contains("- ask p · Lokesh (+919000000111) asked the user something on") && s.contains("the user said they would get to it (") && s.contains("— still open (2 days ago)"), "a promise is still open, and listed with its id")
+        #expect(s.contains("Lalita asked the user something on") && s.contains("they said it is settled") && s.contains("Zubin asked") && s.contains("the user said no"))
+        #expect(s.contains("Meena asked the user something on") && s.contains("answered on Slack"))
         #expect(!s.contains("- ask t ·") && !s.contains("- ask n ·") && !s.contains("- ask s ·"))
     }
 
     @Test func theJudgesWordClosesAnOpenAskAndNeverReopensOne() {
-        let open = Ask(id: "ask-a1b2c3d4e5f6", person: "Nitesh", bucket: BucketID("whatsapp:507"), askedAt: now.addingTimeInterval(-86400), question: "postgres ka url?", answeredAt: now.addingTimeInterval(-3600), reply: "lol", addressed: false, outcome: .open, outcomeAt: now.addingTimeInterval(-3600), outcomeBy: "rules")
-        var no = Ask(id: "ask-ffff00001111", person: "Rohan", bucket: BucketID("whatsapp:3"), askedAt: now.addingTimeInterval(-86400), question: "q?", answeredAt: now.addingTimeInterval(-3600), reply: "no"); no.settle(.declined, at: no.answeredAt!, by: "rules")
-        var gone = Ask(id: "ask-eeee00002222", person: "Kanika", bucket: BucketID("whatsapp:9"), askedAt: now.addingTimeInterval(-50 * 86400), question: "q?"); gone.lapsedAt = now.addingTimeInterval(-86400)
-        let silent = Ask(id: "ask-dddd00003333", person: "Meera", bucket: BucketID("whatsapp:2"), askedAt: now.addingTimeInterval(-7200), question: "q?")
+        let open = Ask(id: "ask-a1b2c3d4e5f6", person: "Lokesh", bucket: BucketID("whatsapp:507"), askedAt: now.addingTimeInterval(-86400), question: "postgres ka url?", answeredAt: now.addingTimeInterval(-3600), reply: "lol", addressed: false, outcome: .open, outcomeAt: now.addingTimeInterval(-3600), outcomeBy: "rules")
+        var no = Ask(id: "ask-ffff00001111", person: "Zubin", bucket: BucketID("whatsapp:3"), askedAt: now.addingTimeInterval(-86400), question: "q?", answeredAt: now.addingTimeInterval(-3600), reply: "no"); no.settle(.declined, at: no.answeredAt!, by: "rules")
+        var gone = Ask(id: "ask-eeee00002222", person: "Lalita", bucket: BucketID("whatsapp:9"), askedAt: now.addingTimeInterval(-50 * 86400), question: "q?"); gone.lapsedAt = now.addingTimeInterval(-86400)
+        let silent = Ask(id: "ask-dddd00003333", person: "Meena", bucket: BucketID("whatsapp:2"), askedAt: now.addingTimeInterval(-7200), question: "q?")
         let out = AskLedger.apply(updates: [(idPrefix: "ask-a1b2c3d4e5f6", how: "on Slack."), (idPrefix: "ffff0000", how: "by mail"), (idPrefix: "ask eeee0000", how: "on Slack"), (idPrefix: "DDDD0000", how: "  "), (idPrefix: "ask-", how: "x")], to: [open, no, gone, silent], now: now)
         #expect(out[0].outcome == .answered && out[0].outcomeBy == "judge" && out[0].outcomeHow == "on Slack" && out[0].outcomeAt == now && out[0].isAnswered && !out[0].isOpen, "closed as answered, dated tonight, the judge's words on where")
         #expect(out[0].answeredAt == open.answeredAt && out[0].addressed == true, "the reply in the chat stays what it was")
@@ -104,12 +104,12 @@ import Domain
         let day = 86400.0
         // asked five days ago, answered three days ago
         var sent = ask("a", askedAgo: 5 * day, answeredAgo: 3 * day, q: "can you send the estimates for the three tasks?"); sent.settle(.answered, at: sent.answeredAt!, by: "rules")
-        let loop = Loop(id: "EST", direction: .mine, person: "Nitesh", what: "Send Nitesh the estimates for the three tasks", quote: "", sourceLabel: "WhatsApp", due: nil, openedAt: now.addingTimeInterval(-4 * day))
-        let earlier = Loop(id: "OLD", direction: .mine, person: "Nitesh", what: "Send the task estimates", quote: "", sourceLabel: "WhatsApp", due: nil, openedAt: now.addingTimeInterval(-10 * day))
-        let other = Loop(id: "DECK", direction: .mine, person: "Nitesh", what: "Send Nitesh the deck", quote: "", sourceLabel: "WhatsApp", due: nil, openedAt: now.addingTimeInterval(-4 * day))
-        let someoneElse = Loop(id: "KAN", direction: .mine, person: "Kanika", what: "Send Kanika the estimates for the three tasks", quote: "", sourceLabel: "WhatsApp", due: nil, openedAt: now.addingTimeInterval(-4 * day))
-        let newer = Loop(id: "NEW", direction: .mine, person: "Nitesh", what: "Send Nitesh the estimates for the three tasks", quote: "", sourceLabel: "WhatsApp", due: nil, openedAt: now.addingTimeInterval(-day))
-        let theirs = Loop(id: "THEIRS", direction: .theirs, person: "Nitesh", what: "Send the estimates for the three tasks", quote: "", sourceLabel: "WhatsApp", due: nil, openedAt: now.addingTimeInterval(-4 * day))
+        let loop = Loop(id: "EST", direction: .mine, person: "Lokesh", what: "Send Lokesh the estimates for the three tasks", quote: "", sourceLabel: "WhatsApp", due: nil, openedAt: now.addingTimeInterval(-4 * day))
+        let earlier = Loop(id: "OLD", direction: .mine, person: "Lokesh", what: "Send the task estimates", quote: "", sourceLabel: "WhatsApp", due: nil, openedAt: now.addingTimeInterval(-10 * day))
+        let other = Loop(id: "DECK", direction: .mine, person: "Lokesh", what: "Send Lokesh the deck", quote: "", sourceLabel: "WhatsApp", due: nil, openedAt: now.addingTimeInterval(-4 * day))
+        let someoneElse = Loop(id: "KAN", direction: .mine, person: "Lalita", what: "Send Lalita the estimates for the three tasks", quote: "", sourceLabel: "WhatsApp", due: nil, openedAt: now.addingTimeInterval(-4 * day))
+        let newer = Loop(id: "NEW", direction: .mine, person: "Lokesh", what: "Send Lokesh the estimates for the three tasks", quote: "", sourceLabel: "WhatsApp", due: nil, openedAt: now.addingTimeInterval(-day))
+        let theirs = Loop(id: "THEIRS", direction: .theirs, person: "Lokesh", what: "Send the estimates for the three tasks", quote: "", sourceLabel: "WhatsApp", due: nil, openedAt: now.addingTimeInterval(-4 * day))
         let out = AskLedger.followers(loops: [loop, earlier, other, someoneElse, newer, theirs], asks: [sent], now: now)
         #expect(out[0].status == .closed && out[0].closedBy == "ask" && out[0].closedHow == "the ask it came from was answered" && out[0].closedAt == sent.answeredAt, "the promise about the very thing asked for")
         #expect(out[1].status == .closed, "opened before the ask, about the same thing: the answer settles it too")
@@ -134,22 +134,22 @@ import Domain
     }
 
     @Test func theJudgeHearsLapsedNeverNoReplyYetAndLoopsLetGo() {
-        var gone = ask("g", person: "Kanika", askedAgo: 46 * 86400); gone.lapsedAt = now.addingTimeInterval(-86400)
-        var old = ask("o", person: "Rohan", askedAgo: 70 * 86400); old.lapsedAt = now.addingTimeInterval(-20 * 86400)
+        var gone = ask("g", person: "Lalita", askedAgo: 46 * 86400); gone.lapsedAt = now.addingTimeInterval(-86400)
+        var old = ask("o", person: "Zubin", askedAgo: 70 * 86400); old.lapsedAt = now.addingTimeInterval(-20 * 86400)
         let s = AskLedger.judgeLines([gone, old], now: now)
-        #expect(s.contains("Kanika asked the user something on") && s.contains("LAPSED — no reply in 45 days"))
+        #expect(s.contains("Lalita asked the user something on") && s.contains("LAPSED — no reply in 45 days"))
         #expect(!s.contains("NO REPLY YET"), "a question let go is never called unanswered")
-        #expect(!s.contains("Rohan"), "one let go three weeks back is not worth the judge's time")
-        let letGo = Loop(id: "LAPSED01-x", direction: .mine, person: "Karan", what: "send the villa share", quote: "", sourceLabel: "s", due: nil, status: .lapsed, openedAt: now.addingTimeInterval(-100 * 86400), closedAt: now.addingTimeInterval(-3600), closedBy: "lapsed", lapsedAt: now.addingTimeInterval(-3600))
-        let openLoop = Loop(id: "OPEN0001-x", direction: .mine, person: "Karan", what: "cricket tickets", quote: "", sourceLabel: "s", due: nil, openedAt: now)
+        #expect(!s.contains("Zubin"), "one let go three weeks back is not worth the judge's time")
+        let letGo = Loop(id: "LAPSED01-x", direction: .mine, person: "Devan", what: "send the villa share", quote: "", sourceLabel: "s", due: nil, status: .lapsed, openedAt: now.addingTimeInterval(-100 * 86400), closedAt: now.addingTimeInterval(-3600), closedBy: "lapsed", lapsedAt: now.addingTimeInterval(-3600))
+        let openLoop = Loop(id: "OPEN0001-x", direction: .mine, person: "Devan", what: "cricket tickets", quote: "", sourceLabel: "s", due: nil, openedAt: now)
         let l = AskLedger.judgeLines([], loops: [letGo, openLoop], now: now)
-        #expect(l.hasPrefix("LOOPS LET GO") && l.contains("- loop LAPSED01 · the user → Karan · send the villa share · let go") && !l.contains("cricket"))
+        #expect(l.hasPrefix("LOOPS LET GO") && l.contains("- loop LAPSED01 · the user → Devan · send the villa share · let go") && !l.contains("cricket"))
         #expect(!l.contains("ASKS IN DIRECT CHATS"), "no asks, no asks section")
     }
 
     @Test func samePersonIsForgivingAboutNumbersAndSurnames() {
-        #expect(AskLedger.samePerson("Nitesh (+919540752593)", "Nitesh"))
-        #expect(AskLedger.samePerson("Kanika Pandey Loadmill", "Kanika Pandey"))
-        #expect(!AskLedger.samePerson("Rohan", "Priya"))
+        #expect(AskLedger.samePerson("Lokesh (+919000000111)", "Lokesh"))
+        #expect(AskLedger.samePerson("Lalita Pathak Tideline", "Lalita Pathak"))
+        #expect(!AskLedger.samePerson("Zubin", "Tanvi"))
     }
 }

@@ -8,7 +8,7 @@ import Foundation
     static let now = Date(timeIntervalSince1970: 1_789_732_800)
     static let utc: Calendar = { var c = Calendar(identifier: .gregorian); c.timeZone = TimeZone(identifier: "UTC")!; return c }()
     static func at(daysAgo: Double, hours: Double = 0) -> Date { now.addingTimeInterval(-daysAgo * 86400 + hours * 3600) }
-    func fb(_ v: NoteFeedback.Verdict = .notRight, path: String = "People/Meera.md", reason: String? = "too much hedging", daysAgo: Double = 0, hours: Double = 0) -> NoteFeedback {
+    func fb(_ v: NoteFeedback.Verdict = .notRight, path: String = "People/Meena.md", reason: String? = "too much hedging", daysAgo: Double = 0, hours: Double = 0) -> NoteFeedback {
         NoteFeedback(path: path, title: String(path.split(separator: "/").last!.dropLast(3)), contentHash: "h", verdict: v, reason: reason, at: Self.at(daysAgo: daysAgo, hours: hours))
     }
     func list(_ entries: [NoteFeedback]) -> NoteFeedbackList { var l = NoteFeedbackList(); for e in entries { l.add(e, now: Self.now, calendar: Self.utc) }; return l }
@@ -22,10 +22,10 @@ import Foundation
         let morning = fb(.good, reason: nil, hours: -4), afternoon = fb(.notRight, reason: "wrong person", hours: -1)
         let l = list([morning, afternoon])
         #expect(l.entries == [afternoon], "the afternoon's word replaces the morning's")
-        #expect(l.latest(for: "People/Meera.md") == afternoon && l.latest(for: "People/Karan.md") == nil)
+        #expect(l.latest(for: "People/Meena.md") == afternoon && l.latest(for: "People/Devan.md") == nil)
         let yesterday = fb(.good, reason: nil, daysAgo: 1)
         #expect(list([yesterday, afternoon]).entries == [yesterday, afternoon], "a word on another day stands beside it, oldest first")
-        let other = fb(.good, path: "People/Karan.md", reason: nil, hours: -2)
+        let other = fb(.good, path: "People/Devan.md", reason: nil, hours: -2)
         #expect(list([other, afternoon]).entries == [other, afternoon], "another note the same day is its own entry")
     }
 
@@ -58,7 +58,7 @@ import Foundation
         #expect(NoteFeedbackList.decode(l.json) == l)
         #expect(NoteFeedbackList.decode(nil).entries.isEmpty && NoteFeedbackList.decode("not json").entries.isEmpty && NoteFeedbackList.decode("").entries.isEmpty)
         // A row written without a reason (a Good) decodes with none; a row this build cannot read is a list it cannot read — nothing, never a crash.
-        let row = #"[{"path":"People/Meera.md","title":"Meera","contentHash":"h","verdict":"good","at":812000000}]"#
+        let row = #"[{"path":"People/Meena.md","title":"Meena","contentHash":"h","verdict":"good","at":812000000}]"#
         #expect(NoteFeedbackList.decode(row).entries.first?.reason == nil && NoteFeedbackList.decode(row).entries.first?.verdict == .good)
         #expect(NoteFeedbackList.decode(#"[{"path":"p","title":"t","contentHash":"h","verdict":"meh","at":1}]"#).entries.isEmpty)
     }

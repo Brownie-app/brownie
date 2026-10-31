@@ -21,8 +21,8 @@ import Domain
     // MARK: voice
 
     @Test func theUserBecomesYouAndTheVerbFollows() {
-        let out = clean("# A\n\n## Now\n- The user has agreed to send the deck (2026-09-10)\n- Asha said the user is expected to reply (2026-09-11)\n- The user does not want the user's data shared (2026-09-12)\n- the user's own plan; the user himself said so (2026-09-13)\n- She reminded the user; the user says yes. The user plans to go (2026-09-14)\n- The user was asked, and the user believes the user needs a week (2026-09-15)\n")
-        #expect(section("## Now", of: out.body) == ["- You have agreed to send the deck (2026-09-10)", "- Asha said you are expected to reply (2026-09-11)", "- You do not want your data shared (2026-09-12)", "- Your own plan; you yourself said so (2026-09-13)", "- She reminded you; you say yes. You plan to go (2026-09-14)", "- You were asked, and you believe you need a week (2026-09-15)"],
+        let out = clean("# A\n\n## Now\n- The user has agreed to send the deck (2026-09-10)\n- Lalita said the user is expected to reply (2026-09-11)\n- The user does not want the user's data shared (2026-09-12)\n- the user's own plan; the user himself said so (2026-09-13)\n- She reminded the user; the user says yes. The user plans to go (2026-09-14)\n- The user was asked, and the user believes the user needs a week (2026-09-15)\n")
+        #expect(section("## Now", of: out.body) == ["- You have agreed to send the deck (2026-09-10)", "- Lalita said you are expected to reply (2026-09-11)", "- You do not want your data shared (2026-09-12)", "- Your own plan; you yourself said so (2026-09-13)", "- She reminded you; you say yes. You plan to go (2026-09-14)", "- You were asked, and you believe you need a week (2026-09-15)"],
                 "the possessive is 'your', a capital is kept and given at the head of a sentence, the verb agrees, 'himself' right after is 'yourself'")
         #expect(out.changes == ["6 lines put in your voice"])
         #expect(clean(out.body).changes.isEmpty, "idempotent")
@@ -47,8 +47,8 @@ import Domain
     // MARK: hedges
 
     @Test func aHedgeClauseGoesAndTheSentenceAroundItStays() {
-        let out = clean("# A\n\n## Now\n- Asha said an upgraded UI was expected this week; delivery is not confirmed. (2026-09-10)\n- No decision was recorded; asha will confirm next week. (2026-09-11)\n- Asha shared the deck (not independently confirmed). (2026-09-12)\n- This is a plan, not an established outcome — Goa in October. (2026-09-13)\n- The available summaries do not establish whether she came. Asha sent photos. (2026-09-14)\n- Asha will call, but the timing is not confirmed (2026-09-15)\n")
-        #expect(section("## Now", of: out.body) == ["- Asha said an upgraded UI was expected this week. (2026-09-10)", "- Asha will confirm next week. (2026-09-11)", "- Asha shared the deck. (2026-09-12)", "- Goa in October. (2026-09-13)", "- Asha sent photos. (2026-09-14)", "- Asha will call (2026-09-15)"],
+        let out = clean("# A\n\n## Now\n- Lalita said an upgraded UI was expected this week; delivery is not confirmed. (2026-09-10)\n- No decision was recorded; lalita will confirm next week. (2026-09-11)\n- Lalita shared the deck (not independently confirmed). (2026-09-12)\n- This is a plan, not an established outcome — Goa in October. (2026-09-13)\n- The available summaries do not establish whether she came. Lalita sent photos. (2026-09-14)\n- Lalita will call, but the timing is not confirmed (2026-09-15)\n")
+        #expect(section("## Now", of: out.body) == ["- Lalita said an upgraded UI was expected this week. (2026-09-10)", "- Lalita will confirm next week. (2026-09-11)", "- Lalita shared the deck. (2026-09-12)", "- Goa in October. (2026-09-13)", "- Lalita sent photos. (2026-09-14)", "- Lalita will call (2026-09-15)"],
                 "a trailing clause, a leading clause (the next word given its capital), an aside in parentheses, a whole sentence: each goes, the full stop put back where there was one, a dangling 'but' taken off")
         #expect(out.changes == ["6 hedges removed"])
         #expect(clean(out.body).changes.isEmpty)
@@ -59,14 +59,14 @@ import Domain
                       "the summary does not confirm it", "the records do not record a reply", "no later summary confirms delivery", "the outcome and any user action are not recorded", "the outcome and any your action are not recorded",
                       "Nothing was recorded about the venue", "this remains under discussion unless noted above", "delivery is not confirmed", "the timing and transition are not independently confirmed", "it does not create a new pending action", "the outcome is not yet known"]
         for h in hedges { #expect(NoteLint.hedge(h), Comment(rawValue: h)) }
-        for kept in ["Asha confirmed the venue", "no reply yet from Priya", "she recorded a podcast", "the deck is not finished", "no allergies"] { #expect(!NoteLint.hedge(kept), Comment(rawValue: kept)) }
+        for kept in ["Lalita confirmed the venue", "no reply yet from Tanvi", "she recorded a podcast", "the deck is not finished", "no allergies"] { #expect(!NoteLint.hedge(kept), Comment(rawValue: kept)) }
         #expect(NoteLint.hedgePatterns.count >= 11, "one pattern per habit, in a list")
     }
 
     // MARK: filler
 
     @Test func aBulletThatSaysNothingIsDropped() {
-        let out = clean("# A\n\n## About\n- Standing facts about Asha.\n- No standing facts yet.\n- TBD\n- Nothing new.\n- Nothing beats her biryani.\n- No known allergies.\n- —\n\n## Now\n- No pending request or unresolved obligation is established by this exchange. (2026-09-10)\n- No pending request, but she mentioned a trip to Goa in October. (2026-09-11)\n- No outcome or reply was recorded. (2026-09-12)\n")
+        let out = clean("# A\n\n## About\n- Standing facts about Lalita.\n- No standing facts yet.\n- TBD\n- Nothing new.\n- Nothing beats her biryani.\n- No known allergies.\n- —\n\n## Now\n- No pending request or unresolved obligation is established by this exchange. (2026-09-10)\n- No pending request, but she mentioned a trip to Goa in October. (2026-09-11)\n- No outcome or reply was recorded. (2026-09-12)\n")
         #expect(out.body == "# A\n\n## About\n- Nothing beats her biryani.\n- No known allergies.\n\n## Now\n- No pending request, but she mentioned a trip to Goa in October. (2026-09-11)\n",
                 "a placeholder, a bullet that only says nothing happened, a bullet left empty once its hedge went; a fact that starts the same way stays")
         #expect(out.changes == ["2 hedges removed", "7 empty bullets dropped"])
@@ -76,30 +76,30 @@ import Domain
     // MARK: repeats
 
     @Test func twoBulletsThatSayTheSameThingAreOneInTheHigherSection() {
-        let out = clean("# A\n\n## About\n- Works at Northwind as design lead\n- Asha works at Northwind as the design lead\n\n## Now\n- Asha shared the Q3 deck with the team (2026-09-16)\n- Lunch (2026-09-11)\n- Priya wants the Goa photos by Friday (2026-09-01)\n\n## Context\n- Asha shared the Q3 deck for review (2026-09-10)\n- Lunch (2026-09-01)\n- Asha asked for the deck (2026-09-02)\n- Asha sent the deck (2026-09-03)\n- Priya wants the Goa photos by Friday at the latest (2026-09-12)\n")
-        #expect(section("## About", of: out.body) == ["- Asha works at Northwind as the design lead"], "undated, the longer stays")
-        #expect(section("## Now", of: out.body) == ["- Asha shared the Q3 deck with the team (2026-09-16)", "- Lunch (2026-09-11)", "- Priya wants the Goa photos by Friday at the latest (2026-09-12)"],
+        let out = clean("# A\n\n## About\n- Works at Tideline as design lead\n- Lalita works at Tideline as the design lead\n\n## Now\n- Lalita shared the Q3 deck with the team (2026-09-16)\n- Lunch (2026-09-11)\n- Tanvi wants the Goa photos by Friday (2026-09-01)\n\n## Context\n- Lalita shared the Q3 deck for review (2026-09-10)\n- Lunch (2026-09-01)\n- Lalita asked for the deck (2026-09-02)\n- Lalita sent the deck (2026-09-03)\n- Tanvi wants the Goa photos by Friday at the latest (2026-09-12)\n")
+        #expect(section("## About", of: out.body) == ["- Lalita works at Tideline as the design lead"], "undated, the longer stays")
+        #expect(section("## Now", of: out.body) == ["- Lalita shared the Q3 deck with the team (2026-09-16)", "- Lunch (2026-09-11)", "- Tanvi wants the Goa photos by Friday at the latest (2026-09-12)"],
                 "the newer stays, and takes the copy's place under Now when it sat under Context")
-        #expect(section("## Context", of: out.body) == ["- Lunch (2026-09-01)", "- Asha asked for the deck (2026-09-02)", "- Asha sent the deck (2026-09-03)"],
+        #expect(section("## Context", of: out.body) == ["- Lunch (2026-09-01)", "- Lalita asked for the deck (2026-09-02)", "- Lalita sent the deck (2026-09-03)"],
                 "'asked for' and 'sent' are two facts; 'Lunch' on two days is two lunches, too short to call a repeat")
         #expect(out.changes == ["3 repeated bullets merged"])
         #expect(clean(out.body).changes.isEmpty)
     }
 
     @Test func aboutStaysAboutAndABulletWithNestedLinesNeverGoes() {
-        let out = clean("# A\n\n## About\n- Asha is on leave until October\n\n## Now\n- Asha is on leave until October (since 2026-09-01)\n- Wants the flat in Pune sorted (2026-09-10)\n  - two bedrooms\n\n## Context\n- Wants the flat in Pune sorted soon (2026-09-12)\n")
-        #expect(out.body == "# A\n\n## Now\n- Asha is on leave until October (since 2026-09-01)\n- Wants the flat in Pune sorted (2026-09-10)\n  - two bedrooms\n",
+        let out = clean("# A\n\n## About\n- Lalita is on leave until October\n\n## Now\n- Lalita is on leave until October (since 2026-09-01)\n- Wants the flat in Pune sorted (2026-09-10)\n  - two bedrooms\n\n## Context\n- Wants the flat in Pune sorted soon (2026-09-12)\n")
+        #expect(out.body == "# A\n\n## Now\n- Lalita is on leave until October (since 2026-09-01)\n- Wants the flat in Pune sorted (2026-09-10)\n  - two bedrooms\n",
                 "the dated one wins over the undated and stays where it was; the newer Context copy goes because the older Now one holds nested lines, which never go")
         #expect(out.changes == ["2 repeated bullets merged"])
-        let aboutWins = clean("# A\n\n## About\n- Asha is the design lead at Northwind and runs the Pune studio\n\n## Context\n- Asha is the design lead at Northwind in Pune (date unclear)\n")
-        #expect(aboutWins.body == "# A\n\n## About\n- Asha is the design lead at Northwind and runs the Pune studio\n", "both undated: the longer stays, under About")
+        let aboutWins = clean("# A\n\n## About\n- Lalita is the design lead at Tideline and runs the Pune studio\n\n## Context\n- Lalita is the design lead at Tideline in Pune (date unclear)\n")
+        #expect(aboutWins.body == "# A\n\n## About\n- Lalita is the design lead at Tideline and runs the Pune studio\n", "both undated: the longer stays, under About")
     }
 
     // MARK: meta
 
     @Test func aMetaLineKeepsOnlyTheFactsAfterItsColon() {
-        let out = clean("# A\n\n## Now\n- Earlier requests and plans remain historical unless noted above: Asha asked for the deck in July; the user promised the recipe. (2026-09-10)\n- Individual recurring contacts now have separate notes so this note only holds the group's facts. (2026-09-11)\n- References to calls involving Priya do not establish a remaining user action. (2026-09-12)\n- Earlier plans remain historical unless noted above. (2026-09-13)\n- Carried over from the old note: none. (2026-09-14)\n")
-        #expect(out.body == "# A\n\n## Now\n- Asha asked for the deck in July; you promised the recipe. (2026-09-10)\n", "the facts after the colon are a bullet, in your voice; a meta line with none is gone")
+        let out = clean("# A\n\n## Now\n- Earlier requests and plans remain historical unless noted above: Lalita asked for the deck in July; the user promised the recipe. (2026-09-10)\n- Individual recurring contacts now have separate notes so this note only holds the group's facts. (2026-09-11)\n- References to calls involving Tanvi do not establish a remaining user action. (2026-09-12)\n- Earlier plans remain historical unless noted above. (2026-09-13)\n- Carried over from the old note: none. (2026-09-14)\n")
+        #expect(out.body == "# A\n\n## Now\n- Lalita asked for the deck in July; you promised the recipe. (2026-09-10)\n", "the facts after the colon are a bullet, in your voice; a meta line with none is gone")
         #expect(out.changes == ["1 line put in your voice", "5 meta lines cut"])
         #expect(clean(out.body).changes.isEmpty)
     }
@@ -107,9 +107,9 @@ import Domain
     // MARK: all at once
 
     @Test func aMessyPeopleNoteComesOutReadable() {
-        let messy = "# Asha Mehta\n" + Self.block + "\n\n## About\n- Standing facts about Asha.\n- Design lead at Northwind; works with the user on the Q3 deck.\n- The user's colleague since 2024.\n\n## Now\n- **16 Sep 2026:** Asha shared the Q3 deck with the team; delivery is not confirmed.\n- **14 Sep 2026:** The user agreed to review the deck by Friday (not independently confirmed).\n- **12 Sep 2026:** No decision was recorded; Asha will confirm the offsite dates next week.\n- No pending request or unresolved obligation is established by this exchange.\n- Earlier requests and plans remain historical unless noted above: Asha asked the user for the July figures; the user promised the recipe.\n\n## Context\n- Asha shared the Q3 deck for the team (2026-09-10)\n- On leave (since 2026-06-01)\n"
+        let messy = "# Lalita Pathak\n" + Self.block + "\n\n## About\n- Standing facts about Lalita.\n- Design lead at Tideline; works with the user on the Q3 deck.\n- The user's colleague since 2024.\n\n## Now\n- **16 Sep 2026:** Lalita shared the Q3 deck with the team; delivery is not confirmed.\n- **14 Sep 2026:** The user agreed to review the deck by Friday (not independently confirmed).\n- **12 Sep 2026:** No decision was recorded; Lalita will confirm the offsite dates next week.\n- No pending request or unresolved obligation is established by this exchange.\n- Earlier requests and plans remain historical unless noted above: Lalita asked the user for the July figures; the user promised the recipe.\n\n## Context\n- Lalita shared the Q3 deck for the team (2026-09-10)\n- On leave (since 2026-06-01)\n"
         let once = norm(messy), twice = norm(once.body)
-        #expect(once.body == "# Asha Mehta\n\n" + Self.block + "\n\n## About\n- Design lead at Northwind; works with you on the Q3 deck.\n- Your colleague since 2024.\n\n## Now\n- Asha shared the Q3 deck with the team. (2026-09-16)\n- You agreed to review the deck by Friday. (2026-09-14)\n- Asha will confirm the offsite dates next week. (2026-09-12)\n- Asha asked you for the July figures; you promised the recipe. (date unclear)\n\n## Context\n- On leave (since 2026-06-01)\n")
+        #expect(once.body == "# Lalita Pathak\n\n" + Self.block + "\n\n## About\n- Design lead at Tideline; works with you on the Q3 deck.\n- Your colleague since 2024.\n\n## Now\n- Lalita shared the Q3 deck with the team. (2026-09-16)\n- You agreed to review the deck by Friday. (2026-09-14)\n- Lalita will confirm the offsite dates next week. (2026-09-12)\n- Lalita asked you for the July figures; you promised the recipe. (date unclear)\n\n## Context\n- On leave (since 2026-06-01)\n")
         #expect(once.changes == ["3 bullets dated", "2 bullets marked date unclear", "4 lines put in your voice", "4 hedges removed", "2 empty bullets dropped", "1 repeated bullet merged", "1 meta line cut"])
         #expect(twice.body == once.body && twice.changes.isEmpty, "a clean note passes through unchanged")
         #expect(NoteStatus.extract(from: once.body) == Self.block, "the block keeps 'the user' — it is not the lint's")
@@ -135,10 +135,10 @@ import Domain
         #expect(out.contains("improve the user experience; you said you would not back out"), "\(out)")
     }
     @Test func theGeneralHedgeShapesGo() {
-        let body = "# K\n\n## Now\n- They discussed going full-time; neither a deal closure nor a full-time transition is confirmed. (2026-09-18)\n- Asha plans to use Lanterna's design. No upgraded-UI delivery is confirmed. (2026-09-16)\n- You shared the quarterly figures. The actual identifiers and email addresses are intentionally not recorded. (2026-08-27)\n- Asha's July request for feedback and the 27 Aug Meridian call. References to calls involving Noor and others do not establish a remaining user action or completed outcome. (2026-09-01)\n\n## About\n- Dev — TPM.\n- Context These materials concern recruiting and peer review. Individual recurring contacts now have separate notes so their pending requests can be tracked.\n"
+        let body = "# K\n\n## Now\n- They discussed going full-time; neither a deal closure nor a full-time transition is confirmed. (2026-09-18)\n- Lalita plans to use Lanterna's design. No upgraded-UI delivery is confirmed. (2026-09-16)\n- You shared the quarterly figures. The actual identifiers and email addresses are intentionally not recorded. (2026-08-27)\n- Lalita's July request for feedback and the 27 Aug Meridian call. References to calls involving Noor and others do not establish a remaining user action or completed outcome. (2026-09-01)\n\n## About\n- Varun — TPM.\n- Context These materials concern recruiting and peer review. Individual recurring contacts now have separate notes so their pending requests can be tracked.\n"
         let r = NoteLint.clean(body: body, kind: .person, now: now, timeZone: utc)
         #expect(!r.body.contains("is confirmed") && !r.body.contains("not recorded") && !r.body.contains("do not establish") && !r.body.contains("These materials") && !r.body.contains("separate notes"), "\(r.body)")
-        #expect(r.body.contains("- They discussed going full-time. (2026-09-18)") && r.body.contains("- Asha plans to use Lanterna's design. (2026-09-16)") && r.body.contains("- You shared the quarterly figures. (2026-08-27)"), "\(r.body)")
+        #expect(r.body.contains("- They discussed going full-time. (2026-09-18)") && r.body.contains("- Lalita plans to use Lanterna's design. (2026-09-16)") && r.body.contains("- You shared the quarterly figures. (2026-08-27)"), "\(r.body)")
         #expect(!r.body.contains("- Context"), "a bullet left with one word is dropped: \(r.body)")
         let again = NoteLint.clean(body: r.body, kind: .person, now: now, timeZone: utc).body
         #expect(again == r.body, "idempotent")
@@ -148,10 +148,10 @@ import Domain
 @Suite struct NoteLintSentencesAndEarlierTests {
     let now = Date(timeIntervalSince1970: 1_789_000_000), utc = TimeZone(identifier: "UTC")!
     @Test func aHedgeSentenceGoesWholeNotHalf() {
-        let body = "# K\n\n## About\n- Dev — TPM.\n- Context These materials concern recruiting, peer review, and career development. Individual recurring contacts now have separate notes so their pending requests can be tracked.\n\n## Context\n- Asha's July request for feedback, the August coordination, and the 27 Aug Meridian call. References to calls involving Noor, Kiran, Mr. Varma, and others do not establish a remaining user action or completed outcome. (2026-09-01)\n"
+        let body = "# K\n\n## About\n- Varun — TPM.\n- Context These materials concern recruiting, peer review, and career development. Individual recurring contacts now have separate notes so their pending requests can be tracked.\n\n## Context\n- Lalita's July request for feedback, the August coordination, and the 27 Aug Meridian call. References to calls involving Noor, Kiran, Mr. Vartak, and others do not establish a remaining user action or completed outcome. (2026-09-01)\n"
         let out = NoteLint.clean(body: body, kind: .person, now: now, timeZone: utc).body
         #expect(!out.contains("Career development") && !out.contains("References to") && !out.contains("Context These"), "\(out)")
-        #expect(out.contains("- Asha's July request for feedback, the August coordination, and the 27 Aug Meridian call. (2026-09-01)"), "\(out)")
+        #expect(out.contains("- Lalita's July request for feedback, the August coordination, and the 27 Aug Meridian call. (2026-09-01)"), "\(out)")
     }
     @Test func earlierMonthLinesGetTheVoiceAndLoseTheirHedges() {
         let body = "# N\n\n## Earlier\n- 2026-08 — The user's planned QA account creation was discussed; no later summary confirms completion; they asked for the deck — you replied 3 Aug\n"
@@ -164,17 +164,17 @@ import Domain
 @Suite struct NoteLintMoreHedgesTests {
     let now = Date(timeIntervalSince1970: 1_789_000_000), utc = TimeZone(identifier: "UTC")!
     @Test func theQuieterHedgesGoToo() {
-        let body = "# A\n\n## Now\n- They discussed dinners in December. The dates and plans were not consistently confirmed, so there is no reliable upcoming itinerary or dinner commitment. (2026-09-04)\n- Nayra asked you to transfer money for a shared booking. Amounts and account details are omitted. (2026-09-17)\n- Nayra said he had settled on a supplier, so earlier sourcing uncertainty is resolved only at that level. (2026-09-02)\n\n## Context\n- Sam mentioned a Harbour colleague. These were conversational context, not confirmed referrals or outcomes. (2026-02-14)\n- Earlier exchanges included an AI-QA course plan. The course and content ideas were proposals. (2025-10-12)\n- Nayra's messages also included contacts such as Lata and Bela; those references are not treated as commitments by you. (2026-01-01)\n"
+        let body = "# A\n\n## Now\n- They discussed dinners in December. The dates and plans were not consistently confirmed, so there is no reliable upcoming itinerary or dinner commitment. (2026-09-04)\n- Nayra asked you to transfer money for a shared booking. Amounts and account details are omitted. (2026-09-17)\n- Nayra said he had settled on a supplier, so earlier sourcing uncertainty is resolved only at that level. (2026-09-02)\n\n## Context\n- Sameer mentioned a Vantage colleague. These were conversational context, not confirmed referrals or outcomes. (2026-02-14)\n- Earlier exchanges included an AI-QA course plan. The course and content ideas were proposals. (2025-10-12)\n- Nayra's messages also included contacts such as Tarun and Bela; those references are not treated as commitments by you. (2026-01-01)\n"
         let r = NoteLint.clean(body: body, kind: .person, now: now, timeZone: utc)
         for gone in ["not consistently confirmed", "no reliable", "are omitted", "only at that level", "conversational context", "were proposals", "not treated as commitments"] { #expect(!r.body.contains(gone), "\(gone) stayed: \(r.body)") }
-        for kept in ["- They discussed dinners in December. (2026-09-04)", "- Nayra asked you to transfer money for a shared booking. (2026-09-17)", "- Nayra said he had settled on a supplier. (2026-09-02)", "- Sam mentioned a Harbour colleague. (2026-02-14)", "- Earlier exchanges included an AI-QA course plan. (2025-10-12)", "- Nayra's messages also included contacts such as Lata and Bela. (2026-01-01)"] { #expect(r.body.contains(kept), "\(kept) missing: \(r.body)") }
+        for kept in ["- They discussed dinners in December. (2026-09-04)", "- Nayra asked you to transfer money for a shared booking. (2026-09-17)", "- Nayra said he had settled on a supplier. (2026-09-02)", "- Sameer mentioned a Vantage colleague. (2026-02-14)", "- Earlier exchanges included an AI-QA course plan. (2025-10-12)", "- Nayra's messages also included contacts such as Tarun and Bela. (2026-01-01)"] { #expect(r.body.contains(kept), "\(kept) missing: \(r.body)") }
     }
 }
 
 @Suite struct NoteLintThreadTests {
     let now = Date(timeIntervalSince1970: 1_789_000_000), utc = TimeZone(identifier: "UTC")!
     @Test func oneThreadToldThreeTimesKeepsTheNewestTelling() {
-        let body = "# Noor\n\n## Now\n- Noor's request for a perpetual licence option remains under discussion. You spoke with Noor about paperwork for Mr. Varma's approval and plan to ping Noor again. (2026-09-18)\n- Noor's request for a perpetual licence option was discussed. [[Asha Mehta]] will update Noor after speaking with you. (2026-09-16)\n- You had a conversation with Noor about a process involving Kiran, Mr. Varma, and a further call. (2026-09-16)\n"
+        let body = "# Noor\n\n## Now\n- Noor's request for a perpetual licence option remains under discussion. You spoke with Noor about paperwork for Mr. Vartak's approval and plan to ping Noor again. (2026-09-18)\n- Noor's request for a perpetual licence option was discussed. [[Lalita Pathak]] will update Noor after speaking with you. (2026-09-16)\n- You had a conversation with Noor about a process involving Kiran, Mr. Vartak, and a further call. (2026-09-16)\n"
         let r = NoteLint.clean(body: body, kind: .person, now: now, timeZone: utc)
         let now = r.body.components(separatedBy: "## Now\n")[1]
         #expect(now.components(separatedBy: "\n- ").count == 2, "the two tellings of the licence thread are one; the Kiran call is its own: \(r.body)")
@@ -182,7 +182,7 @@ import Domain
         #expect(r.changes.contains("1 repeated bullet merged"))
     }
     @Test func aboutBulletsAndShortBulletsAreNotThreads() {
-        let body = "# K\n\n## About\n- Asha Mehta is a Northwind contact in Delhi who runs product.\n- Asha Mehta is a Northwind contact whose sister works at Tideline in Pune.\n\n## Now\n- Lunch with Asha. (2026-09-10)\n- Lunch with Asha. (2026-09-12)\n"
+        let body = "# K\n\n## About\n- Lalita Pathak is a Tideline contact in Delhi who runs product.\n- Lalita Pathak is a Tideline contact whose sister works at Harbour in Pune.\n\n## Now\n- Lunch with Lalita. (2026-09-10)\n- Lunch with Lalita. (2026-09-12)\n"
         let r = NoteLint.clean(body: body, kind: .person, now: now, timeZone: utc)
         #expect(r.body.components(separatedBy: "\n- ").count == 5, "About is never threaded and three-word bullets are too short to be: \(r.body)")
     }

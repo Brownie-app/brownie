@@ -139,7 +139,7 @@ final class AppModel: ObservableObject {
     @Published var pinnedNotes = PinnedNotes(paths: UserDefaults.standard.stringArray(forKey: "notes.pinned") ?? [])
     /// The registry's people, for the header of a People note.
     @Published var people: [Person] = []
-    /// A question waiting in the Ask box ("about Meera: ") when the user arrives there from a note.
+    /// A question waiting in the Ask box ("about Meena: ") when the user arrives there from a note.
     @Published var askPrefill: String?
     @Published var quickOpenShown = false
     /// The raw editor's sitting on the Notes screen, kept here so a screen change, ⌘K or a watcher reload never blanks it (AppModel+Notes).

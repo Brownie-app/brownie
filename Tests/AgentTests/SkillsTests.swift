@@ -24,11 +24,11 @@ func el(_ id: Int, _ role: String, _ title: String, value: String = "", x: CGFlo
 @Suite struct ChatWindowCheckTests {
     let win = el(1, "Window", "WhatsApp", x: 0, y: 0, w: 1000, h: 800)
     @Test func theHeaderNamesThePerson() {
-        let snap = UISnapshot(app: "WhatsApp", window: "WhatsApp", elements: [win, el(2, "StaticText", "Kanika Pandey Loadmill", x: 400, y: 30), el(3, "StaticText", "Rohan", x: 20, y: 300), el(4, "TextArea", "", x: 400, y: 740, w: 500, h: 40)])
-        #expect(ChatWindowCheck.headerNames(snap, person: "Kanika Pandey"))
-        #expect(ChatWindowCheck.headerNames(snap, person: "kanika"))
-        #expect(!ChatWindowCheck.headerNames(snap, person: "Rohan"), "a name in the chat list on the left is not the open chat")
-        #expect(!ChatWindowCheck.headerNames(UISnapshot(app: "WhatsApp", window: "", elements: []), person: "Kanika"))
+        let snap = UISnapshot(app: "WhatsApp", window: "WhatsApp", elements: [win, el(2, "StaticText", "Lalita Pathak Tideline", x: 400, y: 30), el(3, "StaticText", "Zubin", x: 20, y: 300), el(4, "TextArea", "", x: 400, y: 740, w: 500, h: 40)])
+        #expect(ChatWindowCheck.headerNames(snap, person: "Lalita Pathak"))
+        #expect(ChatWindowCheck.headerNames(snap, person: "lalita"))
+        #expect(!ChatWindowCheck.headerNames(snap, person: "Zubin"), "a name in the chat list on the left is not the open chat")
+        #expect(!ChatWindowCheck.headerNames(UISnapshot(app: "WhatsApp", window: "", elements: []), person: "Lalita"))
     }
     @Test func theComposerIsTheLabelledBoxOrTheWideOneAtTheBottom() {
         let labelled = UISnapshot(app: "Messages", window: "", elements: [win, el(2, "TextField", "Search", x: 20, y: 20), el(3, "TextArea", "iMessage", x: 300, y: 740, w: 600, h: 30)])
@@ -42,7 +42,7 @@ func el(_ id: Int, _ role: String, _ title: String, value: String = "", x: CGFlo
 @Suite struct TypingAndFindingTests {
     @Test func typingLanded() {
         #expect(TypingCheck.landed(expected: "https://www.amazon.com", value: "https://www.amazon.com"))
-        #expect(TypingCheck.landed(expected: "Hi Kanika, quick update on the licence", value: "hi kanika, quick"))
+        #expect(TypingCheck.landed(expected: "Hi Lalita, quick update on the licence", value: "hi lalita, quick"))
         #expect(!TypingCheck.landed(expected: "iphone", value: "Brownie — a house spirit"))
         #expect(TypingCheck.landed(expected: "", value: "anything"))
     }
@@ -57,7 +57,7 @@ func el(_ id: Int, _ role: String, _ title: String, value: String = "", x: CGFlo
     @Test func narratorSpeaksTheNewTools() {
         #expect(HandsNarrator.line(tool: "plan", args: #"{"steps":["a","b"]}"#) == "Planning the steps")
         #expect(HandsNarrator.line(tool: "open_url", args: #"{"url":"https://amazon.com"}"#) == "Going to amazon.com")
-        #expect(HandsNarrator.line(tool: "open_chat", args: #"{"app":"WhatsApp","name":"Kanika"}"#) == "Opening the WhatsApp conversation with Kanika")
+        #expect(HandsNarrator.line(tool: "open_chat", args: #"{"app":"WhatsApp","name":"Lalita"}"#) == "Opening the WhatsApp conversation with Lalita")
         #expect(HandsNarrator.line(tool: "wait_for", args: #"{"text":"Add to Cart"}"#) == "Waiting for “Add to Cart” to appear")
         #expect(HandsNarrator.line(tool: "type_message", args: #"{"text":"Hi"}"#) == "Putting the message in the box: “Hi”")
     }

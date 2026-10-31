@@ -69,7 +69,7 @@ public enum AskLedger {
         return AskScan(since: scanSince(open: [], now: now), sinceByBucket: byBucket, judgedReplies: judged, selfNames: selfNames)
     }
 
-    /// Loops that are about *responding* to someone. "Send" and "share" are deliberately not here: "send Kanika the
+    /// Loops that are about *responding* to someone. "Send" and "share" are deliberately not here: "send Lalita the
     /// numbers by Friday" is a thing to do, not a reply owed, and closing it the moment the user writes anything is how
     /// a promise came to mark itself done. A loop about sending is closed by `followers` instead, on a settled ask.
     /// Matched as whole words — "let" used to match "wallet".
@@ -87,8 +87,8 @@ public enum AskLedger {
     }
 
     /// Loops that the asks they came from settled: an open loop with the same person whose `what` shares half its
-    /// words with a settled ask's question — the judge opened "Send Nitesh the estimates" the night Nitesh asked for
-    /// them, and the night the ask closes (the user sent them, Nitesh said he has them, or the judge saw them sent on
+    /// words with a settled ask's question — the judge opened "Send Lokesh the estimates" the night Lokesh asked for
+    /// them, and the night the ask closes (the user sent them, Lokesh said he has them, or the judge saw them sent on
     /// Slack) the loop goes with it, once. A loop opened more than a day after the ask settled is newer news and stays.
     public static func followers(loops: [Loop], asks: [Ask], now: Date) -> [Loop] {
         loops.map { l in

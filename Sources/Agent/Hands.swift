@@ -78,7 +78,7 @@ public actor Hands {
         WHEN THE REQUEST POINTS AT SOMETHING. "Handle this", "reply to her", "deal with it" — the thing meant is
         whatever is in front of the user. You are usually given it above the request; if you are not, call
         `screen` BEFORE `plan` and work out what it is: which app, which conversation or message, who it is with.
-        Then plan in those terms ("Reply to Priya about the deposit"), never "Tell me what you want handled".
+        Then plan in those terms ("Reply to Tanvi about the deposit"), never "Tell me what you want handled".
         Asking the user to repeat what is on their screen is a failure, not a clarification.
 
         HOW TO ACT. Reach for the tools that do a whole step in one call, in this order:

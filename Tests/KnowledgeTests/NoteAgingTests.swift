@@ -27,9 +27,9 @@ import Domain
 
     @Test func aSincePastTheContextCapIsAStandingFactUnderAbout() {
         let ctx = (1...12).map { "- c\($0) (2026-08-\(String(format: "%02d", $0)))" }.joined(separator: "\n")
-        let out = age("# A\n\n## About\n- friend\n\n## Now\n- Works at Loadmill (since 2024-03-01)\n\n## Context\n\(ctx)\n")
-        #expect(section("## About", of: out.body) == ["- friend", "- Works at Loadmill (since 2024-03-01)"], "the fact and its date are kept, under About")
-        #expect(section("## Context", of: out.body).count == 12 && !section("## Context", of: out.body).contains { $0.contains("Loadmill") })
+        let out = age("# A\n\n## About\n- friend\n\n## Now\n- Works at Tideline (since 2024-03-01)\n\n## Context\n\(ctx)\n")
+        #expect(section("## About", of: out.body) == ["- friend", "- Works at Tideline (since 2024-03-01)"], "the fact and its date are kept, under About")
+        #expect(section("## Context", of: out.body).count == 12 && !section("## Context", of: out.body).contains { $0.contains("Tideline") })
         #expect(out.changes == ["1 bullet moved to Context", "1 standing fact past the cap kept under About"])
         let again = age(out.body)
         #expect(again.body == out.body && again.changes.isEmpty)
@@ -77,9 +77,9 @@ import Domain
     }
 
     @Test func aboutPastTheCapMovesToContextSoTheNewestFactIsNotLost() {
-        let facts = (1...30).map { "- fact \($0)" } + ["- Just moved to Bengaluru for a new job at Razorpay"]
+        let facts = (1...30).map { "- fact \($0)" } + ["- Just moved to Bengaluru for a new job at Clearwater"]
         let out = age("# A\n\n## About\n" + facts.joined(separator: "\n") + "\n")
-        #expect(section("## About", of: out.body).count == 30 && out.body.contains("## Context\n- Just moved to Bengaluru for a new job at Razorpay (date unclear)\n"))
+        #expect(section("## About", of: out.body).count == 30 && out.body.contains("## Context\n- Just moved to Bengaluru for a new job at Clearwater (date unclear)\n"))
         #expect(out.changes == ["1 bullet marked date unclear", "1 About bullet past the cap moved to Context"])
         let again = age(out.body)
         #expect(again.body == out.body && again.changes.isEmpty, "the moved fact is not moved again")
@@ -112,7 +112,7 @@ import Domain
 
     @Test func agingTwiceOnTheTrickiestNoteChangesNothingAndLosesNothing() {
         let about = (1...30).map { "- fact \($0)" }.joined(separator: "\n")
-        let body = "# Kanika\n\n## About\n<!-- template -->\n\n### Family\n- Husband: Dev\n  - met him once\n\n| Name | Role |\n|---|---|\n| Dev | husband |\n\n```\n# not a heading\n```\n\n\(about)\n\n## Now\n- Stale ask (2026-06-01)\n  - with a nested line\n- On leave (since 2026-05-01)\n- Fresh (2026-09-10)\n<!-- note to self -->\n\n## Context\n" + (1...12).map { "- c\($0) (2026-08-\(String(format: "%02d", $0)))" }.joined(separator: "\n") + "\n\n## Earlier\n- 2026-07-15 — met at the wedding\n- 2025-12 — first met; coffee\n- 2024-01 — long ago\n> an old quote\n"
+        let body = "# Lalita\n\n## About\n<!-- template -->\n\n### Family\n- Husband: Dev\n  - met him once\n\n| Name | Role |\n|---|---|\n| Dev | husband |\n\n```\n# not a heading\n```\n\n\(about)\n\n## Now\n- Stale ask (2026-06-01)\n  - with a nested line\n- On leave (since 2026-05-01)\n- Fresh (2026-09-10)\n<!-- note to self -->\n\n## Context\n" + (1...12).map { "- c\($0) (2026-08-\(String(format: "%02d", $0)))" }.joined(separator: "\n") + "\n\n## Earlier\n- 2026-07-15 — met at the wedding\n- 2025-12 — first met; coffee\n- 2024-01 — long ago\n> an old quote\n"
         let once = age(body), twice = age(once.body)
         #expect(twice.body == once.body && twice.changes.isEmpty)
         for words in ["<!-- template -->", "fact 30", "### Family", "met him once", "| Dev | husband |", "# not a heading", "Stale ask (with a nested line)", "On leave (since 2026-05-01)", "Fresh (2026-09-10)", "<!-- note to self -->", "c1 (2026-08-01)", "2026-07-15 — met at the wedding", "first met; coffee", "> an old quote"] {

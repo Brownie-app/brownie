@@ -154,7 +154,7 @@ public struct NoteMeta: Sendable, Equatable, Codable {
         return "---\n" + lines.joined(separator: "\n") + "\n---\n"
     }
 
-    /// Comma-separated items, a comma inside quotes being part of its item ("Pandey, Kanika").
+    /// Comma-separated items, a comma inside quotes being part of its item ("Pathak, Lalita").
     static func splitList(_ s: String) -> [String] {
         var items: [String] = [], cur = "", quoted = false
         for ch in s {

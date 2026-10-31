@@ -22,13 +22,13 @@ import Domain
 
     @Test func aDaysSummariesBecomeOneNoteGroupedByWhereTheyCameFrom() throws {
         let note = try #require(SummaryNotes.render(summaries: [
-            summary(1, "files", "Desktop", title: "invoice-sept.pdf", text: "An invoice from Raghavan & Co for September, due on the 20th."),
-            summary(2, "whatsapp", "Priya Sharma", title: "", text: "Priya is in Goa from the 3rd to the 6th and asked about the flat."),
+            summary(1, "files", "Desktop", title: "invoice-sept.pdf", text: "An invoice from Chhabra & Co for September, due on the 20th."),
+            summary(2, "whatsapp", "Tanvi Rege", title: "", text: "Tanvi is in Goa from the 3rd to the 6th and asked about the flat."),
             summary(3, "files", "Documents", title: "lease.pdf", text: "The flat's lease runs to March."),
         ], day: day, calendar: cal))
         #expect(note.hasPrefix("# Read on Sunday 11 October"))
-        #expect(note.contains("## Files · Desktop") && note.contains("## WhatsApp · Priya Sharma") && note.contains("## Files · Documents"))
-        #expect(note.contains("**invoice-sept.pdf** — An invoice from Raghavan & Co"))
+        #expect(note.contains("## Files · Desktop") && note.contains("## WhatsApp · Tanvi Rege") && note.contains("## Files · Documents"))
+        #expect(note.contains("**invoice-sept.pdf** — An invoice from Chhabra & Co"))
         #expect(note.contains("Brownie read 3 things on this day"), "the count is of what was kept, in words")
         #expect(note.contains("nothing here has been judged or drafted"), "it says what it is not")
     }
@@ -43,14 +43,14 @@ import Domain
     @Test func openAsksAreAtTheTopInTheWordsTheyWereAskedIn() throws {
         let note = try #require(SummaryNotes.render(
             summaries: [summary(1, "files", "Desktop", title: "a.pdf", text: "Something.")],
-            asks: [ask("Kanika Pandey", "can you call Mr Taragi about the pen test?"),
-                   ask("Rohan Desai", "sorted?", answeredAt: day, addressed: false)],
+            asks: [ask("Lalita Pathak", "can you call Mr Vartak about the pen test?"),
+                   ask("Zubin Patel", "sorted?", answeredAt: day, addressed: false)],
             day: day, calendar: cal))
         let waiting = note.range(of: "## Waiting on you")
         let files = note.range(of: "## Files")
         #expect(waiting != nil && files != nil && waiting!.lowerBound < files!.lowerBound, "waiting comes first")
-        #expect(note.contains("**Kanika Pandey** asked: can you call Mr Taragi about the pen test? — no reply from you yet"))
-        #expect(note.contains("**Rohan Desai** asked: sorted? — you wrote back, but not about this"),
+        #expect(note.contains("**Lalita Pathak** asked: can you call Mr Vartak about the pen test? — no reply from you yet"))
+        #expect(note.contains("**Zubin Patel** asked: sorted? — you wrote back, but not about this"),
                 "a reply that settled nothing is not silence, and the note says which it was")
     }
 
@@ -64,7 +64,7 @@ import Domain
         let first = try #require(SummaryNotes.render(summaries: [summary(1, "files", "Desktop", title: "a.pdf", text: "The first thing.")], day: day, calendar: cal))
         let second = try #require(SummaryNotes.merge(summaries: [
             summary(1, "files", "Desktop", title: "a.pdf", text: "The first thing."),
-            summary(2, "whatsapp", "Priya Sharma", title: "", text: "The second thing."),
+            summary(2, "whatsapp", "Tanvi Rege", title: "", text: "The second thing."),
         ], day: day, into: first, calendar: cal))
         #expect(second.components(separatedBy: "The first thing.").count - 1 == 1, "the first bullet is not repeated")
         #expect(second.contains("The second thing."))
@@ -80,7 +80,7 @@ import Domain
         let notes = SummaryNotes.notes(summaries: [
             summary(1, "files", "Desktop", title: "a.pdf", text: "Today's thing."),
             summary(2, "files", "Desktop", title: "b.pdf", text: "Yesterday's thing.", at: yesterday),
-        ], asks: [ask("Kanika Pandey", "where are the numbers?")], now: day, calendar: cal, existing: { _ in nil })
+        ], asks: [ask("Lalita Pathak", "where are the numbers?")], now: day, calendar: cal, existing: { _ in nil })
         #expect(notes.map(\.path) == ["Read/2026-10-10.md", "Read/2026-10-11.md"], "oldest first, one file each")
         #expect(notes[0].body.contains("Waiting on you") == false, "a back-dated day does not repeat today's open questions")
         #expect(notes[1].body.contains("Waiting on you"))

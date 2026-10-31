@@ -105,7 +105,7 @@ public enum CommandIntent: Sendable, Equatable {
 }
 
 extension Asker {
-    /// The first string value in a tool's JSON arguments, for the progress line: {"query":"nayan"} → nayan.
+    /// The first string value in a tool's JSON arguments, for the progress line: {"query":"nayra"} → nayra.
     static func firstArgument(_ json: String) -> String {
         if let d = json.data(using: .utf8), let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any], let v = o.values.compactMap({ $0 as? String }).first { return v }
         return json.trimmingCharacters(in: CharacterSet(charactersIn: "{}\" "))

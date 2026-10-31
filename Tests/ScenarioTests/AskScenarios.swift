@@ -11,14 +11,14 @@ import Proactive
 
     // 1 ────────────────────────────────────────────────────────────────────────────────────────────
 
-    /// EXPECTED: Meera asks on Monday and the user says nothing, so Monday night the ask is open and a card
+    /// EXPECTED: Meena asks on Monday and the user says nothing, so Monday night the ask is open and a card
     /// asks the user to reply. The user answers on Tuesday, so Tuesday night the ask is answered and no card
     /// is made — the thing the card existed for has happened.
     @Test func askedTodayAnsweredTomorrow() async {
-        let w = World([.direct("whatsapp:11", "Meera Joshi", handle: "whatsapp:+919810011001")])
+        let w = World([.direct("whatsapp:11", "Meena Joshi", handle: "whatsapp:+919000000709")])
         // What the brain wrote about her before tonight: one bullet that is still news, one from July that is not.
-        w.write(note: "Meera Joshi", """
-        # Meera Joshi
+        w.write(note: "Meena Joshi", """
+        # Meena Joshi
 
         ## About
         - Architect on the Bandra flat
@@ -32,26 +32,26 @@ import Proactive
         ## Earlier
         """)
         w.say("whatsapp:11", "hey, can you send me the revised floor plan?", day: 1, at: 11)
-        let n1 = await w.night(1, judge: JudgeScript(cards: [.proposed("Send Meera the revised floor plan", to: "Meera Joshi",
+        let n1 = await w.night(1, judge: JudgeScript(cards: [.proposed("Send Meena the revised floor plan", to: "Meena Joshi",
                                                                       why: "She asked yesterday and you have not replied")]))
         #expect(n1.openAsks.count == 1, n1.summary)
-        #expect(n1.ask(from: "Meera Joshi")?.isAnswered == false, n1.summary)
-        #expect(n1.cardTitles == ["Send Meera the revised floor plan"], n1.summary)
-        #expect(n1.lines("Meera Joshi").contains { $0.contains("⏳") && $0.contains("no reply yet") }, "\(n1.lines("Meera Joshi"))")
+        #expect(n1.ask(from: "Meena Joshi")?.isAnswered == false, n1.summary)
+        #expect(n1.cardTitles == ["Send Meena the revised floor plan"], n1.summary)
+        #expect(n1.lines("Meena Joshi").contains { $0.contains("⏳") && $0.contains("no reply yet") }, "\(n1.lines("Meena Joshi"))")
         // The note keeps its shape around the block: the bullet that is still news stays under Now, the one from
         // July is two months old and has gone down to Earlier as a clause on its month's line.
-        #expect(n1.nowBullets["Meera Joshi"] == ["- Waiting on the revised floor plan from the contractor (2026-09-06)"],
-                "\(n1.nowBullets["Meera Joshi"] ?? [])")
-        let note = w.notes["Meera Joshi"] ?? ""
+        #expect(n1.nowBullets["Meena Joshi"] == ["- Waiting on the revised floor plan from the contractor (2026-09-06)"],
+                "\(n1.nowBullets["Meena Joshi"] ?? [])")
+        let note = w.notes["Meena Joshi"] ?? ""
         #expect(note.contains("- 2026-07 — Took over the Bandra flat from Rahul"), "\(note)")
-        #expect(note.hasPrefix("# Meera Joshi\n\n<!-- brownie:status -->"), "the block sits right under the title\n\(note)")
+        #expect(note.hasPrefix("# Meena Joshi\n\n<!-- brownie:status -->"), "the block sits right under the title\n\(note)")
 
         w.say("whatsapp:11", "sending the revised floor plan now, the balcony is 20cm wider", mine: true, day: 2, at: 9)
         let n2 = await w.night(2)
-        #expect(n2.ask(from: "Meera Joshi")?.outcome == .answered, n2.summary)
+        #expect(n2.ask(from: "Meena Joshi")?.outcome == .answered, n2.summary)
         #expect(n2.openAsks.isEmpty, n2.summary)
         #expect(n2.cards.isEmpty, n2.summary)
-        #expect(n2.lines("Meera Joshi").contains { $0.contains("✅") && $0.contains("you replied") }, "\(n2.lines("Meera Joshi"))")
+        #expect(n2.lines("Meena Joshi").contains { $0.contains("✅") && $0.contains("you replied") }, "\(n2.lines("Meena Joshi"))")
     }
 
     // 2 ────────────────────────────────────────────────────────────────────────────────────────────
@@ -59,7 +59,7 @@ import Proactive
     /// EXPECTED: nothing is said on Monday, so Monday night has no ask and no card at all. Sandeep asks on
     /// Tuesday, so Tuesday night has one open ask and one card.
     @Test func nothingTodayAskedTomorrow() async {
-        let w = World([.direct("imessage:22", "Sandeep Rao", handle: "imessage:+919810022002")])
+        let w = World([.direct("imessage:22", "Sandeep Rao", handle: "imessage:+919000000711")])
         let n1 = await w.night(1)
         #expect(n1.asks.isEmpty && n1.cards.isEmpty && n1.loops.isEmpty, n1.summary)
         #expect(n1.lines("Sandeep Rao").isEmpty, "a person with nothing between you gets no block")
@@ -85,7 +85,7 @@ import Proactive
     /// answer on Thursday is never paired with it.
     @Test(.disabled("half-fixed: \"oh no\" no longer reads as declined, but a reply the rules cannot read still closes the ask by benefit of the doubt, so day 3 needs the reader the harness does not run"))
     func answeredThreeDaysLaterAfterUnrelatedChat() async {
-        let w = World([.direct("whatsapp:33", "Farah Siddiqui", handle: "whatsapp:+919810033003")])
+        let w = World([.direct("whatsapp:33", "Farah Siddiqui", handle: "whatsapp:+919000000712")])
         w.say("whatsapp:33", "what's the final number on the Baroda quotation?", day: 1, at: 10)
         let n1 = await w.night(1)
         #expect(n1.openAsks.count == 1, n1.summary)
@@ -115,36 +115,36 @@ import Proactive
     /// `promised` and stays open, and the note says "you said you would". The real answer comes on Tuesday, and
     /// Tuesday night the ask is answered, the promise replaced by what actually happened.
     @Test func checkingNowThenTheRealAnswer() async {
-        let w = World([.direct("whatsapp:44", "Nitesh Kumar", handle: "whatsapp:+919810044004")])
+        let w = World([.direct("whatsapp:44", "Lokesh Kadri", handle: "whatsapp:+919000000713")])
         w.say("whatsapp:44", "is the staging database back up?", day: 1, at: 15)
         w.say("whatsapp:44", "checking now, give me an hour", mine: true, day: 1, at: 15.2)
         let n1 = await w.night(1)
-        #expect(n1.ask(from: "Nitesh Kumar")?.outcome == .promised, "“checking now, give me an hour” is a promise — \(n1.line)")
+        #expect(n1.ask(from: "Lokesh Kadri")?.outcome == .promised, "“checking now, give me an hour” is a promise — \(n1.line)")
         #expect(n1.openAsks.count == 1, "a promise leaves the question open — \(n1.line)")
-        #expect(n1.lines("Nitesh Kumar").contains { $0.contains("⏳") && $0.contains("you said you would") }, "\(n1.lines("Nitesh Kumar"))")
+        #expect(n1.lines("Lokesh Kadri").contains { $0.contains("⏳") && $0.contains("you said you would") }, "\(n1.lines("Lokesh Kadri"))")
 
         w.say("whatsapp:44", "staging is back up, the replica had run out of disk", mine: true, day: 2, at: 9)
         let n2 = await w.night(2)
-        #expect(n2.ask(from: "Nitesh Kumar")?.outcome == .answered, "the answer replaces the promise — \(n2.line)")
+        #expect(n2.ask(from: "Lokesh Kadri")?.outcome == .answered, "the answer replaces the promise — \(n2.line)")
         #expect(n2.openAsks.isEmpty, n2.summary)
     }
 
     // 5 ────────────────────────────────────────────────────────────────────────────────────────────
 
-    /// EXPECTED: the user does the thing without saying so, and Priya writes "thanks, got it". The ask closes
+    /// EXPECTED: the user does the thing without saying so, and Tanvi writes "thanks, got it". The ask closes
     /// credited to her — `confirmedByThem`, the strongest word there is — the note says she said it's done, and
     /// no card is made to do what is already done.
     @Test func theyConfirmItThemselves() async {
-        let w = World([.direct("whatsapp:55", "Priya Nair", handle: "whatsapp:+919810055005")])
+        let w = World([.direct("whatsapp:55", "Tanvi Nair", handle: "whatsapp:+919000000714")])
         w.say("whatsapp:55", "can you add me to the Drive folder with the shoot photos?", day: 1, at: 13)
         let n1 = await w.night(1)
         #expect(n1.openAsks.count == 1, n1.summary)
 
         w.say("whatsapp:55", "thanks, got it", day: 2, at: 10)
         let n2 = await w.night(2)
-        #expect(n2.ask(from: "Priya Nair")?.outcome == .confirmedByThem, "she closed it herself — \(n2.line)")
+        #expect(n2.ask(from: "Tanvi Nair")?.outcome == .confirmedByThem, "she closed it herself — \(n2.line)")
         #expect(n2.openAsks.isEmpty && n2.cards.isEmpty, n2.summary)
-        #expect(n2.lines("Priya Nair").contains { $0.contains("✅") && $0.contains("they said it's done") }, "\(n2.lines("Priya Nair"))")
+        #expect(n2.lines("Tanvi Nair").contains { $0.contains("✅") && $0.contains("they said it's done") }, "\(n2.lines("Tanvi Nair"))")
     }
 
     // 6 ────────────────────────────────────────────────────────────────────────────────────────────
@@ -157,13 +157,13 @@ import Proactive
     /// "you said you would", and Brownie goes on waiting for a thing the user has already said no to.
     @Test
     func theUserDeclines() async {
-        let w = World([.direct("whatsapp:66", "Rohan Bakshi", handle: "whatsapp:+919810066006")])
+        let w = World([.direct("whatsapp:66", "Zubin Bakshi", handle: "whatsapp:+919000000715")])
         w.say("whatsapp:66", "can you cover the Thursday session for me?", day: 1, at: 17)
         w.say("whatsapp:66", "sorry, can't this week", mine: true, day: 1, at: 19)
         let n1 = await w.night(1)
-        #expect(n1.ask(from: "Rohan Bakshi")?.outcome == .declined, n1.summary)
+        #expect(n1.ask(from: "Zubin Bakshi")?.outcome == .declined, n1.summary)
         #expect(n1.openAsks.isEmpty && n1.cards.isEmpty, n1.summary)
-        #expect(n1.lines("Rohan Bakshi").contains { $0.contains("✅") && $0.contains("you said no") }, "\(n1.lines("Rohan Bakshi"))")
+        #expect(n1.lines("Zubin Bakshi").contains { $0.contains("✅") && $0.contains("you said no") }, "\(n1.lines("Zubin Bakshi"))")
 
         let n2 = await w.night(2)
         #expect(n2.openAsks.isEmpty && n2.cards.isEmpty, "a no stays a no — \(n2.line)")
@@ -174,11 +174,11 @@ import Proactive
     /// The same refusal without a week in it, to show where the line actually falls. This one is right, and it
     /// is what makes the scenario above a rule-order bug rather than a missing rule.
     @Test func aPlainRefusalIsRead() async {
-        let w = World([.direct("whatsapp:661", "Rohan Bakshi", handle: "whatsapp:+919810066006")])
+        let w = World([.direct("whatsapp:661", "Zubin Bakshi", handle: "whatsapp:+919000000715")])
         w.say("whatsapp:661", "can you cover the Thursday session for me?", day: 1, at: 17)
         w.say("whatsapp:661", "sorry, can't", mine: true, day: 1, at: 19)
         let n1 = await w.night(1)
-        #expect(n1.ask(from: "Rohan Bakshi")?.outcome == .declined, n1.summary)
+        #expect(n1.ask(from: "Zubin Bakshi")?.outcome == .declined, n1.summary)
         #expect(n1.openAsks.isEmpty && n1.cards.isEmpty, n1.summary)
     }
 
@@ -194,7 +194,7 @@ import Proactive
     /// is seeing.
     @Test
     func aDismissedCardDoesNotComeBack() async {
-        let w = World([.direct("whatsapp:77", "Aditya Menon", handle: "whatsapp:+919810077007")])
+        let w = World([.direct("whatsapp:77", "Aditya Menon", handle: "whatsapp:+919000000716")])
         w.say("whatsapp:77", "can you introduce me to the Tata team?", day: 1, at: 12)
         let bare = "Introduce Aditya to the Tata team", loopy = "Send Aditya the Tata contact"
         let loop = Loop.proposed("Send Aditya the Tata contact", .mine, with: "Aditya Menon", openedAt: w.at(1, 12), id: "L-tata")
@@ -222,7 +222,7 @@ import Proactive
     /// nothing remembers that this exact thing was done nineteen hours ago.
     @Test
     func aCardMarkedDoneDoesNotComeBack() async {
-        let w = World([.direct("whatsapp:88", "Kabir Shah", handle: "whatsapp:+919810088008")])
+        let w = World([.direct("whatsapp:88", "Kabir Shah", handle: "whatsapp:+919000000717")])
         w.say("whatsapp:88", "please send the signed NDA when you get a minute", day: 1, at: 10)
         w.say("whatsapp:88", "and can we do the demo Thursday?", day: 1, at: 10.1)
         let bare = "Send Kabir the signed NDA", loopy = "Book the Thursday demo slot"

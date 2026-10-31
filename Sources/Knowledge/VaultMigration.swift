@@ -41,7 +41,7 @@ public enum VaultMigration {
     }
 
     /// The one-time pass that takes the user out of their own People folder. A People note whose title is the user
-    /// under any spelling ("Vivek Upreti.md"), or opens with a self name and a dash ("Vivek Upreti — Career Materials
+    /// under any spelling ("Ishan Shirke.md"), or opens with a self name and a dash ("Ishan Shirke — Career Materials
     /// (Jul–Aug 2026).md"), is about the user, not about a person: it moves to `Life/` under the title with the name
     /// gone ("Life/Career Materials (Jul–Aug 2026).md" — never over a note already there, " 2" is added instead), its
     /// front-matter becomes a topic's, and the registry record that claimed it (or that carries a self name) goes.

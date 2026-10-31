@@ -1,7 +1,8 @@
-# Truncated SHA-256 of values scrubbed from this repository's history.
-# One per line. The plaintext is deliberately absent: the whole point of the scrub was to
-# remove it. Add an entry with:  printf '%s' "<value>" | shasum -a 256 | cut -c1-12
-# Checked by Scripts/no-real-data.sh against the lower-cased words and digit runs a change adds.
+# Truncated SHA-256 of values scrubbed from this repository and its history.
+# The plaintext is deliberately absent: removing it was the point. Add an entry with
+#   printf '%s' "<value>" | shasum -a 256 | cut -c1-12
+# Scripts/no-real-data.sh hashes the lower-cased words and digit runs a change ADDS and
+# compares. No name in CONTRIBUTING.md's fixture cast appears here, by assertion.
 
 6ce819aced79
 d549a5f531a6
@@ -10,44 +11,47 @@ d549a5f531a6
 175fe25e8763
 fa4f7155e110
 aa27749c8dbf
-f164d4524e76
 dfb62ced17bd
 55cdd7079d61
 42b5bf6a3fa5
 6bc9e70e253b
+a6eac1a0ae42
+28c5f19f166a
+5f4df959a115
+2019e79a05ec
 3bbed2548efb
 6292fba12d2f
 1d590e170a17
 5eb4f18ad61a
 d9c08cf3e588
-5f4df959a115
 e6ea72f28483
+151eebb0dd1d
+dae35151fe2b
+ff06be44c7e8
+70c64570680d
+49e60a7c53c5
 4dee87cbaa15
 38b40420323a
 f975b1ec21e6
 9d800b766e83
 3ad26c5abab8
 34d92b02315b
-151eebb0dd1d
 dff65f6d4be6
 9457d4f7abce
 18f300fca029
 dd59c6132089
 cc2be21faaba
-70c64570680d
-49e60a7c53c5
 209e67c3bd07
 a60b0f3ad884
 1cf7485db9d6
 1814921c99a5
 77a63afd53c9
 40a90d8f6156
-94393237ac40
-abd9713bd48b
 00db602fcd2f
 59017cc320fe
 601195ca7406
 011b18bb30c3
+92b5072176e7
 690952676030
 1889001adff8
 c0531b6522b4

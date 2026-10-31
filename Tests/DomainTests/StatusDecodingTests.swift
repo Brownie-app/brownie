@@ -14,7 +14,7 @@ import Foundation
         #expect(back == l, "and it round-trips unchanged")
     }
     @Test func aLapsedLoopRoundTrips() throws {
-        var l = Loop(id: "L2", direction: .theirs, person: "Karan", what: "villa share", quote: "", sourceLabel: "s", due: nil, openedAt: Date(timeIntervalSince1970: 1_700_000_000))
+        var l = Loop(id: "L2", direction: .theirs, person: "Devan", what: "villa share", quote: "", sourceLabel: "s", due: nil, openedAt: Date(timeIntervalSince1970: 1_700_000_000))
         l.status = .lapsed; l.lapsedAt = Date(timeIntervalSince1970: 1_708_000_000); l.closedAt = l.lapsedAt; l.closedBy = "lapsed"
         let json = String(data: try JSONEncoder().encode(l), encoding: .utf8)!
         #expect(json.contains("\"status\":\"lapsed\"") && json.contains("\"closedBy\":\"lapsed\""))
@@ -31,7 +31,7 @@ import Foundation
     }
     @Test func anOldAskWithoutLapsedAtDecodes() throws {
         let json = """
-        {"id":"ask-1","person":"Nitesh","bucket":{"rawValue":"whatsapp:1"},"askedAt":780000000,"question":"beer?","answeredAt":780001000,"reply":"yes","addressed":true}
+        {"id":"ask-1","person":"Lokesh","bucket":{"rawValue":"whatsapp:1"},"askedAt":780000000,"question":"beer?","answeredAt":780001000,"reply":"yes","addressed":true}
         """
         let a = try JSONDecoder().decode(Ask.self, from: Data(json.utf8))
         #expect(a.lapsedAt == nil && a.isAnswered && !a.isLapsed && !a.isOpen)

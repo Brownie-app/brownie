@@ -5,7 +5,7 @@ import Platform
 // MARK: - What an evidence label points at
 
 /// A card's evidence names where a fact came from. The brain writes the labels in its own words
-/// ("WhatsApp summary #1 · Kanika Pandey Loadmill", "People/Karan.md", "Recording · Meera call · 03:12");
+/// ("WhatsApp summary #1 · Lalita Pathak Tideline", "People/Devan.md", "Recording · Meena call · 03:12");
 /// this reads them back into something the app can open.
 public enum EvidenceRef: Equatable, Sendable {
     case chat(app: String, name: String)      // app: whatsapp | imessage | telegram | slack | teams
@@ -42,12 +42,12 @@ public enum EvidenceRef: Equatable, Sendable {
         return .unknown(s)
     }
 
-    /// "WhatsApp with Nayan" → "Nayan".
+    /// "WhatsApp with Nayra" → "Nayra".
     static func afterWith(_ s: String) -> String? {
         guard let r = s.range(of: " with ", options: .caseInsensitive) else { return nil }
         return String(s[r.upperBound...])
     }
-    /// "nayan bsb (+919034935256)" → "nayan bsb".
+    /// "nayra bsb (+919000000222)" → "nayra bsb".
     public static func cleanName(_ n: String) -> String {
         var t = n
         if let r = t.range(of: "(") { t = String(t[..<r.lowerBound]) }
