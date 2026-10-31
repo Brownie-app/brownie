@@ -14,6 +14,10 @@ struct BrownieApp: App {
     // discovery pass twice, milliseconds apart.
     @StateObject private var model: AppModel
     @StateObject private var hands: HandsController
+    /// On the App struct, not the window's content, so it survives the window being closed and reopened from
+    /// the menu bar. Brownie keeps running after its last window closes — that is not a launch, and should not
+    /// bring the launch screen back.
+    @State private var launching = true
 
     init() {
         let m = AppModel()
@@ -24,7 +28,15 @@ struct BrownieApp: App {
     var body: some Scene {
         Window("Brownie", id: "main") {
             Themed {
-                if model.onboardingDone { RootView() } else { OnboardingView() }
+                ZStack {
+                    if model.onboardingDone { RootView() } else { OnboardingView() }
+                    if launching { LaunchScreen().transition(.opacity) }
+                }
+                // The app renders underneath the whole time, so bootstrap is not held up by this — only shown over.
+                .task {
+                    try? await Task.sleep(for: LaunchScreen.hold)
+                    withAnimation(.easeOut(duration: 0.4)) { launching = false }
+                }
             }
             .environmentObject(model)
             .sheet(isPresented: $hands.showCommandBar) { Themed { CommandBar(controller: hands) }.environmentObject(model) }
