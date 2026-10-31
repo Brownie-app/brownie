@@ -221,3 +221,78 @@ import LocalSources
         #expect(await c.get(60) == nil)
     }
 }
+
+/// UNIT. Finding the mail the user sent, and keeping it apart from the mail they received.
+///
+/// An ask closes on the user's own reply, and a reply lives in the Sent mailbox — never in INBOX. Reading only
+/// INBOX gives Brownie the question and never the answer, so every ask opens and then nags forever. These are
+/// the two things that have to hold for a reply to close the ask it answers.
+@Suite struct MailSentMailboxTests {
+
+    let greeting = "* OK ready\r\n"
+
+    @Test func theSentMailboxIsFoundByItsSpecialUseAttribute() async throws {
+        let t = FakeIMAP(greeting + """
+        * LIST (\\HasNoChildren) "/" "INBOX"\r
+        * LIST (\\HasNoChildren \\Sent) "/" "[Gmail]/Sent Mail"\r
+        * LIST (\\HasNoChildren \\Trash) "/" "[Gmail]/Bin"\r
+        a001 OK Success\r\n
+        """)
+        let s = IMAPSession(transport: t)
+        try await s.connect(host: "h", port: 993)
+        #expect(try await s.sentMailbox() == "[Gmail]/Sent Mail", "RFC 6154 names it, whatever the folder is called")
+    }
+
+    @Test func aServerWithoutSpecialUseIsFoundByName() async throws {
+        let t = FakeIMAP(greeting + "* LIST (\\HasNoChildren) \"/\" \"INBOX\"\r\n* LIST (\\HasNoChildren) \"/\" \"Sent Items\"\r\na001 OK done\r\n")
+        let s = IMAPSession(transport: t)
+        try await s.connect(host: "h", port: 993)
+        #expect(try await s.sentMailbox() == "Sent Items", "Outlook calls it this and publishes no attribute")
+    }
+
+    @Test func aServerThatKeepsNoSentMailSaysSoRatherThanGuessing() async throws {
+        let t = FakeIMAP(greeting + "* LIST (\\HasNoChildren) \"/\" \"INBOX\"\r\n* LIST (\\HasNoChildren) \"/\" \"Archive\"\r\na001 OK done\r\n")
+        let s = IMAPSession(transport: t)
+        try await s.connect(host: "h", port: 993)
+        #expect(try await s.sentMailbox() == nil, "better nothing than reading Archive as if it were Sent")
+    }
+
+    @Test func theTrashIsNeverMistakenForTheSentMailbox() async throws {
+        let t = FakeIMAP(greeting + "* LIST (\\HasNoChildren \\Trash) \"/\" \"Deleted Messages\"\r\n* LIST (\\HasNoChildren \\Sent) \"/\" \"Sent Messages\"\r\na001 OK done\r\n")
+        let s = IMAPSession(transport: t)
+        try await s.connect(host: "h", port: 993)
+        #expect(try await s.sentMailbox() == "Sent Messages")
+    }
+
+    // MARK: - The two mailboxes must not collide
+
+    @Test func aUidIsOnlyUniqueInsideOneMailboxSoItIsTaggedWithOne() {
+        // INBOX 7 and Sent 7 are different messages. Untagged, the body map would hold one of them twice and a
+        // reply would come back carrying the text of the question it answers.
+        let inbox = "INBOX\u{1}7", sent = "[Gmail]/Sent Mail\u{1}7"
+        #expect(inbox != sent)
+        #expect(MailSource.mailbox(of: inbox) == "INBOX" && MailSource.uid(of: inbox) == "7")
+        #expect(MailSource.mailbox(of: sent) == "[Gmail]/Sent Mail" && MailSource.uid(of: sent) == "7")
+    }
+
+    @Test func aMailboxNameWithPunctuationInItSurvivesTheTag() {
+        for name in ["[Gmail]/Sent Mail", "INBOX.Sent", "Sent Items", "Envoyés"] {
+            let tagged = "\(name)\u{1}412"
+            #expect(MailSource.mailbox(of: tagged) == name, Comment(rawValue: name))
+            #expect(MailSource.uid(of: tagged) == "412", Comment(rawValue: name))
+        }
+    }
+
+    @Test func aSentReplyJoinsTheThreadOfTheMailItAnswers() {
+        // The whole point: the question arrives in INBOX, the answer is in Sent, and threading has to put them
+        // back together before the detector can see that the ask was answered.
+        let question = MailThreads.Message(uid: "INBOX\u{1}7", date: Date(timeIntervalSince1970: 1_788_739_200),
+                                           fields: ["subject": "the audited accounts", "message-id": "<q@x.test>", "from": "rhea@chhabra-co.test"])
+        let answer = MailThreads.Message(uid: "Sent\u{1}7", date: Date(timeIntervalSince1970: 1_788_912_000),
+                                         fields: ["subject": "Re: the audited accounts", "message-id": "<a@x.test>",
+                                                  "in-reply-to": "<q@x.test>", "from": "me@x.test"])
+        let t = MailThreads.group([question, answer])
+        #expect(t.count == 1, "one conversation, across two mailboxes")
+        #expect(t[0].messages.map(\.uid) == ["INBOX\u{1}7", "Sent\u{1}7"], "the question, then the answer")
+    }
+}

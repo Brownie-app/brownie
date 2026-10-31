@@ -100,18 +100,45 @@ public actor IMAPSession {
         return hit.dropFirst("* SEARCH".count).split(separator: " ").compactMap { Int($0) }
     }
 
-    /// Mailboxes the account has, as `LIST` reports them. Used to find where mail actually lives, since Gmail
-    /// calls the inbox INBOX but keeps everything else behind `[Gmail]/All Mail`.
-    public func list() async throws -> [String] {
+    /// A mailbox and what the server says it is for.
+    public struct Mailbox: Sendable, Equatable {
+        public let name: String
+        /// The LIST attributes, upper-cased: `\HASNOCHILDREN`, and for a SPECIAL-USE server `\SENT`, `\DRAFTS`…
+        public let attributes: Set<String>
+    }
+
+    /// Mailboxes the account has, as `LIST` reports them. Used to find where mail actually lives, since every
+    /// server names its folders differently and only the inbox is called INBOX by the standard.
+    public func list() async throws -> [Mailbox] {
         let lines = try await command("LIST \"\" \"*\"")
-        return lines.compactMap { line in
+        return lines.compactMap { line -> Mailbox? in
             guard line.hasPrefix("* LIST") else { return nil }
+            let attrs = (try? #/^\* LIST \(([^)]*)\)/#.firstMatch(in: line)).map {
+                Set(String($0.1).split(separator: " ").map { $0.uppercased() })
+            } ?? []
             // The name is the last token, quoted when it has a space in it.
+            let name: String?
             if let q = line.range(of: "\"", options: .backwards), let o = line.range(of: "\"", options: .backwards, range: line.startIndex..<q.lowerBound) {
-                return String(line[o.upperBound..<q.lowerBound])
+                name = String(line[o.upperBound..<q.lowerBound])
+            } else {
+                name = line.split(separator: " ").last.map(String.init)
             }
-            return line.split(separator: " ").last.map(String.init)
-        }.filter { !$0.isEmpty && $0 != "/" }
+            guard let name, !name.isEmpty, name != "/" else { return nil }
+            return Mailbox(name: name, attributes: attrs)
+        }
+    }
+
+    /// Where this server keeps the mail the user sent.
+    ///
+    /// It has to be found rather than assumed, and it is not optional: a reply lives here and nowhere else, so
+    /// without it Brownie sees the question it was asked and never the answer it gave — an ask that opens and
+    /// can never close. `\Sent` is the SPECIAL-USE attribute (RFC 6154) and is what most servers now publish;
+    /// the names are the fallback for the ones that do not, Gmail's localised `[Gmail]/Sent Mail` included.
+    public func sentMailbox() async throws -> String? {
+        let boxes = try await list()
+        if let flagged = boxes.first(where: { $0.attributes.contains("\\SENT") }) { return flagged.name }
+        let known = ["sent", "sent items", "sent messages", "sent mail", "[gmail]/sent mail", "inbox.sent", "inbox/sent"]
+        return boxes.first { known.contains($0.name.lowercased()) }?.name
     }
 
     /// What the server says it can do. Only one answer is acted on — `X-GM-EXT-1`, which is Gmail offering its

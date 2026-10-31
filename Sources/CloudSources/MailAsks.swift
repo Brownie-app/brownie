@@ -94,31 +94,43 @@ extension MailSource: ChatReader, AskScanning {
         guard let me = MailAccount.address?.lowercased(), !me.isEmpty else { return [] }
         let since = Calendar.current.date(byAdding: .day, value: -days, to: Date()) ?? Date()
 
-        let (heads, bodies) = try await pool.withSession { s -> ([IMAPSession.Header], [String: String]) in
-            _ = try await s.examine("INBOX")
+        let (heads, bodies) = try await pool.withSession { s -> ([MailThreads.Message], [String: String]) in
             let gmail = (try? await s.capabilities().contains("X-GM-EXT-1")) ?? false
-            // Gmail can filter its own categories; nobody else can, and a plain SINCE is the honest fallback.
-            var seqs: [Int] = []
-            if gmail { seqs = (try? await s.search(gmailRaw: "newer_than:\(days)d -category:promotions")) ?? [] }
-            if seqs.isEmpty { seqs = try await s.search(since: since) }
-            guard !seqs.isEmpty else { return ([], [:]) }
-            let heads = try await s.headers(seqs, threadIDs: gmail)
+
+            /// One mailbox's worth of headers, tagged with where they came from.
+            ///
+            /// The tag is not decoration. A UID is only unique within one mailbox, so INBOX 7 and Sent 7 are
+            /// different messages that would otherwise overwrite each other in the body map, and a reply would
+            /// come back carrying the text of the question it answers.
+            func read(_ mailbox: String) async -> [MailThreads.Message] {
+                guard (try? await s.examine(mailbox)) != nil else { return [] }
+                var seqs: [Int] = []
+                if gmail { seqs = (try? await s.search(gmailRaw: "newer_than:\(days)d -category:promotions")) ?? [] }
+                if seqs.isEmpty { seqs = (try? await s.search(since: since)) ?? [] }
+                guard !seqs.isEmpty, let heads = try? await s.headers(seqs, threadIDs: gmail) else { return [] }
+                return heads.map { MailThreads.Message(uid: "\(mailbox)\u{1}\($0.uid)", date: $0.date, fields: $0.fields, threadID: $0.threadID) }
+            }
+
+            // Both halves of the conversation. Mail the user sent lives in Sent and nowhere else, and an ask
+            // closes on the user's own reply — read only INBOX and every ask opens and then nags forever.
+            var all = await read("INBOX")
+            if let sent = try? await s.sentMailbox(), !sent.isEmpty { all += await read(sent) }
+            guard !all.isEmpty else { return ([], [:]) }
 
             // Thread first, cap second: the cap has to fall on conversations, not on messages, or a thread
             // arrives with its question read and its answer missing.
-            let threads = MailThreads.group(heads.map {
-                MailThreads.Message(uid: $0.uid, date: $0.date, fields: $0.fields, threadID: $0.threadID)
-            }).prefix(Self.askThreadCap)
-            let uids = threads.flatMap { $0.messages.map(\.uid) }
-            return (heads, try await s.messages(uids: uids, limit: Self.askBodyBytes))
+            let threads = MailThreads.group(all).prefix(Self.askThreadCap)
+            var bodies: [String: String] = [:]
+            for (mailbox, uids) in Dictionary(grouping: threads.flatMap { $0.messages.map(\.uid) }, by: { Self.mailbox(of: $0) }) {
+                guard (try? await s.examine(mailbox)) != nil else { continue }
+                let fetched = (try? await s.messages(uids: uids.map(Self.uid(of:)), limit: Self.askBodyBytes)) ?? [:]
+                for (u, raw) in fetched { bodies["\(mailbox)\u{1}\(u)"] = raw }
+            }
+            return (all, bodies)
         }
         guard !heads.isEmpty else { return [] }
 
-        let threads = MailThreads.group(heads.map {
-            MailThreads.Message(uid: $0.uid, date: $0.date, fields: $0.fields, threadID: $0.threadID)
-        }).prefix(Self.askThreadCap)
-
-        return threads.compactMap { t in
+        return MailThreads.group(heads).prefix(Self.askThreadCap).compactMap { t in
             guard let who = Self.correspondent(t, me: me) else { return nil }
             let msgs = Self.lines(t, bodies: bodies, me: me)
             guard !msgs.isEmpty else { return nil }
@@ -128,6 +140,11 @@ extension MailSource: ChatReader, AskScanning {
             return Conversation(info: info, messages: msgs)
         }
     }
+
+    /// A tagged uid is `<mailbox>\u{1}<uid>`: U+0001 because a mailbox name may contain anything printable,
+    /// `[Gmail]/Sent Mail` and `INBOX.Sent` included, but never a control character.
+    static func mailbox(of tagged: String) -> String { String(tagged.prefix { $0 != "\u{1}" }) }
+    static func uid(of tagged: String) -> String { String(tagged.drop { $0 != "\u{1}" }.dropFirst()) }
 
     /// Who the thread is with, and how many people that is besides the user. The first address in it that is
     /// not the user's own names the thread, the way a chat is named after the person in it.
