@@ -323,7 +323,7 @@ public actor PersonRegistry {
         if let h = handle, let i = records.firstIndex(where: { $0.handles.contains(h) }) { return join(i) }
         let proven = records.filter { r in r.allProofs.contains { proofs.contains($0) } }
         if let first = proven.first, let i = index(proven.dropFirst().reduce(first) { Self.keepFirst($0, $1).0 }.id) {
-            if let h = handle { log.info("\(label) (\(h)) joined \(records[i].name) by proof") }
+            if let h = handle { log.info("a label with a handle joined person \(records[i].id) by proof") }
             return join(i)
         }
         func open(pendingToward ids: [String]) -> String {
@@ -331,7 +331,7 @@ public actor PersonRegistry {
             Self.learn(label: label, into: &p)
             for id in ids { if let i = index(id) { records[i].pending.append(p.id) } }
             records.append(p)
-            if let first = ids.first, let i = index(first) { log.info("\(label) on \(p.sources.first ?? "a chat") may be \(records[i].name) of \(records[i].sources.joined(separator: ", ")) — the banner asks") }
+            if let first = ids.first, let i = index(first) { log.info("a label on \(p.sources.first ?? "a chat") may be person \(records[i].id) of \(records[i].sources.joined(separator: ", ")) — the banner asks") }
             return p.id
         }
         let key = PersonKey.normalise(label), shared = records.filter { $0.keys.contains(key) }
@@ -481,10 +481,10 @@ public actor PersonRegistry {
                     guard let k = index(kept.id), let o = index(other.id), !records[k].notSame.contains(other.id) else { continue }
                     if !records[k].pending.contains(other.id) { records[k].pending.append(other.id) }
                     if !records[o].pending.contains(kept.id) { records[o].pending.append(kept.id) }
-                    log.info("\(other.name) and \(kept.name) are one card in Contacts (\(card.name)) with a note each: the banner asks, and folds them")
+                    log.info("person \(other.id) and person \(kept.id) are one Contacts card with a note each: the banner asks, and folds them")
                     continue
                 }
-                log.info("\(other.name) and \(kept.name) are one card in Contacts (\(card.name)): merged")
+                log.info("person \(other.id) and person \(kept.id) are one Contacts card: merged")
                 merge(keep: kept.id, drop: other.id); merged += 1
                 cardsOf[kept.id, default: []].formUnion(cardsOf.removeValue(forKey: other.id) ?? [])
             }
@@ -500,8 +500,7 @@ public actor PersonRegistry {
             for other in r.pending {
                 guard let mine = cardsOf[r.id], let theirs = cardsOf[other], mine.isDisjoint(with: theirs),
                       !mine.contains(where: { m in theirs.contains { PersonKey.same(cards[m].name, cards[$0].name) } }) else { continue }
-                let names = (mine.map { cards[$0].name } + theirs.map { cards[$0].name }).joined(separator: ", ")
-                log.info("\(r.name) and \(person(other)?.name ?? other) are two cards in Contacts (\(names)): kept separate")
+                log.info("person \(r.id) and person \(other) are \(mine.count + theirs.count) separate Contacts cards: kept apart")
                 keepSeparate(r.id, other)
             }
         }

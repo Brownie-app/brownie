@@ -299,7 +299,7 @@ public actor RunCoordinator {
                 var noteDates: [String: Date] = [:]
                 for f in (try? await deps.knowledge.folders()) ?? [] { for n in f.notes { noteDates[n.relativePath] = n.updatedAt } }
                 let checked = QuietCheck.run(cards: fresh, loops: loopsNow, past: kept, asks: asks, noteUpdated: { noteDates[$0] }, fileExists: { FileManager.default.fileExists(atPath: $0) }, now: deps.clock.now(), staleDays: staleDays)
-                for d in checked.dropped { log.info("quiet check dropped “\(d.card.title)”: \(d.why)") }
+                for d in checked.dropped { log.info("quiet check dropped card \(d.card.id): \(d.why)") }
                 fresh = checked.kept
                 // Last: the word `verified` on a card. It arrives as whatever the preparer's model put in its own
                 // JSON, so nothing has ever failed itself. A card whose figures are in no message, or whose whole

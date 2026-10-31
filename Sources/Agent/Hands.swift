@@ -62,7 +62,7 @@ public actor Hands {
                 await self.count(tool.name)
                 if await self.repeats(tool.name, d) { return ToolOutput("STOP: you have done exactly this three times and the screen hasn't changed. Try a different element, or call could_not with what's blocking you.") }
                 let out = try await tool.run(d)
-                self.log.info("← \(tool.name): \(out.text.replacingOccurrences(of: "\n", with: " ⏎ ").prefix(220))")
+                self.log.info("← \(tool.name): \(out.text.count) chars")
                 if let why = await self.stalled(tool.name, d, out.text) {
                     await box.set(.couldNot(why))
                     return ToolOutput("STOP: \(why). The run is over.", endsRun: true)

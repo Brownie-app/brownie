@@ -88,6 +88,29 @@ actor TableReader: LocalModel {
         #expect(drops.first?.reason == .piiBackstop)
     }
 
+    /// The README says a sensitive item leaves "no line about it in Brownie's own logs", and
+    /// `FileLog`'s own contract says callers log counts, ids, reasons and timings only. Every line
+    /// goes out at `privacy: .public`, so it reaches the unified log and any sysdiagnose — which
+    /// makes this the difference between a claim and a guarantee. Nothing asserted it until now.
+    @Test func testSensitiveReachesNoLogLine() async throws {
+        let store = try SQLiteRunStore.inMemory()
+        // Distinctive tokens: a Verhoeff-free SSN the backstop catches, and a word that appears
+        // nowhere else in the suite, so a hit cannot be anything but this item.
+        let reader = TableReader { _ in #"{"summary":"account 123-45-6789 for Quillhaven","title":"Quillhaven filing","keep":true}"# }
+        let run = IngestRun(store: store, reader: reader, triage: try Triage(), policy: DefaultSensitivityPolicy())
+        let runID = try await store.beginRun(trigger: .test, at: Date())
+
+        LogTap.shared.start()
+        let s = try await run.read(FixtureSource(items: [item(1)]), enabledBuckets: nil, runID: runID, progress: { _ in })
+        let logged = LogTap.shared.stop()
+
+        #expect(s.sensitive == 1, "the backstop caught it")
+        for secret in ["Quillhaven", "123-45-6789"] {
+            #expect(!logged.contains { $0.contains(secret) },
+                    "“\(secret)” reached a log line: \(logged.filter { $0.contains(secret) })")
+        }
+    }
+
     @Test func testParseFailsClosed() {
         #expect(Triage.parse("I cannot judge this") == nil)
         #expect(Triage.parse(#"garbage {"summary":"x","title":"y","keep":"yes"} trailing"#)?.keep == true)

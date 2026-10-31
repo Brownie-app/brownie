@@ -37,7 +37,7 @@
 | Every byte that goes out | Listed in **What left your Mac**, byte for byte, in the app. |
 | Accounts, telemetry, crash reports | None. There is nothing to sign up for and no Brownie server. |
 
-A sensitive item — an account number, a medical detail — leaves no trace at all: not a title, not a log line. There are tests for that.
+An item the reader marks sensitive is dropped whole: no title, no summary, no card, and no line about it in Brownie's own logs — only a count, the time and which source it came from. Behind the model a deterministic backstop catches six high-risk identifier classes (US Social Security number, Luhn-valid card number, Aadhaar, PAN, passport, bank account with IFSC). There are tests for both.
 
 ## Run it
 
@@ -54,7 +54,7 @@ The first launch walks you through: downloading the reader (Gemma 4 E4B, 3.7 GB,
 For development, put your keys in `.secrets/brownie.env` (git-ignored; Debug builds read it). Gmail and Telegram need your own Google OAuth client and Telegram api_id/api_hash there — Brownie ships none. See `docs/launch-setup.md`.
 
 ```bash
-swift build && swift test          # 709 tests: cursors, atomic commit, fail-closed parsing, PII backstop, windowing
+swift build && swift test          # 832 tests: cursors, atomic commit, fail-closed parsing, PII backstop, windowing
 swift run browniectl list files ~/Documents
 swift run browniectl read files ~/Downloads   # judge a folder with the reader from Terminal
 ```
@@ -84,8 +84,8 @@ swift run browniectl read files ~/Downloads   # judge a folder with the reader f
 
 ## Invariants (tests exist for each)
 
-1. Raw data never leaves the Mac; the brain only ever sees summaries.
-2. Sensitive items leave zero trace — not a title, not a log line.
+1. Raw files, messages and mail bodies never leave the Mac. What a cloud brain receives is listed in [the privacy spec](docs/spec/09-privacy.md): reader summaries, your Markdown notes when it judges or grounds Hands, and — only while Hands is running — the frontmost app's accessibility tree, plus a screenshot if you granted Screen Recording.
+2. An item marked sensitive leaves no title, no summary, no card and no log line — a count and a source, nothing else.
 3. The reader's judgement fails closed: unparseable ⇒ dropped.
 4. Nothing is sent, paid, submitted or deleted without your tap on that step.
 5. Every card carries its evidence.

@@ -21,6 +21,7 @@ public struct Log: Sendable {
     private func emit(_ level: OSLogType, _ message: String) {
         logger.log(level: level, "\(message, privacy: .public)")
         FileLog.shared.write(category: category, level: level, message: message)
+        LogTap.shared.record(category, message)
     }
 
     /// Rotation for the app's own log folder: every `<category>.log` over `maxBytes` becomes `.log.1`, the older copies
@@ -49,6 +50,30 @@ public struct Log: Sendable {
             rotated.append(String(name.dropLast(4)))
         }
         return rotated
+    }
+}
+
+/// A tap on every line the app logs, so a test can assert what does **not** reach a log.
+///
+/// Every line is emitted at `privacy: .public`, which means it lands in the unified log and in any
+/// sysdiagnose the user ever sends to Apple — so "counts, ids, reasons and timings only" is a real
+/// guarantee rather than a style note, and it was unenforceable from outside until this existed.
+/// Off in the app: `record` does nothing until a test calls `start`.
+public final class LogTap: @unchecked Sendable {
+    public static let shared = LogTap()
+    private let lock = NSLock()
+    private var lines: [String]?
+
+    public func start() { lock.lock(); lines = []; lock.unlock() }
+
+    /// The lines emitted since `start`, and turns the tap off again.
+    public func stop() -> [String] {
+        lock.lock(); defer { lines = nil; lock.unlock() }
+        return lines ?? []
+    }
+
+    fileprivate func record(_ category: String, _ message: String) {
+        lock.lock(); lines?.append("\(category): \(message)"); lock.unlock()
     }
 }
 
