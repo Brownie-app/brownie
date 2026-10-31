@@ -17,6 +17,8 @@ public enum LoopLedger {
             // A loop that was let go is a duplicate too: it stays let go, and the judge cannot open it again as new.
             if let i = loops.firstIndex(where: { ($0.status == .open || $0.status == .lapsed) && same($0, f) }) {
                 if loops[i].status == .open, loops[i].dueDate == nil, let d = f.dueDate { loops[i].dueDate = d }   // a date learned later still counts
+            } else if loops.contains(where: { justClosed($0, f, now: now) }) {
+                continue   // the same promise, found again days after it was done — see `justClosed`
             } else { loops.append(f) }
         }
         for it in items where it.cameBack == true {
@@ -26,6 +28,35 @@ public enum LoopLedger {
         // Keep the ledger small: closed loops fall off after 30 days; let-go ones after 90, long enough never to be found again as new.
         loops.removeAll { l in l.status != .open && now.timeIntervalSince(l.closedAt ?? l.openedAt) > (l.status == .lapsed ? 90 : 30) * 86400 }
         return loops
+    }
+
+    /// The wording two loops need in common before one counts as the other coming back from the dead. Higher
+    /// than `same` asks of two open loops, because this one overrules a closure the user may have earned.
+    public static let reopenOverlap = 0.7
+
+    /// A promise that was already done, reported again by a judge that cannot know it was.
+    ///
+    /// `merge` compares a new loop only against the open and the lapsed ones. That is deliberate — a thing
+    /// genuinely promised again *is* a new promise, and `testClosedLoopDoesNotBlockANewOne` has pinned it from
+    /// the start. But it also means a closed promise can be found a second time and opened as new, because the
+    /// judge is shown only the open ledger and reads a week of summaries every night, so the message that
+    /// opened the first one is still in front of it. One real ledger carried the same container image promised
+    /// three times and closed three times, the same hosting twice, the same update to Tom twice.
+    ///
+    /// Telling the two apart needs something neither the old code nor the judge had: which message it came
+    /// from. With spans there is an exact answer — **the same message is a re-find, a different message is a
+    /// new promise** — and that is the whole rule. Without them there is no answer, and the old behaviour
+    /// stands: a loop with no span blocks nothing, so a Mac that cannot read its chats back behaves today
+    /// exactly as it did before any of this.
+    static func justClosed(_ existing: Loop, _ found: Loop, now: Date) -> Bool {
+        // Closed loops already fall off after thirty days, which bounds this without a second window.
+        guard existing.status == .closed else { return false }
+        guard let mine = existing.span, let theirs = found.span, mine.messageID == theirs.messageID else { return false }
+        guard existing.direction == found.direction, PersonKey.sameKey(existing.person, found.person) else { return false }
+        let wa = words(existing.what), wb = words(found.what)
+        guard !wa.isEmpty, !wb.isEmpty else { return existing.what == found.what }
+        // One message can carry two promises; the wording still has to agree.
+        return Double(wa.intersection(wb).count) / Double(min(wa.count, wb.count)) >= reopenOverlap
     }
 
     public static func same(_ a: Loop, _ b: Loop) -> Bool {

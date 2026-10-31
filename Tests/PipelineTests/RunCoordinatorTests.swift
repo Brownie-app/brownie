@@ -71,9 +71,16 @@ import Support
 
     struct World {
         let dir: URL, kb: FileKnowledgeStore, store: SQLiteRunStore
-        func coordinator(_ brain: Fake, selfNames: [String] = []) -> RunCoordinator {
+        func coordinator(_ brain: Fake, selfNames: [String] = [], messages: [String: [String]] = [:]) -> RunCoordinator {
             var deps = RunCoordinator.Dependencies(store: store, knowledge: kb, sources: [], reader: Reader(), brain: brain, policy: DefaultSensitivityPolicy(), clock: RunCoordinatorTests.clock, selfNames: selfNames)
             deps.diskHousekeeping = false
+            // What the chats really say, by person. Empty — the default everywhere else in this file — stands for
+            // a Mac whose sources cannot be read back, and must leave every claim exactly as the judge wrote it.
+            if !messages.isEmpty {
+                deps.sourceLines = { person, _ in
+                    (messages[person] ?? []).enumerated().map { SourceLine(id: "\(person)-\($0.offset)", said: RunCoordinatorTests.today, text: $0.element) }
+                }
+            }
             return RunCoordinator(deps)
         }
         /// `n` kept summaries an hour apart inside the last day, each `bytes` long, titled "T<tag><i>".
@@ -239,6 +246,56 @@ import Support
         #expect(ledger.last?.due == "September6" && ledger.last?.dueDate == cal.date(from: DateComponents(year: 2026, month: 9, day: 6, hour: 9)), "the words stay; the date is read from them")
         let registry = PersonRegistry(vault: w.kb.rootURL); await registry.load()
         #expect(await registry.people().map(\.name).sorted() == ["Lalita Pathak", "Noor"], "no record was opened for the user")
+    }
+
+    /// SYSTEM. A whole night, with the judge inventing a figure — the exact shape of the loop that prompted all
+    /// of this: "Call Asha Mehra back about the potential 9 lakh funding", from a chat in which nobody
+    /// mentioned a number. The night reads the chat back, cuts the clause, keeps the promise, and files the
+    /// line it came from beside it.
+    @Test func aFigureTheMessagesNeverMentionDoesNotReachTheLedger() async throws {
+        let w = try Self.world()
+        try await w.seed(2, tag: "a")
+        let brain = Fake()
+        brain.judgeReply = #"""
+        {"action_items":[],"loop_updates":[],"loops":[
+          {"person":"Asha Mehra","direction":"mine","what":"Call Asha Mehra back about the potential 9 lakh funding","quote":"Asha asked the user to call them back","source":"WhatsApp · 27 Oct","due":null,"dueISO":null,"owner":null},
+          {"person":"Ravi","direction":"mine","what":"Send Ravi the 40% deposit","quote":"q","source":"WhatsApp · Tue","due":null,"dueISO":null,"owner":null}
+        ]}
+        """#
+        let chats = ["Asha Mehra": ["Hi, tried calling you. Please call back when free.",
+                                        "Sorry, was travelling for work — will call you back."],
+                     "Ravi": ["can you send the 40% deposit this week?"]]
+        #expect(await w.coordinator(brain, messages: chats).run(trigger: .test, onEvent: { _ in }) == .ran(cards: 0))
+
+        let ledger = try JSONDecoder().decode([Loop].self, from: Data((try await w.store.value(SettingKey.loops) ?? "").utf8))
+        #expect(ledger.count == 2)
+        let asha = try #require(ledger.first { $0.person == "Asha Mehra" })
+        #expect(asha.what == "Call Asha Mehra back", "the promise was real and stays; the figure was not and goes")
+        #expect(!asha.what.contains("9 lakh"))
+        let span = try #require(asha.span, "and it now carries the message it came from, not a retelling of it")
+        #expect(chats["Asha Mehra"]!.contains(span.text))
+
+        let ravi = try #require(ledger.first { $0.person == "Ravi" })
+        #expect(ravi.what == "Send Ravi the 40% deposit", "a figure that was said is left exactly alone")
+    }
+
+    /// The other half of the same contract, and the one that decides whether this is safe to ship: a Mac whose
+    /// chats cannot be read — no Full Disk Access, a source signed out, a promise made on a recording — must
+    /// behave precisely as it did before any of this existed.
+    @Test func aNightThatCannotReadTheChatsChangesNothingAtAll() async throws {
+        let w = try Self.world()
+        try await w.seed(2, tag: "a")
+        let brain = Fake()
+        brain.judgeReply = #"""
+        {"action_items":[],"loop_updates":[],"loops":[
+          {"person":"Asha Mehra","direction":"mine","what":"Call Asha Mehra back about the potential 9 lakh funding","quote":"q","source":"WhatsApp · 27 Oct","due":null,"dueISO":null,"owner":null}
+        ]}
+        """#
+        #expect(await w.coordinator(brain).run(trigger: .test, onEvent: { _ in }) == .ran(cards: 0))
+        let ledger = try JSONDecoder().decode([Loop].self, from: Data((try await w.store.value(SettingKey.loops) ?? "").utf8))
+        #expect(ledger.map(\.what) == ["Call Asha Mehra back about the potential 9 lakh funding"],
+                "unproven is not disproven: a chat Brownie cannot open must never be able to edit a promise")
+        #expect(ledger[0].span == nil)
     }
 
     @Test func mergedRowsSurviveAJudgeThatFailsAndAreJudgedTheNextNightEvenWithNothingNew() async throws {

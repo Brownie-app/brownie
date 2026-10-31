@@ -30,6 +30,31 @@ public struct Evidence: Codable, Sendable, Equatable {
     public let when: String
     public let text: String
     public init(source: String, when: String, text: String) { self.source = source; self.when = when; self.text = text }
+
+    /// Whether this came from the world or from Brownie.
+    ///
+    /// A card carrying two pieces of evidence looks twice as well-founded as one carrying a single piece, and
+    /// the preparer has been marking cards `verified` on exactly that reasoning. It is only true when the two
+    /// are independent. A People note is written by Brownie from the summaries; cite a note beside the summary
+    /// it was written from and you have quoted one source twice. The audit found a card marked `verified` whose
+    /// whole case was a summary and the note made out of it, both repeating an amount nobody had mentioned.
+    public enum Provenance: Sendable, Equatable { case raw, derived }
+
+    /// Notes, the loops ledger and the status blocks are Brownie's own writing; a chat, a mail, a file, a
+    /// recording or a calendar entry is the world's. Judged from the label the brain wrote, which is the only
+    /// thing an evidence item carries about where it came from.
+    ///
+    /// Deliberately not `EvidenceRef.parse`, which lives in `LocalSources` and answers a different question —
+    /// what to *open* when the user taps the line. The two agree on notes and the ledger, which is all this
+    /// needs; keep them in step if either grows a new kind of source.
+    public var provenance: Provenance {
+        let s = source.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if s.hasSuffix(".md") || s.hasPrefix("people/") || s.hasPrefix("groups/") || s.hasPrefix("household/") || s.hasPrefix("read/") { return .derived }
+        if s.contains("loops ledger") || s == "loop" || s.hasPrefix("loop ·") || s.hasPrefix("loop:") { return .derived }
+        if s.contains("brownie") || s.contains("your notes") || s.contains("status block") { return .derived }
+        return .raw
+    }
+    public var isDerived: Bool { provenance == .derived }
 }
 
 /// Routing only. The executor runs it; it never contains anything the user hasn't seen as the draft.

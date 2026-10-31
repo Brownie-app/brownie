@@ -568,7 +568,8 @@ final class AppModel: ObservableObject {
         let logger = sendLogger
         coordinator = RunCoordinator(.init(store: store, knowledge: knowledge, sources: sourcesForRun, reader: reader, brain: brain, policy: policy,
                                             calendarText: { CalendarSource.judgeContext() }, stage: { p, d in logger.setPurpose(p, detail: d) }, selfNames: selfNames, contacts: Self.contactCards,
-                                            bucketProofs: { [weak self] in await self?.bucketProofs() ?? [:] }))
+                                            bucketProofs: { [weak self] in await self?.bucketProofs() ?? [:] },
+                                            sourceLines: SourceLines.lookup))
     }
     /// The address book's cards for the registry, once Contacts is allowed (never a prompt from here).
     static let contactCards: @Sendable () async -> [ContactCard] = { ContactLookup.cards() }

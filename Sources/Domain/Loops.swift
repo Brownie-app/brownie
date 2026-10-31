@@ -20,8 +20,14 @@ public struct Loop: Codable, Sendable, Identifiable, Equatable {
     public let direction: LoopDirection
     public let person: String
     public let what: String
-    /// The line that opened it, as the reader summarised it — never the raw message.
+    /// The line that opened it, as the reader summarised it — never the raw message. Read it as the reader's
+    /// account of what was said, not as something anybody typed: it can be wrong in every way prose can be.
     public let quote: String
+    /// The message itself, read back from the source and kept verbatim — what `quote` only ever described.
+    /// Nil on a loop written before spans existed, and on one whose source could not be read back at the time:
+    /// absent means unproven, never disproven, and nothing refuses a loop for it. What it does mean is that no
+    /// amount, date or id in `what` has been checked, because there was nothing to check it against.
+    public var span: Span?
     /// "WhatsApp · Fri" — where and when it was said.
     public let sourceLabel: String
     public let due: String?
@@ -50,8 +56,8 @@ public struct Loop: Codable, Sendable, Identifiable, Equatable {
 
     public init(id: String = UUID().uuidString, direction: LoopDirection, person: String, what: String, quote: String, sourceLabel: String,
                 due: String?, dueDate: Date? = nil, status: LoopStatus = .open, openedAt: Date, noticedAt: Date? = nil, closedAt: Date? = nil, closedHow: String? = nil,
-                closedBy: String? = nil, lapsedAt: Date? = nil, firedCardIDs: [String] = [], cameBackCount: Int = 0) {
-        self.id = id; self.direction = direction; self.person = person; self.what = what; self.quote = quote; self.sourceLabel = sourceLabel
+                closedBy: String? = nil, lapsedAt: Date? = nil, firedCardIDs: [String] = [], cameBackCount: Int = 0, span: Span? = nil) {
+        self.id = id; self.direction = direction; self.person = person; self.what = what; self.quote = quote; self.sourceLabel = sourceLabel; self.span = span
         self.due = due; self.dueDate = dueDate; self.status = status; self.openedAt = openedAt; self.noticedAt = noticedAt; self.closedAt = closedAt; self.closedHow = closedHow
         self.closedBy = closedBy; self.lapsedAt = lapsedAt; self.firedCardIDs = firedCardIDs; self.cameBackCount = cameBackCount
     }
