@@ -67,6 +67,11 @@ Changing any of them inverts the assertion rather than breaking it, which is wor
 If you have a case from real data that a test should cover, keep the *shape* and change everything else: the
 name, the number, the amount, the company. The shape is the only part the test reads.
 
+Three files are exempt from the scrubbed-value check, because naming a real person is their whole
+job: `CLA.md` has to say who you are granting a licence to, `LICENSE` has to name a copyright
+holder, and `CODE_OF_CONDUCT.md` has to say who to report to. A phone number or a private address
+in them is still caught.
+
 `./Scripts/no-real-data.sh` checks the lines your change adds — run it before you push, and CI runs it on
 every pull request. It also carries hashes of the values that were scrubbed out of this repository's history,
 so reintroducing one fails the build without the repository having to name it.

@@ -289,7 +289,7 @@ public struct RecipeRunner: Sendable {
 
     public func run(_ recipe: TaughtRecipe, values: [String: String], onStep: @escaping @Sendable (String) -> Void) async -> Outcome {
         let steps = Self.substituted(recipe, values: values)
-        log.info("run “\(recipe.name)”: \(steps.count) steps, values \(values)")
+        log.info("run “\(recipe.name)”: \(steps.count) steps, \(values.count) values")
         // Rung 1: an app link does the whole thing without touching the screen.
         if recipe.method == "WhatsApp link", let msg = steps.last(where: { $0.kind == .type && !$0.target.lowercased().contains("search") })?.text {
             let person = recipe.parameters.first(where: { $0.name == "person" }).flatMap { values[$0.name] ?? $0.original } ?? steps.first(where: { $0.kind == .click && ($0.role == "Row" || $0.role == "Cell" || $0.role == "StaticText") })?.target
@@ -297,7 +297,7 @@ public struct RecipeRunner: Sendable {
             if let person, let phone = ContactLookup.phone(for: person), !phone.isEmpty {
                 let q = msg.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""
                 await MainActor.run { NSWorkspace.shared.open(URL(string: "whatsapp://send?phone=\(phone)&text=\(q)")!) }
-                log.info("whatsapp link to \(person) (\(phone))")
+                log.info("whatsapp link opened from Contacts")
                 onStep("Opened the WhatsApp chat with \(person); the message is in the box")
                 return .pausedForUser("Press Send in WhatsApp when you're ready")
             }

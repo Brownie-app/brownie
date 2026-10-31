@@ -50,18 +50,25 @@ case "${1:-}" in
 esac
 
 # Only added lines, and never this script or its own digest list — both are allowed to describe the patterns.
-added=$("${DIFF[@]}" -- . ':(exclude)Scripts/no-real-data.sh' ':(exclude)Scripts/scrubbed-digests.txt' \
-        | grep '^+' | grep -v '^+++' | sed 's/^+//')
+EXCLUDE=(':(exclude)Scripts/no-real-data.sh' ':(exclude)Scripts/scrubbed-digests.txt')
+added=$("${DIFF[@]}" -- . $EXCLUDE | grep '^+' | grep -v '^+++' | sed 's/^+//')
 [ -z "$added" ] && { echo "no added lines to check"; exit 0 }
+
+# Documents whose whole job is to name a real person: the CLA has to say who contributors are granting
+# a licence to, and a copyright line has to name a copyright holder. A fixture must never carry a real
+# name; these three must. They are exempt from the scrubbed-value check only — a phone number or a
+# private email address in them is still caught below.
+NAMES_OK=(':(exclude)CLA.md' ':(exclude)LICENSE' ':(exclude)CODE_OF_CONDUCT.md')
+added_fixtures=$("${DIFF[@]}" -- . $EXCLUDE $NAMES_OK | grep '^+' | grep -v '^+++' | sed 's/^+//')
 
 fail=0
 say() { fail=1; printf '  %s\n' "$1" }
 
 # 1. Something we scrubbed, coming back.
-if [ -s "$DIGESTS" ]; then
+if [ -s "$DIGESTS" ] && [ -n "$added_fixtures" ]; then
   # Every word and every digit run in the diff, folded the way the list was built: lower-cased, 4 characters
   # or more. Hashed one per line, then compared against the stored prefixes.
-  hits=$(print -r -- "$added" \
+  hits=$(print -r -- "$added_fixtures" \
     | tr '[:upper:]' '[:lower:]' | grep -oE '[a-z]{4,}|[0-9]{4,}' | sort -u \
     | hash_lines \
     | grep -Ff <(grep -vE '^\s*(#|$)' "$DIGESTS" | awk '{print $1}') - 2>/dev/null)
