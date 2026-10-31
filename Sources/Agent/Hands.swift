@@ -370,6 +370,10 @@ public actor Hands {
         let p = map?.toScreen(raw) ?? raw
         if let map, !map.covers(raw) { return "(\(Int(raw.x)), \(Int(raw.y))) is outside the \(Int(map.imageSize.width))×\(Int(map.imageSize.height)) screenshot — call look again and use coordinates in that image" }
         let before = session.signature(at: p)
+        // A coordinate says nothing about what it will hit, so ask the app what sits under it first.
+        if HandsGuard.clickWouldCommit(on: before.atPoint ?? "", askBefore: policy.alwaysAskBefore) {
+            return "STOP: \(before.atPoint ?? "that") commits — Hands does not press it. Leave it to the user."
+        }
         await MainActor.run { VirtualInput.click(p) }
         try? await Task.sleep(nanoseconds: 600_000_000)
         let after = session.signature(at: p)
@@ -445,7 +449,9 @@ public actor Hands {
 
     private func focusLooksIrreversible() -> Bool {
         guard let snap = session.snapshot(maxElements: 120) else { return false }
-        return snap.elements.contains { e in e.role == "Button" && policy.alwaysAskBefore.contains { e.title.lowercased().contains($0) } } && snap.app.lowercased().contains("messages")
+        return HandsGuard.returnWouldCommit(buttonTitles: snap.elements.filter { $0.role == "Button" }.map(\.title),
+                                            focusIsTextField: focused() != nil,
+                                            askBefore: policy.alwaysAskBefore)
     }
 }
 
