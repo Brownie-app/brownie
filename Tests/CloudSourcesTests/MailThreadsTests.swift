@@ -296,3 +296,77 @@ import LocalSources
         #expect(t[0].messages.map(\.uid) == ["INBOX\u{1}7", "Sent\u{1}7"], "the question, then the answer")
     }
 }
+
+/// UNIT. Who a thread is with, and which of its questions are the user's to answer.
+///
+/// Mail is the one source whose headers already say who a message was for, and the rule inherited from group
+/// chat — only a line that names you counts — throws that away. These pin the two places that matters: a
+/// thread with several people replying, and a two-person thread with somebody copied in.
+@Suite struct MailCorrespondentTests {
+
+    let me = "me@x.test"
+
+    func msg(_ uid: String, day: Int, from: String, to: String, cc: String? = nil, subject: String = "Q3 board pack",
+             id: String, inReplyTo: String? = nil) -> MailThreads.Message {
+        var f = ["subject": subject, "from": from, "to": to, "message-id": "<\(id)>"]
+        if let cc { f["cc"] = cc }
+        if let inReplyTo { f["in-reply-to"] = "<\(inReplyTo)>" }
+        return MailThreads.Message(uid: uid, date: Date(timeIntervalSince1970: 1_788_739_200 + Double(day) * 86400), fields: f)
+    }
+
+    func thread(_ messages: [MailThreads.Message]) -> MailThreads.Thread { MailThreads.group(messages)[0] }
+
+    // MARK: - Who is actually in the conversation
+
+    @Test func aThreadWhereOnlyOnePersonWritesIsAConversationWithThatPerson() {
+        // Lokesh is on To: and Tanvi on Cc:, but neither has said a word. This is Rhea's conversation.
+        let t = thread([msg("1", day: 0, from: "\"Rhea Chhabra\" <rhea@chhabra-co.test>",
+                            to: "me@x.test, lokesh@tideline.test", cc: "tanvi@tideline.test", id: "q@x.test")])
+        let who = MailSource.correspondent(t, me: me)
+        #expect(who?.name == "Rhea Chhabra")
+        #expect(who?.others == 1, "a Cc must not turn a conversation into a group")
+    }
+
+    @Test func aThreadSeveralPeopleReplyOnIsAGroup() {
+        let t = thread([
+            msg("1", day: 0, from: "\"Rhea Chhabra\" <rhea@chhabra-co.test>", to: "me@x.test, lokesh@tideline.test", id: "q@x.test"),
+            msg("2", day: 0, from: "\"Lokesh Nair\" <lokesh@tideline.test>", to: "me@x.test", id: "r1@x.test", inReplyTo: "q@x.test"),
+            msg("3", day: 1, from: "\"Tanvi Rao\" <tanvi@tideline.test>", to: "me@x.test", id: "r2@x.test", inReplyTo: "q@x.test"),
+        ])
+        let who = MailSource.correspondent(t, me: me)
+        #expect(who?.others == 3, "three people have actually spoken")
+        #expect(who?.name == "Rhea Chhabra", "named after whoever started it")
+    }
+
+    @Test func theUsersOwnAddressIsNeverOneOfTheOthers() {
+        let t = thread([
+            msg("1", day: 0, from: "\"Rhea Chhabra\" <rhea@chhabra-co.test>", to: "me@x.test", id: "q@x.test"),
+            msg("2", day: 1, from: "me@x.test", to: "rhea@chhabra-co.test", id: "a@x.test", inReplyTo: "q@x.test"),
+        ])
+        #expect(MailSource.correspondent(t, me: me)?.others == 1)
+    }
+
+    // MARK: - Whether a question in it is the user's to answer
+
+    @Test func beingOnTheToLineIsWhatAddressedMeans() {
+        let t = thread([msg("1", day: 0, from: "\"Rhea Chhabra\" <rhea@chhabra-co.test>",
+                            to: "me@x.test, lokesh@tideline.test", id: "q@x.test")])
+        let lines = MailSource.lines(t, bodies: ["1": "From: x\r\n\r\nCould you send the audited accounts?"], me: me)
+        #expect(lines.first?.toMe == true, "the header already said who it was for")
+    }
+
+    @Test func beingOnlyCopiedInIsNot() {
+        let t = thread([msg("1", day: 0, from: "\"Rhea Chhabra\" <rhea@chhabra-co.test>",
+                            to: "lokesh@tideline.test", cc: "me@x.test", id: "q@x.test")])
+        let lines = MailSource.lines(t, bodies: ["1": "From: x\r\n\r\nCould you send the audited accounts?"], me: me)
+        #expect(lines.first?.toMe == false, "a question aimed at Lokesh is not the user's to answer")
+    }
+
+    @Test func theToLineIsReadWhateverSpellingItUses() {
+        for to in ["me@x.test", "\"Me\" <me@x.test>", "lokesh@tideline.test, me@x.test", "ME@X.TEST"] {
+            let t = thread([msg("1", day: 0, from: "rhea@chhabra-co.test", to: to, id: "q@x.test")])
+            let lines = MailSource.lines(t, bodies: ["1": "From: x\r\n\r\nAnything?"], me: me)
+            #expect(lines.first?.toMe == true, Comment(rawValue: to))
+        }
+    }
+}

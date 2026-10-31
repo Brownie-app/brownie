@@ -10,6 +10,10 @@ All notable changes. Brownie follows semantic versioning once 1.0 ships; before 
 
 An ask closes on your own reply, and your replies are not in your inbox — every server keeps them in a Sent mailbox of its own naming. Brownie finds it (`\Sent`, or the handful of names servers use without it) and reads both, so the question and the answer end up in the same conversation. Reading only the inbox would have opened an ask for every mail you were sent and then nagged you about the ones you had already answered.
 
+**A thread several people are replying on is handled the way mail works, not the way a group chat does.** In a WhatsApp group a question thrown into a room of twelve is not necessarily yours, so Brownie only counts one that names you. Mail's headers have already said who a message was for: on the `To:` line is addressed to you, and merely copied in is not. A request that never says your name now opens an ask, and a question aimed at somebody else does not.
+
+And a single Cc no longer turns a conversation into a crowd. Two people in a thread counts the people who have actually written in it, not everyone on the headers — so copying in an accountant once does not quietly hold the rest of that conversation to the stricter group rule.
+
 Gmail's search syntax is available over IMAP too, via `X-GM-RAW`, so `-category:promotions` is back: a night does not read every newsletter that arrived.
 
 ## 0.3 — 11 October 2026

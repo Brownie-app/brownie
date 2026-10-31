@@ -146,26 +146,37 @@ extension MailSource: ChatReader, AskScanning {
     static func mailbox(of tagged: String) -> String { String(tagged.prefix { $0 != "\u{1}" }) }
     static func uid(of tagged: String) -> String { String(tagged.drop { $0 != "\u{1}" }.dropFirst()) }
 
-    /// Who the thread is with, and how many people that is besides the user. The first address in it that is
-    /// not the user's own names the thread, the way a chat is named after the person in it.
+    /// Who the thread is with, and how many other people are actually talking in it.
+    ///
+    /// `others` counts the people who **wrote**, not everyone on the headers. Counting the union of To and Cc
+    /// made a plain two-person thread a group the moment somebody copied in an accountant once — and a group
+    /// is held to a stricter rule about what counts as a request, so an ordinary conversation was being
+    /// quietly downgraded by a single Cc. A thread where only Rhea ever speaks is a conversation with Rhea,
+    /// however many people are copied on it.
     static func correspondent(_ t: MailThreads.Thread, me: String) -> (name: String, address: String, others: Int)? {
         var first: (String, String)?
-        var addresses = Set<String>()
+        var wrote = Set<String>(), everyone = Set<String>()
         for m in t.messages {
-            let fromAddress = MailParsing.address(m.fields["from"] ?? "")
+            let fromAddress = MailParsing.address(m.fields["from"] ?? "")?.lowercased()
             for value in [m.fields["from"], m.fields["to"], m.fields["cc"]].compactMap({ $0 }) {
                 for part in value.split(separator: ",") {
                     let piece = String(part)
                     guard let address = MailParsing.address(piece)?.lowercased(), address != me, !address.isEmpty else { continue }
-                    addresses.insert(address)
-                    if first == nil, fromAddress?.lowercased() == address {
-                        first = (MailParsing.decodeWords(MailParsing.displayName(piece)), address)
+                    everyone.insert(address)
+                    if fromAddress == address {
+                        wrote.insert(address)
+                        if first == nil { first = (MailParsing.decodeWords(MailParsing.displayName(piece)), address) }
                     }
                 }
             }
         }
-        guard let first = first ?? addresses.sorted().first.map({ (String($0.prefix { $0 != "@" }), $0) }) else { return nil }
-        return (first.0, first.1, addresses.count)
+        guard let first = first ?? everyone.sorted().first.map({ (String($0.prefix { $0 != "@" }), $0) }) else { return nil }
+        return (first.0, first.1, wrote.count)
+    }
+
+    /// The addresses on one header, lower-cased.
+    static func addresses(_ value: String?) -> [String] {
+        (value ?? "").split(separator: ",").compactMap { MailParsing.address(String($0))?.lowercased() }
     }
 
     /// The thread as chat lines, oldest first. The subject rides on the first message only, because it is
@@ -185,9 +196,12 @@ extension MailSource: ChatReader, AskScanning {
             text = String(text.prefix(4000)).trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else { continue }
             let from = MailParsing.address(m.fields["from"] ?? "")?.lowercased()
+            // On `To:` is what "addressed to you" means in mail. Merely on `Cc:` is not: that is being kept in
+            // the loop, and a question in it is somebody else's unless it names you.
+            let toMe = addresses(m.fields["to"]).contains(me)
             out.append(ChatMessage(rowID: Int64(date.timeIntervalSince1970), date: date,
                                    sender: from == me ? "Me" : MailParsing.decodeWords(MailParsing.displayName(m.fields["from"] ?? "")),
-                                   isMe: from == me, text: text))
+                                   isMe: from == me, text: text, toMe: toMe))
         }
         return out
     }

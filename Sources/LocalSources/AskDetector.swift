@@ -60,10 +60,11 @@ public enum AskDetector {
     public static func detect(_ messages: [ChatMessage], person: String, bucket: BucketID, since: Date, handle: String? = nil, judged: [String: Date] = [:],
                               isGroup: Bool = false, selfNames: [String] = []) -> [Ask] {
         var out: [Ask] = []
-        // in a group, without knowing the user's own names there is no way to tell a request to them from the chatter
-        if isGroup, selfNames.isEmpty { return [] }
+        // In a group, a request to the user has to be told apart from the chatter. Two things can say so: the
+        // source, where it knows (mail's `To:` line), or the words naming them. With neither there is no way.
+        if isGroup, selfNames.isEmpty, !messages.contains(where: \.toMe) { return [] }
         let recent = messages.filter { $0.date >= since }.sorted { $0.date < $1.date }
-        for (i, m) in recent.enumerated() where !m.isMe && isAsk(m.text) && (!isGroup || SelfNames.addressed(m.text, among: selfNames)) {
+        for (i, m) in recent.enumerated() where !m.isMe && isAsk(m.text) && (!isGroup || m.toMe || SelfNames.addressed(m.text, among: selfNames)) {
             let id = "ask-" + String("\(bucket.rawValue)|\(m.rowID)".utf8.reduce(into: UInt64(1469598103934665603)) { $0 = ($0 ^ UInt64($1)) &* 1099511628211 }, radix: 16)
             // a burst of their messages with a question in the middle: the reply that counts is the first "Me" after the burst
             let after = recent[(i + 1)...]
