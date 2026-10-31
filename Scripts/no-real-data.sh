@@ -31,7 +31,10 @@ PHONE_OK='^(91)?900000[0-9]{4}$'
 DOMAIN_OK='^(.+\.)?(test|example|invalid|localhost)$|^(.+\.)?example\.(com|org|net)$'
 # Domains that are a real service on purpose, where the fixture is the local part and the domain is the shape
 # being tested: an Apple address has to look like one. The local part still has to be invented.
-DOMAIN_SERVICE_OK='^(icloud\.com|s\.whatsapp\.net|usebrownie\.com|anthropic\.com|users\.noreply\.github\.com)$'
+# The mail providers are here for the same reason: Brownie is a mail client, so a fixture or a mockup has
+# to name imap.gmail.com or an @outlook.com address to mean anything. The identity is the local part, which
+# still has to be invented, and the digest list below still catches a real one coming back.
+DOMAIN_SERVICE_OK='^(icloud\.com|gmail\.com|googlemail\.com|outlook\.com|hotmail\.com|fastmail\.com|proton\.me|yahoo\.com|s\.whatsapp\.net|usebrownie\.com|anthropic\.com|users\.noreply\.github\.com)$'
 # Whole addresses that are deliberately real: the project's own inboxes, and senders a fixture names.
 # Plus the validator's edge fixtures — degenerate addresses that exist to prove case-fold dedupe and the
 # rejection rules. Changing one inverts its assertion rather than breaking it, which is harder to notice.

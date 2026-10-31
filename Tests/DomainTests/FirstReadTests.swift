@@ -18,7 +18,7 @@ import Foundation
     @Test func eachSourceGetsItsShapesWindow() {
         let p = FirstRead()
         for chat in ["whatsapp", "imessage", "telegram", "slack", "teams"] as [SourceID] { #expect(daysBack(p.window(for: chat, now: now)) == 90, "\(chat)") }
-        #expect(daysBack(p.window(for: "gmail", now: now)) == 30)
+        #expect(daysBack(p.window(for: "mail", now: now)) == 30)
         #expect(daysBack(p.window(for: "files", now: now)) == 180)
         #expect(daysBack(p.window(for: "notes", now: now)) == 365)
         #expect(daysBack(p.window(for: "voicememos", now: now)) == 90 && daysBack(p.window(for: "recordings", now: now)) == 90)
@@ -49,13 +49,13 @@ import Foundation
     @Test func theSettingsLineSaysWhatAFirstReadCovers() {
         var p = FirstRead()
         #expect(p.describe(for: "whatsapp") == "first read: last 90 days, up to 600 messages per direct chat and 300 per group")
-        #expect(p.describe(for: "gmail") == "first read: last 30 days, up to 300 threads, the newest 6 messages of each")
+        #expect(p.describe(for: "mail") == "first read: last 30 days, up to 300 threads, the newest 6 messages of each")
         #expect(p.describe(for: "files") == "first read: files added in the last 180 days")
         #expect(p.describe(for: "notes") == "first read: notes created in the last 365 days")
         #expect(p.describe(for: "recordings") == "first read: recordings from the last 90 days")
         #expect(p.describe(for: "calendar") == nil, "the calendar has its own window; nothing to say")
-        p.readFurtherBack("gmail")
-        #expect(p.describe(for: "gmail")?.hasPrefix("first read: last 120 days") == true)
+        p.readFurtherBack("mail")
+        #expect(p.describe(for: "mail")?.hasPrefix("first read: last 120 days") == true)
     }
 
     @Test func jsonRoundTripKeepsEveryNumberAndTheExtras() throws {

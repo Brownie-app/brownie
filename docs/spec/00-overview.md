@@ -18,7 +18,7 @@ docs were not retained and are not to be consulted during implementation — see
 | **the reader** | the on-device model (Gemma 4 E4B via LiteRT-LM). Reads and filters. Never online. |
 | **the brain** | the frontier model the user already pays for (ChatGPT/OpenAI, Claude, OpenRouter, local). Decides, writes notes, drafts. Sees summaries only. |
 | **Hands** | the computer-use agent. Acts in the user's apps. Stops before sending, paying, deleting. |
-| **source** | one app or place Brownie reads (Files, WhatsApp, iMessage, Notes, Gmail, Calendar, Slack, …) |
+| **source** | one app or place Brownie reads (Files, WhatsApp, iMessage, Notes, Mail, Calendar, Slack, …) |
 | **item** | the unit the reader judges: one file, one note, one *window* of a chat, one mail thread |
 | **summary** | the reader's short, third-person, PII-free description of a kept item |
 | **knowledge base (KB)** | the brain's synthesis of all summaries: plain Markdown files on disk + an index |

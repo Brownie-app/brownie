@@ -430,6 +430,7 @@ extension AppModel {
         case "telegram": return TelegramSource.isConfigured ? TelegramSource() : nil
         case "slack": return SlackAuth.isSignedIn ? SlackSource() : nil
         case "teams": return MicrosoftAuth.isSignedIn ? TeamsSource() : nil
+        case "mail": return MailAccount.isSignedIn ? MailSource() : nil
         default: return nil
         }
     }
@@ -618,7 +619,6 @@ extension AppModel {
             try? FileManager.default.removeItem(at: knowledge.rootURL)
             try? FileManager.default.removeItem(at: Paths.applicationSupport.appendingPathComponent("knowledge-index.sqlite"))
             try? FileManager.default.removeItem(at: Paths.applicationSupport.appendingPathComponent("Telegram"))
-            await GoogleAuth.shared.signOut()
             Keychain.wipeAll()
             try? WakeHelper.Client().uninstall()
             OvernightScheduler.setLoginItem(false)

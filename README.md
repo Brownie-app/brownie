@@ -12,7 +12,7 @@
 
 ## What it actually does
 
-**It reads at night, on this Mac.** Files (skipping code projects and bulk folders), Apple Notes, iMessage, WhatsApp Desktop, Telegram, Calendar (EventKit), Gmail (your own Google sign-in), Slack, Teams, meeting recordings transcribed by Apple's own speech engine, and work apps over MCP — Linear, GitHub, Notion, Granola presets, or any server you point it at. A small model on your GPU decides what is worth keeping. Almost everything is thrown away.
+**It reads at night, on this Mac.** Files (skipping code projects and bulk folders), Apple Notes, iMessage, WhatsApp Desktop, Telegram, Calendar (EventKit), Mail over IMAP (Gmail, iCloud, Outlook, Fastmail or any server), Slack, Teams, meeting recordings transcribed by Apple's own speech engine, and work apps over MCP — Linear, GitHub, Notion, Granola presets, or any server you point it at. A small model on your GPU decides what is worth keeping. Almost everything is thrown away.
 
 **It keeps one note per person, forever.** What they asked you, what you promised them, what is still open between you. Written by code, not by the model, so it cannot drift.
 
@@ -74,7 +74,7 @@ brew install cmake gperf openssl@3
 
 The first launch walks you through: downloading the reader (Gemma 4 E4B, 3.7 GB, public), choosing a brain (your own OpenAI / Anthropic / OpenRouter key, or a local server), picking sources, permissions, the overnight time, and the first read.
 
-For development, put your keys in `.secrets/brownie.env` (git-ignored; Debug builds read it). Gmail and Telegram need your own Google OAuth client and Telegram api_id/api_hash there — Brownie ships none. See `docs/launch-setup.md`.
+For development, put your keys in `.secrets/brownie.env` (git-ignored; Debug builds read it). Telegram needs your own api_id/api_hash there — Brownie ships none. Mail needs nothing: it is IMAP, and the user's own app password lives in their Keychain. See `docs/launch-setup.md`.
 
 ```bash
 swift build && swift test          # 832 tests: cursors, atomic commit, fail-closed parsing, PII backstop, windowing
@@ -100,7 +100,7 @@ swift run browniectl read files ~/Downloads   # judge a folder with the reader f
 | `Sources/Scheduling` | 3 AM wake, root helper with deadman, power rules |
 | `Sources/Agent` | Hands: accessibility-tree computer use with the never-press-Send policy |
 | `Sources/BrownieApp` | SwiftUI app: every screen from the design, walkthroughs, menu bar |
-| `Sources/CloudSources` | Gmail (own OAuth), generic MCP client + presets |
+| `Sources/CloudSources` | Mail over IMAP, Slack, Teams, generic MCP client + presets |
 | `Sources/TelegramSource` | Telegram over TDLib |
 | `Vendor/LiteRTLM` | Google's LiteRT-LM Swift package (Apache-2.0), manifest patched for Swift 6.0 |
 | `Vendor/tdlib` | TDLib headers; the dylibs are built locally by `Scripts/build-tdlib.sh` |

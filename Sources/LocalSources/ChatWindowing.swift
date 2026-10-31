@@ -8,8 +8,14 @@ public struct ChatMessage: Sendable, Equatable {
     public let sender: String      // "Me" for the user
     public let isMe: Bool
     public let text: String
-    public init(rowID: Int64, date: Date, sender: String, isMe: Bool, text: String) {
-        self.rowID = rowID; self.date = date; self.sender = sender; self.isMe = isMe; self.text = text
+    /// Whether the source itself says this was addressed to the user — mail's `To:` line, and nothing else so far.
+    ///
+    /// A chat has no such notion: a message in a WhatsApp group is said to the room, so the only way to tell a
+    /// request to the user from the chatter is whether it names them. Mail does have one, and ignoring it means
+    /// reading the prose of a message whose headers already said who it was for.
+    public let toMe: Bool
+    public init(rowID: Int64, date: Date, sender: String, isMe: Bool, text: String, toMe: Bool = false) {
+        self.rowID = rowID; self.date = date; self.sender = sender; self.isMe = isMe; self.text = text; self.toMe = toMe
     }
 }
 

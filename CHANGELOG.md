@@ -2,6 +2,20 @@
 
 All notable changes. Brownie follows semantic versioning once 1.0 ships; before that, minor versions may change behaviour.
 
+## Unreleased
+
+**Mail is any mailbox now, and Gmail's sign-in is gone.** Reading your mail used to mean signing in to Google, which meant Brownie needed a Google OAuth client, an annual security assessment for a restricted scope, and a refresh token that expired every seven days while the app sat in Testing — and it only ever worked for Gmail. Mail is now read over IMAP with an app password you create yourself: Gmail, iCloud, Outlook, Fastmail, Proton through its Bridge, or a work server you type in. It is read with `EXAMINE`, so a 3 am read never marks anything seen, and only the headers are fetched for mail the reader drops on its subject line.
+
+**Asks and loops from mail now work for every provider, not just Gmail.** A question someone mails you opens an ask, and your reply two days later closes it. That used to depend on Gmail's API handing back a thread id, so it only ever worked for Gmail. It turns out IMAP offers the same thing twice over: Gmail exposes `X-GM-THRID` — the identical thread id — to any IMAP client, and every other server can be threaded from the `In-Reply-To` and `References` headers mail has carried since 1982. So iCloud, Outlook, Fastmail and a work server now close their own loops, which they never could before.
+
+An ask closes on your own reply, and your replies are not in your inbox — every server keeps them in a Sent mailbox of its own naming. Brownie finds it (`\Sent`, or the handful of names servers use without it) and reads both, so the question and the answer end up in the same conversation. Reading only the inbox would have opened an ask for every mail you were sent and then nagged you about the ones you had already answered.
+
+**A thread several people are replying on is handled the way mail works, not the way a group chat does.** In a WhatsApp group a question thrown into a room of twelve is not necessarily yours, so Brownie only counts one that names you. Mail's headers have already said who a message was for: on the `To:` line is addressed to you, and merely copied in is not. A request that never says your name now opens an ask, and a question aimed at somebody else does not.
+
+And a single Cc no longer turns a conversation into a crowd. Two people in a thread counts the people who have actually written in it, not everyone on the headers — so copying in an accountant once does not quietly hold the rest of that conversation to the stricter group rule.
+
+Gmail's search syntax is available over IMAP too, via `X-GM-RAW`, so `-category:promotions` is back: a night does not read every newsletter that arrived.
+
 ## 0.3 — 11 October 2026
 
 **A free brain that actually works.** Until now every key-free option gave you a daily note and nothing else: the small reader on your Mac can't build a knowledge base, and without notes there are no cards, because a card has to be grounded in one. On a Mac running macOS 26 with Apple Intelligence turned on, Brownie can now borrow Apple's own on-device model — no key, no signup, no download of ours — and it writes real notes. Cards and drafts follow from those. "What left your Mac" still reads 0 bytes.

@@ -20,20 +20,24 @@ import Proactive
     /// Wednesday, on the same thread. Wednesday night the ask closes, credited to the reply, and the line on
     /// Rhea's note says it came from mail.
     ///
-    /// WHAT HAPPENS: nothing at all. `GmailSource` is a `Source` and nothing more — it declares no `ChatReader`
-    /// and no `AskScanning` (`Sources/CloudSources/GmailSource.swift:7`), so the nightly ask scan never asks it
-    /// for anything. No ask is ever opened from mail, so none can close. Everything downstream is fine: the same
-    /// thread read as messages gives the right ask and the right verdict, which is shown below.
+    /// WHAT HAPPENS: that, and from any mailbox rather than only Gmail. `MailSource` is a `ChatReader` and an
+    /// `AskScanning` (`Sources/CloudSources/MailAsks.swift`): one SEARCH, one header FETCH, the mailbox grouped
+    /// into conversations on this Mac, and then the same detector every other channel uses.
+    ///
+    /// The threading is the whole trick, and IMAP turns out to offer it twice. Gmail hands back `X-GM-THRID`,
+    /// the same thread id its API returns, to any client that sees `X-GM-EXT-1`. Every other server is threaded
+    /// from `In-Reply-To` and `References`, which RFC 5322 has required all along — so iCloud, Outlook and
+    /// Fastmail now carry asks too, which Gmail's API never did for them.
     @Test
-    func gmailAskAnsweredTwoDaysLater() async {
-        #expect(Self.scansAsks(GmailSource.self), "mail carries asks like any other channel")
+    func mailAskAnsweredTwoDaysLater() async {
+        #expect(Self.scansAsks(MailSource.self), "mail carries asks like any other channel")
 
         // The same thread, replayed as messages, to show the gap is the wiring and not the reading.
-        let w = World([.direct("gmail:thread-9", "Rhea Chhabra", handle: "email:rhea@chhabra-co.test")])
-        w.say("gmail:thread-9", "Could you send across the audited accounts for FY25 before the board call?", day: 1, at: 10)
+        let w = World([.direct("mail:thread-9", "Rhea Chhabra", handle: "email:rhea@chhabra-co.test")])
+        w.say("mail:thread-9", "Could you send across the audited accounts for FY25 before the board call?", day: 1, at: 10)
         let n1 = await w.night(1)
         #expect(n1.openAsks.count == 1, n1.summary)
-        w.say("gmail:thread-9", "Attaching the audited accounts for FY25 — sent from my iPhone", mine: true, day: 3, at: 7)
+        w.say("mail:thread-9", "Attaching the audited accounts for FY25 — sent from my iPhone", mine: true, day: 3, at: 7)
         let n3 = await w.night(3)
         #expect(n3.ask(from: "Rhea Chhabra")?.outcome == .answered, n3.summary)
         #expect(n3.lines("Rhea Chhabra").contains { $0.contains("✅") }, "\(n3.lines("Rhea Chhabra"))")
@@ -43,7 +47,7 @@ import Proactive
     @Test func whichSourcesCarryAsks() {
         #expect(Self.scansAsks(WhatsAppSource.self) && Self.scansAsks(iMessageSource.self), "the phone's chats")
         #expect(Self.scansAsks(SlackSource.self) && Self.scansAsks(TeamsSource.self), "work chat")
-        #expect(Self.scansAsks(GmailSource.self), "mail, read as a conversation per thread")
+        #expect(Self.scansAsks(MailSource.self), "mail, read as a conversation per thread")
     }
 
     // 16 ───────────────────────────────────────────────────────────────────────────────────────────

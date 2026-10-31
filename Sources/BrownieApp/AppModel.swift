@@ -186,7 +186,7 @@ final class AppModel: ObservableObject {
         sendLogger = SendLogger(sink: { p, model, bytes, detail, payload in try? await st.logSend(purpose: p, model: model, bytes: bytes, detail: detail, cameBack: "…", payload: payload, at: Date()) },
                                 result: { id, back in try? await st.setSendResult(id, cameBack: back) })
         knowledge = try! FileKnowledgeStore(root: Paths.knowledgeBase, indexPath: Paths.applicationSupport.appendingPathComponent("knowledge-index.sqlite").path)
-        allSources = [FilesSource(roots: FilesSource.defaultRoots), NotesSource(), iMessageSource(), WhatsAppSource(), CalendarSource(), GmailSource(), TelegramSource(), VoiceMemosSource(), RecordingsSource(), SlackSource(), TeamsSource()]
+        allSources = [FilesSource(roots: FilesSource.defaultRoots), NotesSource(), iMessageSource(), WhatsAppSource(), CalendarSource(), MailSource(), TelegramSource(), VoiceMemosSource(), RecordingsSource(), SlackSource(), TeamsSource()]
         // Which reader this Mac wants, decided once, before anything downloads. It used to be decided twice:
         // the downloader read UserDefaults (nil on a fresh install, so E4B) while the locator derived it from
         // memory (under 12 GB, so E2B). An 8 GB Mac therefore downloaded E4B and then looked for E2B for ever.
@@ -201,6 +201,10 @@ final class AppModel: ObservableObject {
     func bootstrap() async {
         try? await store.prune()
         await loadSettings()
+        // Gmail was read over Google OAuth until mail moved to IMAP. Anyone who signed in back then still has a
+        // refresh token in their Keychain that can read their mail, and no screen left to revoke it from. Deleting
+        // it is the only honest way to remove a source. Cheap and idempotent, so it just runs every start.
+        for k in ["google.refreshToken", "google.accessToken", "google.accessExpiry"] { Keychain.set(k, nil) }
         await refreshPermissions()
         // Every note gets Brownie's front-matter once; a note that has it already is not touched, so this is cheap on every start.
         let registry = PersonRegistry(vault: knowledge.rootURL, selfNames: selfNames); await registry.load()
@@ -381,12 +385,39 @@ final class AppModel: ObservableObject {
         self.set(SettingKey.enabledBuckets(source), json(set.map(\.rawValue)))
     }
 
-    func signInGoogle() {
-        Task {
-            do { try await GoogleAuth.shared.signIn(); enabledSources.insert("gmail"); set(SettingKey.enabledSources, json(enabledSources.map(\.rawValue))); await refreshSources() }
-            catch { announcement = "Google sign-in didn't complete: \(error)" }
+    /// Connects a mailbox and proves it before saying so.
+    ///
+    /// The whole point of the sheet is that the user learns now, not at 3 am, so this does the real thing:
+    /// opens the real connection, signs in with the real password, and counts what is actually there. On the
+    /// way out it either returns nil and a count, or the sentence explaining what the server refused.
+    func mailConnect(address: String, password: String, host: String?, port: UInt16?) async -> (error: String?, found: Int) {
+        let before = MailAccount.snapshot()
+        MailAccount.save(address: address, password: password, host: host, port: port)
+        let pool = MailPool()
+        do {
+            let found = try await pool.withSession { s -> Int in
+                let total = try await s.examine("INBOX")
+                return total
+            }
+            await pool.done()
+            enabledSources.insert("mail"); set(SettingKey.enabledSources, json(enabledSources.map(\.rawValue)))
+            await refreshSources()
+            return (nil, found)
+        } catch {
+            await pool.done()
+            // Put back whatever was there: a failed attempt must not log the user out of a mailbox that worked.
+            MailAccount.restore(before)
+            if case SourceError.cannotRead(let why) = error { return (why, 0) }
+            return (MailPool.explain(error as? IMAPError ?? .closed, address: address), 0)
         }
     }
+
+    func mailForget() {
+        MailAccount.forget()
+        enabledSources.remove("mail"); set(SettingKey.enabledSources, json(enabledSources.map(\.rawValue)))
+        Task { await refreshSources() }
+    }
+
     @Published var telegramAuth: TDClient.AuthState = .waitingForParameters
     func watchTelegram() {
         guard let c = TelegramSource.shared else { return }
@@ -404,8 +435,6 @@ final class AppModel: ObservableObject {
         try? p.run()
         NSApp.terminate(nil)
     }
-
-    func signOutGoogle() { Task { await GoogleAuth.shared.signOut(); await refreshSources() } }
 
     func signInSlack() {
         guard SlackAuth.isConfigured else { announcement = "Slack sign-in isn't set up in this build — paste a user token instead."; return }

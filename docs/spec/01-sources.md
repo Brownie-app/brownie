@@ -18,7 +18,7 @@ public protocol Source: Sendable {
   `.directMessage`, `.groupChat` (WhatsApp/iMessage/Telegram/Slack groups & channels), `.mail`,
   `.event` (calendar), `.ticket` (Linear/GitHub issues, PRs).
 - **`Door`** is how the data is reached: `.localDatabase` (Full Disk Access), `.localAPI`
-  (EventKit etc.), `.userCloud(OAuth)` (Gmail, Telegram, Slack…), `.mcp(server)`.
+  (EventKit etc.), `.userCloud(OAuth)` (Telegram, Slack, Teams…) and `.userCloud` by password (Mail over IMAP), `.mcp(server)`.
 - **`Bucket`** = an independent stream with its own cursor: a folder, a chat, a channel, a mailbox
   label, a project. `BucketID` is stable across runs (`"whatsapp:<chat-id>"`, `"files:<root-id>"`).
 - **`ItemKey`** = a totally-ordered key within a bucket: `(order: Double, tiebreak: String)`.
@@ -44,7 +44,7 @@ as JSON under `sources.firstRead`:
 | Shape | Sources | Window | Cap |
 |---|---|---|---|
 | chat | WhatsApp, iMessage, Telegram, Slack, Teams | last **90 days** | newest **600** messages per direct chat, **300** per group |
-| mail | Gmail | last **30 days** | **300** threads; the reader sees the newest **6** messages of a thread |
+| mail | Mail (IMAP) | last **30 days** | **300** messages; the reader sees the newest **6** messages of a thread |
 | files | Files | files **added** in the last **180 days** | (per-folder bulk rule below) |
 | notes | Apple Notes | notes **created** in the last **365 days** | — |
 | voice | Voice Memos, Meeting audio | recordings from the last **90 days** | — |
@@ -61,7 +61,7 @@ as JSON under `sources.firstRead`:
   window (`extraDays`), saves the policy, and clears the source's cursors, so its next run is a first
   read with the wider window. Items inside the old window are read once more on that run.
 - Once a bucket is complete, incremental runs are unbounded by the policy: everything newer than the
-  mark, subject to the core's per-run limits (Gmail asks for the last 7 days and lets the mark filter).
+  mark, subject to the core's per-run limits (Mail asks for the last 7 days and lets the mark filter).
 
 ## Chat windowing (shared by every chat-like source)
 
@@ -80,8 +80,8 @@ last message's row id.
 | Apple Notes | document | localDatabase | `~/Library/Group Containers/group.com.apple.notes/NoteStore.sqlite` | "notes" | (created, uuid) | Full Disk Access |
 | iMessage | dm / group | localDatabase | `~/Library/Messages/chat.db` | chat | (rowid, "") | Full Disk Access |
 | WhatsApp | dm / group | localDatabase | WhatsApp Desktop's group container `ChatStorage.sqlite` | chat | (rowid, "") | Full Disk Access; WhatsApp installed |
-| Gmail | mail | userCloud (Google OAuth, own client) | Gmail API, threads — the first-read window, then the last 7 days | label/inbox | (historyId, id) | Google sign-in |
-| Calendar | event | userCloud or localAPI (EventKit) | last 7 days + next 24 h, all events | calendar | (start, id) | Calendar permission / Google sign-in |
+| Mail | mail | userCloud (IMAP over TLS, app password in Keychain) | `SEARCH SINCE` over INBOX — the first-read window, then the last 7 days; `EXAMINE`, so nothing is marked read. Threads for the ask scan: INBOX and the Sent mailbox together (`\Sent`, else by name), joined by `X-GM-THRID` on Gmail and `In-Reply-To`/`References` elsewhere | mailbox; one bucket per thread for asks | (INTERNALDATE, uid) | the address and an app password |
+| Calendar | event | localAPI (EventKit) | last 7 days + next 24 h, all events | calendar | (start, id) | Calendar permission |
 | Telegram | dm / group | userCloud (TDLib, own account) | chats the user picks | chat | (messageId, "") | phone sign-in, API id/hash |
 | Slack | group | userCloud (OAuth) or mcp | channels the user picks | channel | (ts, "") | Slack sign-in |
 | Linear, GitHub, Notion, Granola, Drive | ticket / document | mcp (or OAuth) | user's MCP server | project/repo/workspace | (updatedAt, id) | MCP address + sign-in |

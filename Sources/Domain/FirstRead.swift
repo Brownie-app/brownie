@@ -62,7 +62,7 @@ public struct FirstRead: Sendable, Codable, Equatable {
     public static func shape(of source: SourceID) -> Shape {
         switch source.rawValue {
         case "whatsapp", "imessage", "telegram", "slack", "teams": return .chat
-        case "gmail": return .mail
+        case "mail": return .mail
         case "files": return .files
         case "notes": return .notes
         case "voicememos", "recordings": return .voice

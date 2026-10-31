@@ -3,11 +3,11 @@ import Foundation
 /// Where a credential comes from, in order: the user's Keychain (their own key or client always
 /// wins) → the founder's `.secrets/brownie.env` in Debug builds only → the app's own Info.plist,
 /// which `bundle.sh release` fills with the shipped app credentials (Telegram api_id/hash, the
-/// Google OAuth desktop client — identifiers of the app, never of a user). Users' keys never go there.
+/// Slack and Microsoft clients — identifiers of the app, never of a user). Users' keys never go there.
 public enum Secrets {
     /// The Info.plist key that holds the shipped app credentials as a dictionary.
     public static let bundledKey = "BrownieCredentials"
-    static let bundleable: Set<String> = ["GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET", "TELEGRAM_API_ID", "TELEGRAM_API_HASH", "SLACK_CLIENT_ID", "SLACK_CLIENT_SECRET", "MICROSOFT_CLIENT_ID"]
+    static let bundleable: Set<String> = ["TELEGRAM_API_ID", "TELEGRAM_API_HASH", "SLACK_CLIENT_ID", "SLACK_CLIENT_SECRET", "MICROSOFT_CLIENT_ID"]
 
     public static func value(_ key: String) -> String? {
         if let v = Keychain.get(key), !v.isEmpty { return v }

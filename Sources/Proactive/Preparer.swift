@@ -93,7 +93,7 @@ public struct Preparer: Sendable {
     public static func appName(_ s: SourceID) -> String {
         switch s.rawValue {
         case "whatsapp": return "WhatsApp"; case "imessage": return "Messages"; case "telegram": return "Telegram"; case "slack": return "Slack"; case "teams": return "Teams"
-        case "gmail": return "Gmail"; case "files": return "Files"; case "notes": return "Notes"; case "calendar": return "Calendar"; case "voicememos": return "Voice Memo"; case "recordings": return "Recording"
+        case "mail": return "Mail"; case "files": return "Files"; case "notes": return "Notes"; case "calendar": return "Calendar"; case "voicememos": return "Voice Memo"; case "recordings": return "Recording"
         default: return s.rawValue.hasPrefix("mcp:") ? String(s.rawValue.dropFirst(4)).capitalized : s.rawValue.capitalized
         }
     }

@@ -31,6 +31,7 @@ enum SourceLines {
         case "telegram": return TelegramSource.isConfigured ? TelegramSource() : nil
         case "slack": return SlackAuth.isSignedIn ? SlackSource() : nil
         case "teams": return MicrosoftAuth.isSignedIn ? TeamsSource() : nil
+        case "mail": return MailAccount.isSignedIn ? MailSource() : nil
         default: return nil
         }
     }
@@ -61,7 +62,7 @@ enum SourceLines {
         let log = Log("proactive.judge")
         let from = around.addingTimeInterval(-daysAround * 86400)
         let to = around.addingTimeInterval(daysAround * 86400)
-        for app in ["whatsapp", "imessage", "telegram", "slack", "teams"] {
+        for app in ["whatsapp", "imessage", "telegram", "slack", "teams", "mail"] {
             guard let reader = reader(app) else { continue }
             do {
                 let chats = await directory.chats(app, from: reader)

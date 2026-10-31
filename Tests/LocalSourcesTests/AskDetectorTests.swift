@@ -144,3 +144,66 @@ import Domain
         #expect(AskDetector.isAsk("can you check https://example.com/doc?id=9 today"))
     }
 }
+
+/// A thread several people are replying on, which is the shape mail arrives in and chat rarely does.
+///
+/// The group rule was written for WhatsApp, where a question thrown into a room of twelve is not necessarily
+/// yours, so it only counts a line that names you. Mail's headers have already said who a message was for, and
+/// ignoring them meant reading the prose of a message whose `To:` line was the answer.
+@Suite struct AddressedInAGroupTests {
+    let t0 = Date(timeIntervalSince1970: 1_758_000_000)
+    let selfNames = ["Lalita Pathak"]
+
+    func m(_ i: Int, from: String, _ text: String, toMe: Bool = false, me: Bool = false, mins: Double) -> ChatMessage {
+        ChatMessage(rowID: Int64(i), date: t0.addingTimeInterval(mins * 60), sender: me ? "Me" : from, isMe: me, text: text, toMe: toMe)
+    }
+    func detect(_ msgs: [ChatMessage]) -> [Ask] {
+        AskDetector.detect(msgs, person: "Rhea Chhabra", bucket: BucketID("mail:thread:q3"), since: t0.addingTimeInterval(-3600),
+                           isGroup: true, selfNames: selfNames)
+    }
+
+    @Test func aQuestionOnTheToLineIsTheUsersToAnswerEvenWhenItDoesNotNameThem() {
+        // "Could you send..." names nobody. The header already said it was for her.
+        let asks = detect([m(1, from: "Rhea Chhabra", "Could you send the audited accounts before Thursday?", toMe: true, mins: 0)])
+        #expect(asks.count == 1)
+        #expect(asks.first?.person == "Rhea Chhabra", "credited to whoever wrote it, not to whoever started the thread")
+    }
+
+    @Test func aQuestionTheUserIsOnlyCopiedOnIsSomebodyElses() {
+        #expect(detect([m(1, from: "Tanvi Rao", "Can someone confirm the auditor sign-off date?", toMe: false, mins: 0)]).isEmpty)
+    }
+
+    @Test func beingNamedStillCountsWhenOnlyCopiedIn() {
+        let asks = detect([m(1, from: "Tanvi Rao", "Lalita, can you confirm the auditor sign-off date?", toMe: false, mins: 0)])
+        #expect(asks.count == 1, "the words name her even though the headers did not")
+    }
+
+    @Test func severalPeopleAskingInOneThreadEachKeepTheirOwnAsk() {
+        let asks = detect([
+            m(1, from: "Rhea Chhabra", "Could you send the audited accounts before Thursday?", toMe: true, mins: 0),
+            m(2, from: "Lokesh Nair", "I've added the cash-flow slide.", toMe: true, mins: 240),
+            m(3, from: "Tanvi Rao", "Could you confirm the auditor sign-off date?", toMe: true, mins: 1380),
+        ])
+        #expect(asks.count == 2, "two questions, and the statement in the middle is not one")
+        #expect(Set(asks.map(\.person)) == ["Rhea Chhabra", "Tanvi Rao"])
+    }
+
+    @Test func theUsersOneReplyClosesTheQuestionsItFollows() {
+        let asks = detect([
+            m(1, from: "Rhea Chhabra", "Could you send the audited accounts before Thursday?", toMe: true, mins: 0),
+            m(3, from: "Tanvi Rao", "Could you confirm the auditor sign-off date?", toMe: true, mins: 1380),
+            m(4, from: "Me", "Accounts attached, sign-off was the 14th.", me: true, mins: 2820),
+        ])
+        #expect(asks.count == 2)
+        #expect(asks.allSatisfy { $0.answeredAt != nil }, "reply-all answers both, as it does in any group")
+    }
+
+    @Test func aGroupWithNeitherNamesNorHeadersIsStillLeftAlone() {
+        // No self names configured and no source that knows who was addressed: there is no way to tell, and
+        // guessing would open an ask for every question anyone asks anyone.
+        let asks = AskDetector.detect([m(1, from: "Tanvi Rao", "Can someone confirm the date?", mins: 0)],
+                                      person: "Tanvi Rao", bucket: BucketID("mail:thread:q3"),
+                                      since: t0.addingTimeInterval(-3600), isGroup: true, selfNames: [])
+        #expect(asks.isEmpty)
+    }
+}
