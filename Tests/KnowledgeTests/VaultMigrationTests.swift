@@ -26,6 +26,8 @@ import Platform
         let root = try fresh()
         try put("README.md", "# Me\nportrait\n", in: root, born: Date(timeIntervalSince1970: 1_788_000_000))   // 2026-08-29 UTC
         try put("People/Lalita Pathak.md", "# Lalita Pathak\nfriend\n", in: root)
+        // `gmail` is deliberate: the source was removed in favour of IMAP, and a vault written before that
+        // still names it. A migration that only understands today's source names is a migration that loses data.
         try put("Work/Tideline.md", "---\nsources: gmail, slack\nupdated: 2026-09-10T03:00:00Z\nuser_edited: true\n---\n# Tideline\n", in: root)
         try put("Groups/Founders.md", NoteMeta.fresh(path: "Groups/Founders.md", body: "# Founders\n", today: "2026-08-01").render() + "# Founders\n", in: root)
         try put("Today.md", "# Today\n", in: root)

@@ -618,7 +618,6 @@ extension AppModel {
             try? FileManager.default.removeItem(at: knowledge.rootURL)
             try? FileManager.default.removeItem(at: Paths.applicationSupport.appendingPathComponent("knowledge-index.sqlite"))
             try? FileManager.default.removeItem(at: Paths.applicationSupport.appendingPathComponent("Telegram"))
-            await GoogleAuth.shared.signOut()
             Keychain.wipeAll()
             try? WakeHelper.Client().uninstall()
             OvernightScheduler.setLoginItem(false)

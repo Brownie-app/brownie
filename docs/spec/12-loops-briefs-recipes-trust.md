@@ -31,7 +31,7 @@ On the first run on or after Sunday, once per ISO week: this week's run numbers,
 `LocalBrain` implements `Brain` over the reader (Gemma 4 via LiteRT-LM). Input is cut to 36 KB; no tools, so the preparer and knowledge builder use their no-tools paths. Hands is unavailable in this mode. Cards are plainer; the send log reads zero.
 
 ## Panic wipe
-Settings → Privacy and the menu bar. Hold 1.5 s to confirm. Deletes the store's runs/cursors/summaries/drop log/send log and every `proactive.*`/`knowledge.*`/recipe key, the knowledge base folder and its index, the Telegram session, Google tokens, every Keychain item, the wake helper daemon and the login item. The reader model stays unless the user also uninstalls.
+Settings → Privacy and the menu bar. Hold 1.5 s to confirm. Deletes the store's runs/cursors/summaries/drop log/send log and every `proactive.*`/`knowledge.*`/recipe key, the knowledge base folder and its index, the Telegram session, every Keychain item, the wake helper daemon and the login item. The reader model stays unless the user also uninstalls.
 
 ## Daytime reads
 `overnight.daytime` = h1 | h3 | off. A loop in the scheduler checks once a minute: between 7 AM and midnight, last run older than the interval, on AC, idle ≥ 10 minutes → a run with trigger `daytime`. Cards: new ready cards replace the ready ones; fired/snoozed/dismissed history is kept. Notifications only when a card appeared.

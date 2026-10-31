@@ -26,7 +26,7 @@ public actor SlackAuth {
     /// Opens the browser; resolves when the app receives the `brownie://oauth/slack` callback.
     public func signIn(transport: any JSONTransport = URLSessionTransport()) async throws {
         guard let id = Secrets.value("SLACK_CLIENT_ID"), let secret = Secrets.value("SLACK_CLIENT_SECRET") else { throw Error.notConfigured }
-        state = GoogleAuth.random(16)
+        state = OAuth.random(16)
         var c = URLComponents(string: "https://slack.com/oauth/v2/authorize")!
         c.queryItems = [.init(name: "client_id", value: id), .init(name: "user_scope", value: Self.scopes.joined(separator: ",")), .init(name: "redirect_uri", value: Self.callback), .init(name: "state", value: state)]
         await MainActor.run { NSWorkspace.shared.open(c.url!) }

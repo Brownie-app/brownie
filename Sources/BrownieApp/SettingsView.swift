@@ -68,9 +68,12 @@ struct SourcesPane: View {
                 ForEach(personal) { s in
                     SettingRow(title: s.name, detail: detail(s)) {
                         if s.id == "files" { BButton(title: "Choose folders", kind: .quiet) { chooseFolder() } }
-                        if s.id == "gmail" {
-                            if case .needsSignIn = m.availability[s.id] { BButton(title: "Sign in with Google") { m.signInGoogle() } }
-                            else if m.availability[s.id] == .available { BButton(title: "Sign out", kind: .quiet) { m.signOutGoogle() } }
+                        if s.id == "mail" {
+                            if case .needsSignIn = m.availability[s.id] { BButton(title: "Connect") { showMail = true } }
+                            else if m.availability[s.id] == .available {
+                                BButton(title: "Change…", kind: .quiet) { showMail = true }
+                                BButton(title: "Disconnect", kind: .quiet) { m.mailForget() }
+                            }
                         }
                         if s.id == "telegram" {
                             BButton(title: TelegramSource.OwnApp.inUse ? "Your own app" : "Use your own app…", kind: .quiet) { showTelegramApp = true }
@@ -165,10 +168,12 @@ struct SourcesPane: View {
             }
         }
         .sheet(isPresented: $showAdd) { AddMCPSheet().environmentObject(m).environment(\.theme, t) }
+        .sheet(isPresented: $showMail) { MailSheet().environmentObject(m).environment(\.theme, t) }
         .sheet(isPresented: $showTelegram) { TelegramSignIn().environmentObject(m).environment(\.theme, t) }
         .sheet(isPresented: $showTelegramApp) { TelegramAppSheet().environmentObject(m).environment(\.theme, t) }
     }
     @State private var showAdd = false
+    @State private var showMail = false
     @State private var showTelegram = false
     @State private var showTelegramApp = false
     @State private var chatFilter = ""
@@ -213,7 +218,8 @@ struct SourcesPane: View {
         case .needsSignIn:
             if s.id == "slack" { return "Sign in as you · DMs and channels you choose" }
             if s.id == "teams" { return "Sign in with your work account · chats and channels you choose · needs your admin's consent once" }
-            return s.id == "telegram" ? "Sign in with your own phone number" : "Sign in with your own Google account · read-only"
+            if s.id == "mail" { return "Your inbox, read-only · Gmail, iCloud, Outlook, Fastmail or any IMAP" }
+            return s.id == "telegram" ? "Sign in with your own phone number" : s.detail
         default:
             if s.id == "files" { return m.fileRoots.map(\.lastPathComponent).joined(separator: ", ") }
             if s.perBucket { return "\(m.enabledBuckets[s.id]?.count ?? 0) \(Self.workChatIDs.contains(s.id) ? "conversations" : "chats") chosen" }
@@ -540,7 +546,7 @@ struct PanicSheet: View {
             VStack(alignment: .leading, spacing: 6) {
                 row("The knowledge base — every note, every person, every loop")
                 row("All cards, the send log and the recipes you taught Hands")
-                row("Sign-ins to Gmail and Telegram, and your brain key from the Keychain")
+                row("Sign-ins to your mailbox and Telegram, and your brain key from the Keychain")
                 row("The 3 AM wake and the helper that holds the Mac awake")
             }
             Text("The reader model stays unless you also uninstall. Nothing needs deleting anywhere else — there is nowhere else.").font(.system(size: 11)).foregroundStyle(t.ink2)

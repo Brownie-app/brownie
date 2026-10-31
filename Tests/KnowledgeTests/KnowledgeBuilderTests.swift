@@ -408,10 +408,10 @@ import Platform
     }
 
     @Test func corpusLinesUseTheRowIdWhenThereIsNoStableId() {
-        let s = SummaryRecord(id: 7, runID: 1, source: "gmail", bucket: BucketID("gmail"), bucketName: "Inbox", kind: .mail, title: "T", text: "body", itemDate: nil, createdAt: Self.today)
-        #expect(CorpusSlicer.render(s, timeZone: Self.utc) == "#7 · [gmail/mail] Inbox · undated\nT — body\n")
-        let dated = SummaryRecord(id: 8, runID: 1, source: "gmail", bucket: BucketID("gmail"), bucketName: "Inbox", kind: .mail, title: "T", text: "body", itemDate: Self.day(2), createdAt: Self.today, sid: "0123456789ab")
-        #expect(CorpusSlicer.render(dated, timeZone: Self.utc).hasPrefix("#0123456789ab · [gmail/mail] Inbox · 2026-09-03\n"))
+        let s = SummaryRecord(id: 7, runID: 1, source: "mail", bucket: BucketID("mail:inbox"), bucketName: "Inbox", kind: .mail, title: "T", text: "body", itemDate: nil, createdAt: Self.today)
+        #expect(CorpusSlicer.render(s, timeZone: Self.utc) == "#7 · [mail/mail] Inbox · undated\nT — body\n")
+        let dated = SummaryRecord(id: 8, runID: 1, source: "mail", bucket: BucketID("mail:inbox"), bucketName: "Inbox", kind: .mail, title: "T", text: "body", itemDate: Self.day(2), createdAt: Self.today, sid: "0123456789ab")
+        #expect(CorpusSlicer.render(dated, timeZone: Self.utc).hasPrefix("#0123456789ab · [mail/mail] Inbox · 2026-09-03\n"))
     }
 
     // MARK: build.md for every part of a first build, update.md after

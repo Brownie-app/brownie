@@ -8,7 +8,7 @@ import Domain
     let now = Date(timeIntervalSince1970: 1_758_000_000)
     var summaries: [SummaryRecord] {
         [SummaryRecord(id: 1, runID: 1, source: "whatsapp", bucket: BucketID("whatsapp:507"), bucketName: "Lokesh", kind: .directMessage, title: "t", text: "Lokesh asked for estimates to be posted in the Slack channel", itemDate: now, createdAt: now),
-         SummaryRecord(id: 2, runID: 1, source: "gmail", bucket: BucketID("gmail"), bucketName: "Inbox", kind: .mail, title: "t", text: "x", itemDate: now, createdAt: now)]
+         SummaryRecord(id: 2, runID: 1, source: "mail", bucket: BucketID("mail:inbox"), bucketName: "Inbox", kind: .mail, title: "t", text: "x", itemDate: now, createdAt: now)]
     }
     func card(label: String, evidence: [Evidence], loop: String? = nil, title: String = "Send Lokesh the estimates") -> Card {
         Card(id: "1", title: title, sourceLabel: label, why: "", actionLabel: "", dueLine: "", urgency: .medium, draftLabel: "", draft: "", recipe: .whatsapp(chat: "Lokesh", body: ""), evidence: evidence, verification: .verified, verifiedLine: "", createdAt: now, loopID: loop)
@@ -22,9 +22,9 @@ import Domain
     }
 
     @Test func summaryReferencesInAnyStyleResolve() {
-        for ref in ["Summary #2", "#2 · Gmail Inbox", "summary 2", "2"] {
+        for ref in ["Summary #2", "#2 · Mail Inbox", "summary 2", "2"] {
             let c = Preparer.groundSources(card(label: "Mail", evidence: [Evidence(source: ref, when: "", text: "")]), candidates: [], summaries: summaries)
-            #expect(c.sourceLabel == "Gmail · Inbox", Comment(rawValue: ref))
+            #expect(c.sourceLabel == "Mail · Inbox", Comment(rawValue: ref))
         }
     }
 

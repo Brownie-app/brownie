@@ -14,7 +14,7 @@ brew install cmake gperf openssl@3
 swift test                      # unit tests; `swift test --filter EvalTests` runs the reader eval
 ```
 
-Developer credentials (an OpenAI/Anthropic key, a Google OAuth client, Telegram api_id/api_hash) go in `.secrets/brownie.env` — git-ignored, read only by Debug builds. See `docs/launch-setup.md`. Never commit them.
+Developer credentials (an OpenAI/Anthropic key, Telegram api_id/api_hash) go in `.secrets/brownie.env` — git-ignored, read only by Debug builds. See `docs/launch-setup.md`. Never commit them.
 
 ## The invariants
 

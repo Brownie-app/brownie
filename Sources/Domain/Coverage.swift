@@ -101,7 +101,7 @@ public enum CoverageLine {
     static func name(_ s: SourceID) -> String {
         switch s.rawValue {
         case "whatsapp": return "WhatsApp"; case "imessage": return "iMessage"; case "telegram": return "Telegram"
-        case "slack": return "Slack"; case "teams": return "Microsoft Teams"; case "gmail": return "Gmail"
+        case "slack": return "Slack"; case "teams": return "Microsoft Teams"; case "mail": return "Mail"
         case "files": return "Files"; case "notes": return "Apple Notes"; case "voicememos": return "Voice Memos"
         case "recordings": return "Meeting audio"; case "calendar": return "Calendar"
         default: return s.rawValue.split(separator: ":").last.map { $0.prefix(1).uppercased() + $0.dropFirst() } ?? s.rawValue
@@ -110,7 +110,7 @@ public enum CoverageLine {
     static func nouns(_ s: SourceID) -> (bucket: String?, item: String) {
         switch s.rawValue {
         case "whatsapp", "imessage", "telegram", "slack", "teams": return ("chats", "messages")
-        case "gmail": return ("mailboxes", "emails")
+        case "mail": return ("mailboxes", "emails")
         case "files": return ("folders", "files")
         case "notes": return (nil, "notes")
         case "voicememos", "recordings": return (nil, "recordings")

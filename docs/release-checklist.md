@@ -13,7 +13,7 @@ Run by hand before every tagged release. These are the things no test can prove.
 
 ## Sources
 - [ ] Files, Notes, iMessage, WhatsApp read without errors; skipped sources say why
-- [ ] Gmail sign-in from a clean state; Telegram sign-in with phone + code
+- [ ] Mail connect from a clean state (an app password, a wrong password, an unknown domain); Telegram sign-in with phone + code
 - [ ] Calendar: a brief arrives ten minutes before a meeting with people in it
 
 ## Hands

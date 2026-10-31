@@ -37,7 +37,7 @@ for bucket in source.buckets(since: marks):
 Progress is published per item: `{source, bucket, index, total, read, kept, dropped, sensitive,
 lastTitle?, lastSummary?}`. Sensitive items publish **no** title or summary — only the count.
 
-## Cloud-door sources (Gmail, Calendar, MCP)
+## Cloud-door sources (Mail, Calendar, MCP)
 Same loop; the source's `load` fetches the item from the user's account to the Mac, and the reader
 judges it locally like anything else. (Alternative kept behind the protocol: let the brain summarise
 mail server-side. Not used in v1 — it would breach invariant 1 for mail bodies.)

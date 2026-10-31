@@ -20,8 +20,8 @@ public actor MicrosoftAuth {
 
     public func signIn(transport: any JSONTransport = URLSessionTransport()) async throws {
         guard let clientID = Secrets.value("MICROSOFT_CLIENT_ID") else { throw Error.notConfigured }
-        let verifier = GoogleAuth.random(64), state = GoogleAuth.random(16)
-        let challenge = GoogleAuth.base64url(GoogleAuth.sha256(Data(verifier.utf8)))
+        let verifier = OAuth.random(64), state = OAuth.random(16)
+        let challenge = OAuth.base64url(OAuth.sha256(Data(verifier.utf8)))
         let server = try LoopbackServer()
         let redirect = "http://localhost:\(server.port)"
         var c = URLComponents(string: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize")!

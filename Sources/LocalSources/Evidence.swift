@@ -28,7 +28,7 @@ public enum EvidenceRef: Equatable, Sendable {
             let name = parts.dropFirst().first { !$0.lowercased().hasPrefix("recording") && !$0.lowercased().hasPrefix("voice") && stamp($0) == nil } ?? parts.last ?? s
             return .recording(name: name, seconds: parts.compactMap(stamp).first)
         }
-        if lower.contains("gmail") || lower.contains("mail") && !lower.contains("imessage") { return .mail(label: s) }
+        if lower.contains("mail") && !lower.contains("imessage") { return .mail(label: s) }
         if let app = apps.first(where: { lower.contains($0.0) })?.1 {
             // the chat name is the part that isn't the app word or a "summary #n"
             // "#design" is a Slack channel; "#1" is a summary number
