@@ -33,12 +33,15 @@ DOMAIN_OK='^(.+\.)?(test|example|invalid|localhost)$|^(.+\.)?example\.(com|org|n
 # being tested: an Apple address has to look like one. The local part still has to be invented.
 DOMAIN_SERVICE_OK='^(icloud\.com|s\.whatsapp\.net|usebrownie\.com|anthropic\.com|users\.noreply\.github\.com)$'
 # Whole addresses that are deliberately real: the project's own inboxes, and senders a fixture names.
-EMAIL_LITERAL_OK='^(security|hello|conduct)@usebrownie\.com$|^billing@google\.com$|^noreply@'
+# Plus the validator's edge fixtures — degenerate addresses that exist to prove case-fold dedupe and the
+# rejection rules. Changing one inverts its assertion rather than breaking it, which is harder to notice.
+EMAIL_LITERAL_OK='^(security|hello|conduct)@usebrownie\.com$|^billing@google\.com$|^noreply@|^[a-z]@(b\.co|x\.io|x\.in|y\.in)$'
 
 DIGESTS=Scripts/scrubbed-digests.txt
 
-# macOS ships shasum, Linux ships sha256sum; CI runs this on whichever is cheaper that day.
-if whence -p shasum >/dev/null 2>&1; then sha() { shasum -a 256 }; else sha() { sha256sum }; fi
+# Hashes the whole word list in one process. Perl's Digest::SHA is core on macOS and on the CI image, and a
+# subprocess per word turns a two-hundred-file diff into several thousand forks.
+hash_lines() { perl -MDigest::SHA=sha256_hex -nle 'chomp; print substr(sha256_hex($_),0,12), " ", $_' }
 
 case "${1:-}" in
   --staged) DIFF=(git diff --cached --unified=0) ;;
@@ -60,9 +63,7 @@ if [ -s "$DIGESTS" ]; then
   # or more. Hashed one per line, then compared against the stored prefixes.
   hits=$(print -r -- "$added" \
     | tr '[:upper:]' '[:lower:]' | grep -oE '[a-z]{4,}|[0-9]{4,}' | sort -u \
-    | while read -r w; do
-        printf '%s %s\n' "$(printf '%s' "$w" | sha | cut -c1-12)" "$w"
-      done \
+    | hash_lines \
     | grep -Ff <(grep -vE '^\s*(#|$)' "$DIGESTS" | awk '{print $1}') - 2>/dev/null)
   if [ -n "$hits" ]; then
     echo "A value that was scrubbed from this repository is back:"

@@ -87,7 +87,7 @@ import Platform
         await r.seed(from: Self.folders([("People/Lalita Pathak.md", "Lalita Pathak"), ("People/Lalita Pathak Tideline.md", "Lalita Pathak Tideline")]))
         let people = await r.people()
         let keep = try #require(people.first { $0.notePath == "People/Lalita Pathak.md" }), drop = try #require(people.first { $0.notePath == "People/Lalita Pathak Tideline.md" })
-        _ = await r.register(label: "Lalita", handle: "slack:U1")   // a lone first name beside two Lalitas: a third person
+        _ = await r.register(label: "Lalita", handle: "slack:U1")   // a lone first name beside two Hemalis: a third person
         let third = try #require(await r.resolve(label: "Lalita", handle: nil))
         #expect(await r.people().count == 3)
         await r.keepSeparate(keep.id, third)
@@ -227,7 +227,7 @@ import Platform
     }
 
     @Test func aKnownPersonWithoutANoteNeverGetsANamesakesNote() async throws {
-        // two Lalitas from two notes, kept separate; the plain one's note is then deleted (or renamed) in Obsidian
+        // two Hemalis from two notes, kept separate; the plain one's note is then deleted (or renamed) in Obsidian
         let v = try Self.vault(); let r = v.registry()
         let plainNote = Self.note("People/Lalita Pathak.md", "Lalita Pathak"), tidelineNote = Self.note("People/Lalita Pathak Tideline.md", "Lalita Pathak Tideline")
         await r.seed(from: [KnowledgeFolder(name: "People", notes: [plainNote, tidelineNote])])
@@ -316,7 +316,7 @@ import Platform
         let a = await first.register(label: "Kiran", handle: nil), b = await first.register(label: "Kiran Bose", handle: "whatsapp:+1")
         try await first.save()
         let keep = try #require(await first.people().first { $0.notePath == "People/Lalita Pathak.md" }?.id), drop = try #require(await first.people().first { $0.notePath == "People/Lalita Pathak Tideline.md" }?.id)
-        // the night run loads its copy and works for an hour; meanwhile the app merges the Lalitas, keeps the Kirans apart, deletes the dropped note
+        // the night run loads its copy and works for an hour; meanwhile the app merges the Hemalis, keeps the Kirans apart, deletes the dropped note
         let run = v.registry(at: 3600); await run.load()
         let app = v.registry(at: 10); await app.load()
         await app.merge(keep: keep, drop: drop); await app.keepSeparate(a, b); try await app.save()

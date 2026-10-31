@@ -22,7 +22,7 @@ let now = Date(timeIntervalSince1970: 1_758_000_000)
     }
     @Test func aChatIsEligibleOnlyWhenEveryOtherMemberIsInIt() {
         let h = Household(members: [me, tanvi, amma], folderPath: "/x", since: now)
-        #expect(HouseholdEligibility.isEligible(chatMembers: ["+919000000444", "Shalini Devi", "Zubin", "+919000000724"], others: h.others))
+        #expect(HouseholdEligibility.isEligible(chatMembers: ["+919000000444", "Shalini Devi", "Zubin", "+919000000446"], others: h.others))
         #expect(!HouseholdEligibility.isEligible(chatMembers: ["+919000000444", "Zubin"], others: h.others), "Amma isn't in it")
         #expect(!HouseholdEligibility.isEligible(chatMembers: ["everyone"], others: []), "no household, nothing shared")
     }

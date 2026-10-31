@@ -238,7 +238,7 @@ import Support
         var cal = Calendar(identifier: .gregorian); cal.timeZone = Self.clock.timeZone
         #expect(ledger.last?.due == "September6" && ledger.last?.dueDate == cal.date(from: DateComponents(year: 2026, month: 9, day: 6, hour: 9)), "the words stay; the date is read from them")
         let registry = PersonRegistry(vault: w.kb.rootURL); await registry.load()
-        #expect(await registry.people().map(\.name).sorted() == ["Noor", "Lalita Pathak"], "no record was opened for the user")
+        #expect(await registry.people().map(\.name).sorted() == ["Lalita Pathak", "Noor"], "no record was opened for the user")
     }
 
     @Test func mergedRowsSurviveAJudgeThatFailsAndAreJudgedTheNextNightEvenWithNothingNew() async throws {
