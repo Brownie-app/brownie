@@ -20,6 +20,34 @@ public enum HandsGuard {
         return !goal.lowercased().contains(a)
     }
 
+    /// Would Return commit something the user has to press themselves?
+    ///
+    /// Return in a focused text field sends in every messaging app there is, so the question is not
+    /// *which* app is in front. It used to be — the old check ANDed this with "the app is Messages",
+    /// which meant WhatsApp, Slack, Telegram, Mail and every browser went straight through with only
+    /// the prompt objecting. The question is whether this window carries a button that commits.
+    ///
+    /// Over-blocking pauses and asks. Under-blocking sends someone's half-written message. Only one
+    /// of those can be taken back, so this errs toward asking.
+    public static func returnWouldCommit(buttonTitles: [String], focusIsTextField: Bool, askBefore: [String]) -> Bool {
+        guard focusIsTextField else { return false }
+        return buttonTitles.contains { title in
+            let t = title.lowercased()
+            return askBefore.contains { t.contains($0) }
+        }
+    }
+
+    /// Would a click at a bare coordinate land on something that commits?
+    ///
+    /// A point carries no title, so the caller passes the words of whatever the app's own hit test
+    /// puts under it — `Button “Send”`. Only the roles that commit are considered, so clicking a
+    /// message whose text happens to contain "send" is not mistaken for pressing Send.
+    public static func clickWouldCommit(on words: String, askBefore: [String]) -> Bool {
+        let w = words.lowercased()
+        guard ["button", "menuitem", "link", "checkbox", "radiobutton"].contains(where: { w.hasPrefix($0) }) else { return false }
+        return askBefore.contains { w.contains($0) }
+    }
+
     /// The exact phrase an action's result carries when the screen did not react; the stall guard counts it.
     public static let stallMarker = "nothing changed"
 
