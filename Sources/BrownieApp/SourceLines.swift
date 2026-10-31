@@ -62,7 +62,7 @@ enum SourceLines {
         let log = Log("proactive.judge")
         let from = around.addingTimeInterval(-daysAround * 86400)
         let to = around.addingTimeInterval(daysAround * 86400)
-        for app in ["whatsapp", "imessage", "telegram", "slack", "teams"] {
+        for app in ["whatsapp", "imessage", "telegram", "slack", "teams", "mail"] {
             guard let reader = reader(app) else { continue }
             do {
                 let chats = await directory.chats(app, from: reader)

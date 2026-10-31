@@ -1,5 +1,7 @@
 import Testing
 import Foundation
+import Domain
+import LocalSources
 @testable import CloudSources
 
 /// UNIT. Turning a mailbox back into conversations.
@@ -185,5 +187,37 @@ import Foundation
         ])
         let tailOnly = MailThreads.group([m("2", 1, subject: "two", id: "b@x.test", thrid: "99")])
         #expect(whole[0].key == tailOnly[0].key)
+    }
+}
+
+/// UNIT. The short memory that keeps one night's questions down to one night's reading.
+@Suite struct MailConversationsTests {
+
+    func conversation(_ name: String) -> MailSource.Conversation {
+        MailSource.Conversation(
+            info: BucketInfo(id: BucketID("mail:thread:\(name)"), name: name, detail: "", isGroup: false, count: 1),
+            messages: [ChatMessage(rowID: 1, date: Date(timeIntervalSince1970: 1_788_739_200), sender: name, isMe: false, text: "hello")])
+    }
+
+    @Test func whatWasReadOnceIsAnsweredFromMemory() async {
+        let c = MailConversations()
+        #expect(await c.get(60) == nil, "nothing read yet")
+        await c.put(60, [conversation("Lalita Pathak")])
+        #expect(await c.get(60)?.count == 1)
+        #expect(await c.get(30) == nil, "a different window is a different read")
+    }
+
+    @Test func memoryOlderThanItsWelcomeIsNotUsed() async {
+        let c = MailConversations(ttl: -1)
+        await c.put(60, [conversation("Lalita Pathak")])
+        #expect(await c.get(60) == nil, "mail that arrives mid-run should be seen by the next run")
+    }
+
+    @Test func changingTheMailboxForgetsTheOldOne() async {
+        // Otherwise the mailbox you just disconnected answers for the one you just connected.
+        let c = MailConversations()
+        await c.put(60, [conversation("Lalita Pathak")])
+        await c.forget()
+        #expect(await c.get(60) == nil)
     }
 }

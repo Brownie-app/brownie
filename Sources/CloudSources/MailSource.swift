@@ -74,13 +74,17 @@ public enum MailAccount {
     }
 
     public static func save(address: String, password: String, host: String? = nil, port: UInt16? = nil) {
+        Task { await MailConversations.shared.forget() }
         Keychain.set(addressKey, address.trimmingCharacters(in: .whitespaces))
         // An app password is shown in groups of four; people paste it as shown, and every server wants it joined.
         Keychain.set(passwordKey, password.filter { !$0.isWhitespace })
         Keychain.set(hostKey, host); Keychain.set(portKey, port.map(String.init))
     }
 
-    public static func forget() { for k in [addressKey, passwordKey, hostKey, portKey] { Keychain.set(k, nil) } }
+    public static func forget() {
+        for k in [addressKey, passwordKey, hostKey, portKey] { Keychain.set(k, nil) }
+        Task { await MailConversations.shared.forget() }
+    }
 
     /// What is stored now, so a failed attempt at a second mailbox can put the working one back.
     public struct Saved: Sendable, Equatable {

@@ -26,7 +26,7 @@ extension MailSource: ChatReader, AskScanning {
     // MARK: - ChatReader
 
     public func chats() async throws -> [BucketInfo] {
-        try await conversations(days: 30).map(\.info)
+        try await conversations(days: Self.askMaxDays).map(\.info)
     }
 
     public func messages(in bucket: BucketID, from: Date, to: Date) async throws -> [ChatMessage] {
@@ -78,7 +78,19 @@ extension MailSource: ChatReader, AskScanning {
     /// Three commands, not three per thread. The headers come back for every message in the window at once and
     /// the threading is worked out on this Mac; only the capped set of live conversations has its bodies
     /// fetched, and those arrive in a single UID FETCH.
+    ///
+    /// Held briefly afterwards, because the callers ask repeatedly. The evidence gate looks a person up once
+    /// per open loop, and a busy week has twenty — without the cache that is twenty whole mailbox reads over
+    /// TLS to answer twenty questions, which is the same mistake `SourceLines.Directory` exists to avoid for
+    /// the chat sources.
     func conversations(days: Int) async throws -> [Conversation] {
+        if let had = await MailConversations.shared.get(days) { return had }
+        let fresh = try await readConversations(days: days)
+        await MailConversations.shared.put(days, fresh)
+        return fresh
+    }
+
+    private func readConversations(days: Int) async throws -> [Conversation] {
         guard let me = MailAccount.address?.lowercased(), !me.isEmpty else { return [] }
         let since = Calendar.current.date(byAdding: .day, value: -days, to: Date()) ?? Date()
 
@@ -180,4 +192,24 @@ extension MailSource: ChatReader, AskScanning {
         }
         return kept.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
     }
+}
+
+/// A few minutes of memory, so one night's questions cost one night's reading.
+///
+/// Deliberately not a permanent store: mail that arrives mid-run should be seen by the next run, and a cache
+/// that outlived the run would be a second copy of the user's inbox for no reason.
+actor MailConversations {
+    static let shared = MailConversations()
+    private var entries: [Int: (at: Date, value: [MailSource.Conversation])] = [:]
+    private let ttl: TimeInterval
+
+    init(ttl: TimeInterval = 180) { self.ttl = ttl }
+
+    func get(_ days: Int) -> [MailSource.Conversation]? {
+        guard let e = entries[days], Date().timeIntervalSince(e.at) < ttl else { return nil }
+        return e.value
+    }
+    func put(_ days: Int, _ value: [MailSource.Conversation]) { entries[days] = (Date(), value) }
+    /// Dropped when the account changes, so a second mailbox never answers for the first.
+    func forget() { entries.removeAll() }
 }
