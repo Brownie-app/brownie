@@ -2,7 +2,7 @@
 
 All notable changes. Brownie follows semantic versioning once 1.0 ships; before that, minor versions may change behaviour.
 
-## Unreleased
+## 0.4 — 31 October 2026
 
 **Mail is any mailbox now, and Gmail's sign-in is gone.** Reading your mail used to mean signing in to Google, which meant Brownie needed a Google OAuth client, an annual security assessment for a restricted scope, and a refresh token that expired every seven days while the app sat in Testing — and it only ever worked for Gmail. Mail is now read over IMAP with an app password you create yourself: Gmail, iCloud, Outlook, Fastmail, Proton through its Bridge, or a work server you type in. It is read with `EXAMINE`, so a 3 am read never marks anything seen, and only the headers are fetched for mail the reader drops on its subject line.
 
@@ -15,6 +15,10 @@ An ask closes on your own reply, and your replies are not in your inbox — ever
 And a single Cc no longer turns a conversation into a crowd. Two people in a thread counts the people who have actually written in it, not everyone on the headers — so copying in an accountant once does not quietly hold the rest of that conversation to the stricter group rule.
 
 Gmail's search syntax is available over IMAP too, via `X-GM-RAW`, so `-category:promotions` is back: a night does not read every newsletter that arrived.
+
+**If you were signed in to Gmail, reconnect.** The Google sign-in is gone, so that source stops reading. Everything it already wrote stays — the notes, the people, the loops. Go to Settings → Sources → Mail → Connect and use an app password; Brownie works out the server from your address. The Google token that was sitting in your Keychain is deleted the first time this version starts, because a source you cannot see is not a source you can revoke.
+
+**Also:** Brownie now opens on its own screen for five seconds rather than showing you a flash of the welcome screen it had already finished with.
 
 ## 0.3 — 11 October 2026
 
