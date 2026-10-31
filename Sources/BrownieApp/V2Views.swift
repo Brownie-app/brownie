@@ -768,7 +768,7 @@ struct AskView: View {
                         if m.asks.isEmpty {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Ask about anyone, any promise, any plan.").font(.system(size: 17, weight: .semibold))
-                                Text("“What did I promise Meera?” · “Who is Karan?” · “What's still open with the landlord?”").foregroundStyle(t.ink2)
+                                Text("“What did I promise Lata?” · “Who is Dev?” · “What's still open with the landlord?”").foregroundStyle(t.ink2)
                                 Text("The answer is built from your notes on this Mac; only the matching note excerpts go to the brain.").font(.system(size: 11)).foregroundStyle(t.ink2)
                             }.padding(.top, 20)
                         }
