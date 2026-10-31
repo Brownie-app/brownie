@@ -16,4 +16,4 @@ NOTES THAT MATCH THE QUESTION'S WORDS (already looked up for you; cite them as k
 THE QUESTION:
 {{question}}
 
-When you have looked, call `finish` once with: {"answer":"<the answer with [n] markers>","citations":[{"n":1,"kind":"note|whatsapp|imessage|mail|recording|loop|card","label":"<what the chip says, e.g. People/Devan or WhatsApp · Devan · Fri, or Recording · Meena call · 03:12>","ref":"<note path, person/chat name, loop id, or card id>"}],"actions":[{"label":"<two or three words>","kind":"loops|card|note","ref":"<id or path>"}]}
+When you have looked, call `finish` once with: {"answer":"<the answer with [n] markers>","citations":[{"n":1,"kind":"note|whatsapp|imessage|mail|recording|loop|card","label":"<what the chip says, e.g. People/Dev or WhatsApp · Dev · Fri, or Recording · Lata call · 03:12>","ref":"<note path, person/chat name, loop id, or card id>"}],"actions":[{"label":"<two or three words>","kind":"loops|card|note","ref":"<id or path>"}]}

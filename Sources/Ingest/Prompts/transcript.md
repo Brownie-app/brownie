@@ -8,7 +8,7 @@ Recorded: {{created}}
 {{body}}
 
 Do this in order:
-1. Write a summary of up to 60 words: what the recording is about, in the third person ("the user talks through…", never "I" or "my"). Then, if anything was promised, asked or decided out loud, add it as its own sentence with the time and the words used, like: At [03:12] the user says "I'll send it by Thursday" to Meena. Keep every promise, request and decision; drop small talk.
+1. Write a summary of up to 60 words: what the recording is about, in the third person ("the user talks through…", never "I" or "my"). Then, if anything was promised, asked or decided out loud, add it as its own sentence with the time and the words used, like: At [03:12] the user says "I'll send it by Thursday" to Lata. Keep every promise, request and decision; drop small talk.
 2. Give it a short title of three to six words.
 3. Decide `keep`: true when the recording holds a promise, a request, a decision, a plan, or facts about people close to the user. False for noise, tests ("testing one two"), music, dictated shopping lists, or recordings that are clearly someone else's.
 4. Only if it applies, add `sensitive: true`: the core content is something that must never be stored anywhere — card or account numbers read out loud, passwords, a medical consultation, someone else's confidential matter.

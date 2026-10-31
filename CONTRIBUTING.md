@@ -29,6 +29,37 @@ Every change must keep these true; there are tests for each and a PR that weaken
 7. No account, no telemetry. The Mac's copy is the truth; deletion is total.
 8. Walkthroughs play once.
 
+## Fixtures are invented
+
+**Never put a real person into this repository** — not in a test, not in a doc comment, not in a commit
+message, not in a prompt or an eval case. No real phone number, email address, person's name, company, group
+or chat name, account id, or message text copied out of a real conversation.
+
+This is the rule most easily broken in good faith, because the natural way to write a test for this app is to
+paste in something that actually happened, and the natural way to explain a matcher in a doc comment is to
+show a name it has to get right. Both publish whoever was in the chat. It has happened here, which is why the
+rule is written down: a contact's mobile number reached 89 places across 17 files, and a cloud account id sat
+in a test fixture beside its region, both public for weeks.
+
+Use these, and add to the cast rather than inventing alongside it:
+
+| | |
+|---|---|
+| **People** | Ravi Sharma, Tanvi Bhatt, Asha Mehra, Dev Iyer, Noor Siddiqui, Lata Pillai, Sam |
+| …sharing a first name | Kiran Bose and Kiran Dutta — two people, for the matcher tests |
+| …the same person twice | "Tanvi Bhatt" and "Tanvi Bhatt Northwind", who fold to one key |
+| **Companies** | Northwind, Tideline |
+| **Phone numbers** | `+91 90000 0xxxx` — a real prefix so formatting behaves, a body no operator issues |
+| **Email** | `someone@example.com`, or `someone@tideline.test`. `.test`, `.example` and `.invalid` are reserved by RFC 2606 and can never belong to anyone |
+| **Ids, keys, accounts** | obviously patterned digits — `100200300400500`, not something copied |
+
+If you have a case from real data that a test should cover, keep the *shape* and change everything else: the
+name, the number, the amount, the company. The shape is the only part the test reads.
+
+`./Scripts/no-real-data.sh` checks the lines your change adds — run it before you push, and CI runs it on
+every pull request. It also carries hashes of the values that were scrubbed out of this repository's history,
+so reintroducing one fails the build without the repository having to name it.
+
 ## How the code is arranged
 
 `Sources/Domain` holds value types and protocols and depends on nothing. Every other target depends inward. If you need to add a source, implement `Source` in `LocalSources`/`CloudSources` (or add an MCP preset); if you need a new brain, implement `Brain`/`AgenticBrain`. Prompts live next to the code that uses them (`Prompts/*.md`) and are treated as code: change one, add or update an eval case in `Tests/Eval/Corpus/corpus.json`.

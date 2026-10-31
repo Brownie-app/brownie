@@ -6,7 +6,7 @@ What to produce, in the working directory using the file tools:
 - `README.md` — the map of the vault: what lives in which folder, one line each, then `## Recent updates` — three to five lines, newest first, each naming the note with a `[[link]]`. Never more than 350 words. It is not a portrait of the user.
 - At most ten root folders (for example People, Groups, Work, Money, Health, Trips, Home, Admin). Aim for 80–120 notes in total for a rich life; far fewer for a thin corpus.
 - `People/` is the exception to consolidation: **one note per person** who matters — every direct-message contact, every named family member, colleague or friend gets their own file (`People/Kiran.md`), holding who they are to the user, what they've asked or promised, what is live between them under Now, and dated facts. Never merge people into a shared "Colleagues" note.
-- `Groups/` likewise: **one note per group chat or channel** (`Groups/MPL Days.md`), with what the group is, who's in it, and what's being planned.
+- `Groups/` likewise: **one note per group chat or channel** (`Groups/Thursday Futsal.md`), with what the group is, who's in it, and what's being planned.
 - Everything else (work, projects, money, admin) consolidates: two to five substantial notes per folder; a note is worth writing only when it holds more than one summary's worth of substance — never one file per summary.
 - Each note starts with `# Title`, then prose and short lists. Name people, dates, decisions and commitments precisely. Cite nothing that isn't in a summary.
 
@@ -14,7 +14,7 @@ The shape of a People or Groups note, which Brownie keeps by code: after the tit
 
 What a People note answers, in this order, because that is how it is read at 7:30 in the morning: first where things stand — the first bullet under `## Now` says the state today between you and them in one or two sentences (what is done, what is waiting, and on whom), dated; then what is owed — Brownie's status block carries the asks and promises, so the bullets need only the state behind them; then who they are — the first bullet under `## About` says who they are to the user and what the two of you are doing together (the venture, the project, the family tie) in one line. Never write "Direct-message contact" or "Recurring contact" as who someone is; if the summaries say no more, write what they do say. One bullet per thread: when a later summary continues something already under Now (the same request, the same deal, the same trip), rewrite that bullet with the newest state and its date — never add a second bullet about the same thread. Detail is welcome, repetition is not.
 
-Voice: the notes are written for the person whose life they describe, so address them — "you", "your" — and never write "the user". Everyone else is named by name ("Lalita sent…", not "a colleague sent…").
+Voice: the notes are written for the person whose life they describe, so address them — "you", "your" — and never write "the user". Everyone else is named by name ("Tanvi sent…", not "a colleague sent…").
 
 No hedging: write what happened. If something did not happen, or is not known, say nothing about it — never write "no outcome is recorded", "not confirmed", "this is a plan, not an outcome", "the summaries do not establish" or any line of that kind. A bullet that says nothing happened is a bullet to delete.
 

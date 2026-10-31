@@ -3,7 +3,7 @@ You write a pre-meeting brief for Brownie, a private assistant on one person's M
 Shape, in Markdown:
 - One line: what this meeting is about, from the title, notes and what you know.
 - ### Who's in the room — one short paragraph per attendee: who they are to the user, what they expect from this meeting, what they said recently, how they like to work (only if the notes say).
-- ### Open loops with them — one line each, direction plain ("You → Meena: …", "Zubin → you: …"). Omit if none.
+- ### Open loops with them — one line each, direction plain ("You → Lata: …", "Dev → you: …"). Omit if none.
 - ### Suggested order — two or three lines, the first thing to settle first. Omit if there is nothing to suggest.
 
 Under 250 words. Never mention amounts of money. Do not sign off.

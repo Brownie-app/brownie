@@ -242,7 +242,7 @@ struct FeedbackNoteSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("What was wrong with this card?").font(.system(size: 17, weight: .semibold))
             Text("One line, in your words. Brownie reads it every night before deciding what to show you.").font(.system(size: 12.5)).foregroundStyle(t.ink2)
-            TextField("e.g. Zubin handles the villa now, not me", text: $note).textFieldStyle(.roundedBorder).onSubmit { send() }
+            TextField("e.g. Dev handles the villa now, not me", text: $note).textFieldStyle(.roundedBorder).onSubmit { send() }
             HStack { Spacer(); BButton(title: "Cancel", kind: .quiet) { m.feedbackNoteFor = nil }; BButton(title: "Teach Brownie", kind: .primary) { send() }.disabled(note.trimmingCharacters(in: .whitespaces).isEmpty) }
         }.padding(20).frame(width: 460)
     }
