@@ -1,0 +1,32 @@
+name: Privacy
+
+on:
+  pull_request:
+  push: { branches: [main] }
+
+# Reads the diff and nothing else.
+permissions:
+  contents: read
+
+jobs:
+  no-real-data:
+    runs-on: ubuntu-latest
+    steps:
+      # The check compares against the merge base, so it needs the history either side of it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { fetch-depth: 0 }
+      # Every script in Scripts/ is zsh, because the app it builds is a Mac app; the runner here is Linux
+      # only because this check reads a diff and needs nothing else.
+      - name: zsh
+        run: sudo apt-get install -y --no-install-recommends zsh
+      - name: Fixtures are invented
+        shell: zsh {0}
+        run: |
+          # On a pull request, the lines this branch adds. On a push to main, the lines the push added.
+          if [ -n "${{ github.event.pull_request.base.sha }}" ]; then
+            RANGE="${{ github.event.pull_request.base.sha }}...${{ github.sha }}"
+          else
+            RANGE="${{ github.event.before }}..${{ github.sha }}"
+            git cat-file -e "${{ github.event.before }}^{commit}" 2>/dev/null || RANGE="${{ github.sha }}^..${{ github.sha }}"
+          fi
+          ./Scripts/no-real-data.sh "$RANGE"
