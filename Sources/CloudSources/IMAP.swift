@@ -114,26 +114,55 @@ public actor IMAPSession {
         }.filter { !$0.isEmpty && $0 != "/" }
     }
 
+    /// What the server says it can do. Only one answer is acted on — `X-GM-EXT-1`, which is Gmail offering its
+    /// own thread ids and its own search syntax over plain IMAP.
+    public func capabilities() async throws -> Set<String> {
+        let lines = try await command("CAPABILITY")
+        guard let line = lines.first(where: { $0.uppercased().hasPrefix("* CAPABILITY") }) else { return [] }
+        return Set(line.dropFirst("* CAPABILITY".count).split(separator: " ").map { $0.uppercased() })
+    }
+
+    /// Gmail's search, over IMAP. `X-GM-RAW` takes the same syntax as the web interface, which is the only way
+    /// to say `-category:promotions` — there is no IMAP SEARCH key for a Gmail category, and without it a
+    /// night reads every newsletter that arrived.
+    public func search(gmailRaw query: String) async throws -> [Int] {
+        let lines = try await command("SEARCH X-GM-RAW \(quoted(query))")
+        guard let hit = lines.first(where: { $0.hasPrefix("* SEARCH") }) else { return [] }
+        return hit.dropFirst("* SEARCH".count).split(separator: " ").compactMap { Int($0) }
+    }
+
     /// One batch of headers. Deliberately not the whole message: this runs over every message in the window.
     public struct Header: Sendable, Equatable {
         public let seq: Int
         public let uid: String
         public let date: Date?
         public let fields: [String: String]
+        /// Gmail's `X-GM-THRID`, when it was asked for and the server is Gmail. Nil everywhere else, and the
+        /// threading falls back to `References`.
+        public let threadID: String?
+        public init(seq: Int, uid: String, date: Date?, fields: [String: String], threadID: String? = nil) {
+            self.seq = seq; self.uid = uid; self.date = date; self.fields = fields; self.threadID = threadID
+        }
     }
 
-    public func headers(_ seqs: [Int]) async throws -> [Header] {
+    /// `IN-REPLY-TO` and `REFERENCES` ride along with the rest: they cost a few bytes a message on a fetch that
+    /// is already happening, and they are the whole of threading on a server that is not Gmail.
+    static let headerFields = "FROM TO CC SUBJECT DATE MESSAGE-ID IN-REPLY-TO REFERENCES LIST-ID"
+
+    public func headers(_ seqs: [Int], threadIDs: Bool = false) async throws -> [Header] {
         guard !seqs.isEmpty else { return [] }
         let set = seqs.map(String.init).joined(separator: ",")
-        let lines = try await command("FETCH \(set) (UID INTERNALDATE BODY.PEEK[HEADER.FIELDS (FROM TO CC SUBJECT DATE MESSAGE-ID LIST-ID)])")
+        let items = (threadIDs ? "X-GM-THRID " : "") + "UID INTERNALDATE BODY.PEEK[HEADER.FIELDS (\(Self.headerFields))]"
+        let lines = try await command("FETCH \(set) (\(items))")
         return lines.compactMap { line in
             guard let m = try? #/^\* (\d+) FETCH /#.firstMatch(in: line), let seq = Int(m.1) else { return nil }
             let uid = (try? #/UID (\d+)/#.firstMatch(in: line)).map { String($0.1) } ?? String(seq)
             let date = (try? #/INTERNALDATE "([^"]+)"/#.firstMatch(in: line)).flatMap { MailParsing.internalDate(String($0.1)) }
+            let thrid = (try? #/X-GM-THRID (\d+)/#.firstMatch(in: line)).map { String($0.1) }
             // Everything after the last `]` of the BODY section is the folded-in literal.
             guard let bracket = line.range(of: "]", options: .backwards) else { return nil }
             let raw = String(line[bracket.upperBound...]).trimmingCharacters(in: CharacterSet(charactersIn: " )"))
-            return Header(seq: seq, uid: uid, date: date, fields: MailParsing.headers(raw))
+            return Header(seq: seq, uid: uid, date: date, fields: MailParsing.headers(raw), threadID: thrid)
         }
     }
 
@@ -142,6 +171,23 @@ public actor IMAPSession {
         let lines = try await command("UID FETCH \(uid) (BODY.PEEK[]<0.\(limit)>)")
         guard let line = lines.first(where: { $0.contains(" FETCH ") }), let bracket = line.range(of: ">", options: .backwards) ?? line.range(of: "]", options: .backwards) else { return "" }
         return String(line[bracket.upperBound...]).trimmingCharacters(in: CharacterSet(charactersIn: " )"))
+    }
+
+    /// Whole messages for a set of UIDs, in one command rather than one each.
+    ///
+    /// Reading a conversation needs every message in it, and a thread scan needs a few dozen conversations. One
+    /// round trip per message would make the ask scan the slowest thing in the night; the server is perfectly
+    /// happy to answer a UID set, and `command` already folds each reply's literal in.
+    public func messages(uids: [String], limit: Int) async throws -> [String: String] {
+        guard !uids.isEmpty else { return [:] }
+        let lines = try await command("UID FETCH \(uids.joined(separator: ",")) (UID BODY.PEEK[]<0.\(limit)>)")
+        var out: [String: String] = [:]
+        for line in lines {
+            guard line.contains(" FETCH "), let u = (try? #/UID (\d+)/#.firstMatch(in: line)).map({ String($0.1) }) else { continue }
+            guard let bracket = line.range(of: ">", options: .backwards) ?? line.range(of: "]", options: .backwards) else { continue }
+            out[u] = String(line[bracket.upperBound...]).trimmingCharacters(in: CharacterSet(charactersIn: " )"))
+        }
+        return out
     }
 
     public func logout() async { _ = try? await command("LOGOUT"); await t.disconnect() }

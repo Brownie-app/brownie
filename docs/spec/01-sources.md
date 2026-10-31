@@ -80,7 +80,7 @@ last message's row id.
 | Apple Notes | document | localDatabase | `~/Library/Group Containers/group.com.apple.notes/NoteStore.sqlite` | "notes" | (created, uuid) | Full Disk Access |
 | iMessage | dm / group | localDatabase | `~/Library/Messages/chat.db` | chat | (rowid, "") | Full Disk Access |
 | WhatsApp | dm / group | localDatabase | WhatsApp Desktop's group container `ChatStorage.sqlite` | chat | (rowid, "") | Full Disk Access; WhatsApp installed |
-| Mail | mail | userCloud (IMAP over TLS, app password in Keychain) | `SEARCH SINCE` over INBOX — the first-read window, then the last 7 days; `EXAMINE`, so nothing is marked read | mailbox | (INTERNALDATE, uid) | the address and an app password |
+| Mail | mail | userCloud (IMAP over TLS, app password in Keychain) | `SEARCH SINCE` over INBOX — the first-read window, then the last 7 days; `EXAMINE`, so nothing is marked read. Threads for the ask scan: `X-GM-THRID` on Gmail, `In-Reply-To`/`References` elsewhere | mailbox; one bucket per thread for asks | (INTERNALDATE, uid) | the address and an app password |
 | Calendar | event | localAPI (EventKit) | last 7 days + next 24 h, all events | calendar | (start, id) | Calendar permission |
 | Telegram | dm / group | userCloud (TDLib, own account) | chats the user picks | chat | (messageId, "") | phone sign-in, API id/hash |
 | Slack | group | userCloud (OAuth) or mcp | channels the user picks | channel | (ts, "") | Slack sign-in |

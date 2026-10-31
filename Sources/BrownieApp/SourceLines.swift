@@ -31,6 +31,7 @@ enum SourceLines {
         case "telegram": return TelegramSource.isConfigured ? TelegramSource() : nil
         case "slack": return SlackAuth.isSignedIn ? SlackSource() : nil
         case "teams": return MicrosoftAuth.isSignedIn ? TeamsSource() : nil
+        case "mail": return MailAccount.isSignedIn ? MailSource() : nil
         default: return nil
         }
     }

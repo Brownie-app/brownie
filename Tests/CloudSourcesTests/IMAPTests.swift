@@ -160,6 +160,85 @@ func literalFetch(seq: Int, uid: String, date: String, headers: String, tag: Str
         #expect(try await s.message(uid: "1", limit: 10) == "")
     }
 
+    // MARK: - Gmail's own extensions, over plain IMAP
+
+    @Test func gmailAdvertisesItsExtensionsInTheCapabilityReply() async throws {
+        let t = FakeIMAP(greeting + "* CAPABILITY IMAP4rev1 UNSELECT IDLE X-GM-EXT-1 AUTH=XOAUTH2\r\na001 OK Success\r\n")
+        let s = IMAPSession(transport: t)
+        try await s.connect(host: "h", port: 993)
+        let caps = try await s.capabilities()
+        #expect(caps.contains("X-GM-EXT-1"), "this is what says the thread id and the raw search are available")
+        #expect(!caps.contains("X-GM-THRID"), "the capability names the set, not each command")
+    }
+
+    @Test func aServerThatIsNotGmailSaysNothingAboutGmail() async throws {
+        let t = FakeIMAP(greeting + "* CAPABILITY IMAP4rev1 IDLE CONDSTORE\r\na001 OK done\r\n")
+        let s = IMAPSession(transport: t)
+        try await s.connect(host: "h", port: 993)
+        #expect(!(try await s.capabilities()).contains("X-GM-EXT-1"))
+    }
+
+    @Test func theGmailSearchIsSentAsAQuotedRawQuery() async throws {
+        let t = FakeIMAP(greeting + "* SEARCH 4 9\r\na001 OK SEARCH completed\r\n")
+        let s = IMAPSession(transport: t)
+        try await s.connect(host: "h", port: 993)
+        #expect(try await s.search(gmailRaw: "newer_than:30d -category:promotions") == [4, 9])
+        let sent = await t.written
+        #expect(sent[0] == "a001 SEARCH X-GM-RAW \"newer_than:30d -category:promotions\"\r\n",
+                "unquoted, the minus and the colon are read as protocol")
+    }
+
+    @Test func theThreadIdComesBackAlongsideTheHeadersWhenAskedFor() async throws {
+        let headers = "From: a@x.test\r\nSubject: the figures\r\nMessage-ID: <m1@x.test>\r\n\r\n"
+        let n = headers.utf8.count
+        let stream = greeting
+            + "* 1 FETCH (X-GM-THRID 1799 UID 7 INTERNALDATE \" 7-Sep-2026 10:00:00 +0000\" BODY[HEADER.FIELDS (FROM SUBJECT)] {\(n)}\r\n\(headers))\r\n"
+            + "a001 OK FETCH completed\r\n"
+        let t = FakeIMAP(stream)
+        let s = IMAPSession(transport: t)
+        try await s.connect(host: "h", port: 993)
+        let out = try await s.headers([1], threadIDs: true)
+        #expect(out.first?.threadID == "1799")
+        #expect(out.first?.fields["message-id"] == "<m1@x.test>", "threading needs the id the message calls itself")
+        let sent = await t.written
+        #expect(sent[0].contains("X-GM-THRID"))
+        #expect(sent[0].contains("IN-REPLY-TO REFERENCES"), "and the headers every other server threads on")
+    }
+
+    @Test func noThreadIdIsAskedForOnAServerThatIsNotGmail() async throws {
+        let headers = "From: a@x.test\r\nSubject: s\r\n\r\n"
+        let t = FakeIMAP(greeting + literalFetch(seq: 1, uid: "7", date: " 7-Sep-2026 10:00:00 +0000", headers: headers, tag: "a001"))
+        let s = IMAPSession(transport: t)
+        try await s.connect(host: "h", port: 993)
+        let out = try await s.headers([1])
+        #expect(out.first?.threadID == nil)
+        #expect(!(await t.written)[0].contains("X-GM-THRID"))
+    }
+
+    // MARK: - Reading a conversation
+
+    @Test func severalWholeMessagesComeBackFromOneUidFetch() async throws {
+        let one = "From: a@x.test\r\n\r\nthe question\r\n", two = "From: b@x.test\r\n\r\nthe answer\r\n"
+        let stream = greeting
+            + "* 1 FETCH (UID 11 BODY[]<0> {\(one.utf8.count)}\r\n\(one))\r\n"
+            + "* 2 FETCH (UID 12 BODY[]<0> {\(two.utf8.count)}\r\n\(two))\r\n"
+            + "a001 OK FETCH completed\r\n"
+        let t = FakeIMAP(stream)
+        let s = IMAPSession(transport: t)
+        try await s.connect(host: "h", port: 993)
+        let out = try await s.messages(uids: ["11", "12"], limit: 4096)
+        #expect(out["11"]?.contains("the question") == true)
+        #expect(out["12"]?.contains("the answer") == true, "a miscounted literal would swallow this one")
+        #expect((await t.written)[0].hasPrefix("a001 UID FETCH 11,12 "), "one command, not one per message")
+    }
+
+    @Test func askingForNoMessagesAsksTheServerNothing() async throws {
+        let t = FakeIMAP("")
+        let s = IMAPSession(transport: t)
+        #expect(try await s.messages(uids: [], limit: 10).isEmpty)
+        #expect(await t.written.isEmpty)
+    }
+
     @Test func aPasswordWithAQuoteInItIsEscapedRatherThanEndingTheString() async {
         let s = IMAPSession(transport: FakeIMAP(""))
         #expect(await s.quoted(#"pa"ss\word"#) == #""pa\"ss\\word""#)

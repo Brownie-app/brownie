@@ -6,7 +6,9 @@ All notable changes. Brownie follows semantic versioning once 1.0 ships; before 
 
 **Mail is any mailbox now, and Gmail's sign-in is gone.** Reading your mail used to mean signing in to Google, which meant Brownie needed a Google OAuth client, an annual security assessment for a restricted scope, and a refresh token that expired every seven days while the app sat in Testing — and it only ever worked for Gmail. Mail is now read over IMAP with an app password you create yourself: Gmail, iCloud, Outlook, Fastmail, Proton through its Bridge, or a work server you type in. It is read with `EXAMINE`, so a 3 am read never marks anything seen, and only the headers are fetched for mail the reader drops on its subject line.
 
-**What this costs, for now:** asks and loops no longer come from mail. Gmail's API handed back a thread id with every message, so a mail thread could be read as a conversation and a question in it could close on your reply. IMAP has no thread id — grouping a mailbox into conversations means walking `References` and `In-Reply-To` — so until that exists, mail is read and summarised but never reaches the ask ledger. Scenario 15 in `docs/scenarios.md` is marked GAP rather than quietly dropped.
+**Asks and loops from mail now work for every provider, not just Gmail.** A question someone mails you opens an ask, and your reply two days later closes it. That used to depend on Gmail's API handing back a thread id, so it only ever worked for Gmail. It turns out IMAP offers the same thing twice over: Gmail exposes `X-GM-THRID` — the identical thread id — to any IMAP client, and every other server can be threaded from the `In-Reply-To` and `References` headers mail has carried since 1982. So iCloud, Outlook, Fastmail and a work server now close their own loops, which they never could before.
+
+Gmail's search syntax is available over IMAP too, via `X-GM-RAW`, so `-category:promotions` is back: a night does not read every newsletter that arrived.
 
 ## 0.3 — 11 October 2026
 
