@@ -14,8 +14,8 @@ final class FakeTranscriber: Transcriber, @unchecked Sendable {
 
 @Suite struct TranscriptTests {
     @Test func rendersTimestampsPerLine() {
-        let t = Transcript(lines: [.init(start: 0, end: 2, text: "Hi Meera."), .init(start: 192.4, end: 195, text: "I'll send it by Thursday."), .init(start: 3725, end: 3730, text: "Bye.")], duration: 3730)
-        #expect(t.text == "[00:00] Hi Meera.\n[03:12] I'll send it by Thursday.\n[1:02:05] Bye.")
+        let t = Transcript(lines: [.init(start: 0, end: 2, text: "Hi Meena."), .init(start: 192.4, end: 195, text: "I'll send it by Thursday."), .init(start: 3725, end: 3730, text: "Bye.")], duration: 3730)
+        #expect(t.text == "[00:00] Hi Meena.\n[03:12] I'll send it by Thursday.\n[1:02:05] Bye.")
         #expect(!t.isEmpty)
         #expect(Transcript(lines: [.init(start: 0, end: 1, text: "  ")], duration: 1).isEmpty)
     }
@@ -88,7 +88,7 @@ final class FakeTranscriber: Transcriber, @unchecked Sendable {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("rec-\(UUID().uuidString)")
         let cache = FileManager.default.temporaryDirectory.appendingPathComponent("cache-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        let u = root.appendingPathComponent("Meera call.m4a"); try Data([1]).write(to: u)
+        let u = root.appendingPathComponent("Meena call.m4a"); try Data([1]).write(to: u)
         try FileManager.default.setAttributes([.creationDate: Date(timeIntervalSince1970: 1_700_000_000), .modificationDate: Date(timeIntervalSince1970: 1_700_000_000)], ofItemAtPath: u.path)
         return (root, cache)
     }
@@ -112,7 +112,7 @@ final class FakeTranscriber: Transcriber, @unchecked Sendable {
         #expect(b.count == 1 && b[0].id == BucketID("recordings"))
         let c = try #require(b[0].items.first)
         #expect(c.kind == .transcript)
-        #expect(c.metadata["displayPath"] == "Recordings/Meera call")
+        #expect(c.metadata["displayPath"] == "Recordings/Meena call")
         #expect(c.itemDate == Date(timeIntervalSince1970: 1_700_000_000))
         #expect(c.key.order == 1_700_000_000)
     }

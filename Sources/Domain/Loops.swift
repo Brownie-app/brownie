@@ -88,7 +88,7 @@ public struct TaughtRecipe: Codable, Sendable, Identifiable, Equatable {
         public enum Kind: String, Codable, Sendable { case launch, click, type, key }
         public let kind: Kind
         public let app: String
-        /// For click: the element's role and title ("Row “Rohan”"). For type: the field's title. For key: the combo.
+        /// For click: the element's role and title ("Row “Zubin”"). For type: the field's title. For key: the combo.
         public let target: String
         public let role: String
         /// For type: the text typed. May be replaced by a parameter.

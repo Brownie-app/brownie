@@ -8,10 +8,10 @@ import Domain
     let now = Date(timeIntervalSince1970: 1_758_000_000)
     let day = 86400.0
     func ask(_ id: String, askedDaysAgo: Double, answeredDaysAgo: Double? = nil, addressed: Bool? = nil) -> Ask {
-        Ask(id: id, person: "Nitesh", bucket: BucketID("whatsapp:1"), askedAt: now.addingTimeInterval(-askedDaysAgo * day), question: "q?", answeredAt: answeredDaysAgo.map { now.addingTimeInterval(-$0 * day) }, addressed: addressed)
+        Ask(id: id, person: "Lokesh", bucket: BucketID("whatsapp:1"), askedAt: now.addingTimeInterval(-askedDaysAgo * day), question: "q?", answeredAt: answeredDaysAgo.map { now.addingTimeInterval(-$0 * day) }, addressed: addressed)
     }
     func loop(_ id: String, openedDaysAgo: Double, dueDaysAgo: Double? = nil, status: LoopStatus = .open, fired: [String] = [], cameBack: Int = 0) -> Loop {
-        Loop(id: id, direction: .mine, person: "Karan", what: "villa share", quote: "", sourceLabel: "s", due: dueDaysAgo.map { _ in "a date" }, dueDate: dueDaysAgo.map { now.addingTimeInterval(-$0 * day) },
+        Loop(id: id, direction: .mine, person: "Devan", what: "villa share", quote: "", sourceLabel: "s", due: dueDaysAgo.map { _ in "a date" }, dueDate: dueDaysAgo.map { now.addingTimeInterval(-$0 * day) },
              status: status, openedAt: now.addingTimeInterval(-openedDaysAgo * day), firedCardIDs: fired, cameBackCount: cameBack)
     }
 

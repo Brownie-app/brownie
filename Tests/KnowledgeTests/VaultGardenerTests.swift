@@ -22,22 +22,22 @@ import Domain
 
     @Test func changedNotesAreRestampedAndUnchangedOnesUntouched() async throws {
         let root = try fresh()
-        let messy = "# Arjun Mehta\n\nOld friend.\n\n## Pending\n- Asked about the flat (2026-07-01)\n- Wants the photos (2026-09-10)\n"
-        try put("People/Arjun Mehta.md", stamped("People/Arjun Mehta.md", messy), in: root)
-        let tidy = "# Priya\n\n## About\n- Sister-in-law.\n\n## Now\n- Flight dates (2026-09-12)\n"
-        try put("People/Priya.md", stamped("People/Priya.md", tidy), in: root)
+        let messy = "# Kiran Bose\n\nOld friend.\n\n## Pending\n- Asked about the flat (2026-07-01)\n- Wants the photos (2026-09-10)\n"
+        try put("People/Kiran Bose.md", stamped("People/Kiran Bose.md", messy), in: root)
+        let tidy = "# Tanvi\n\n## About\n- Sister-in-law.\n\n## Now\n- Flight dates (2026-09-12)\n"
+        try put("People/Tanvi.md", stamped("People/Tanvi.md", tidy), in: root)
         try put("Groups/MPL Days.md", stamped("Groups/MPL Days.md", "# MPL Days\n\nThe college group.\n"), in: root)
-        try put("Work/Loadmill.md", stamped("Work/Loadmill.md", "# Loadmill\n\n## Pending\n- untouched\n"), in: root)
+        try put("Work/Tideline.md", stamped("Work/Tideline.md", "# Tideline\n\n## Pending\n- untouched\n"), in: root)
         try put("People/Archive/Old.md", stamped("People/Archive/Old.md", "# Old\n\n## Pending\n- untouched\n"), in: root)
-        let before = (raw("People/Priya.md", in: root), raw("Work/Loadmill.md", in: root), raw("People/Archive/Old.md", in: root))
-        let s = await VaultGardener.run(root: root, registry: nil, now: Self.now, timeZone: Self.utc, retiredLines: { $0 == "People/Arjun Mehta.md" ? ["- ✅ 20 Aug — they asked: “dinner?” — you replied 2 Sep 14:00"] : [] }, archive: false)
+        let before = (raw("People/Tanvi.md", in: root), raw("Work/Tideline.md", in: root), raw("People/Archive/Old.md", in: root))
+        let s = await VaultGardener.run(root: root, registry: nil, now: Self.now, timeZone: Self.utc, retiredLines: { $0 == "People/Kiran Bose.md" ? ["- ✅ 20 Aug — they asked: “dinner?” — you replied 2 Sep 14:00"] : [] }, archive: false)
         #expect(s.notes == 3 && s.tidied == 2 && s.movedToEarlier == 1 && s.retired == 1 && s.archived == 0)
-        #expect(s.changed == ["People/Arjun Mehta.md", "Groups/MPL Days.md"])
+        #expect(s.changed == ["People/Kiran Bose.md", "Groups/MPL Days.md"])
         #expect(s.line == "gardener: 2 notes tidied, 1 bullet moved to Earlier, 1 retired line kept, 0 archived")
-        let (meta, body) = NoteMeta.parse(raw("People/Arjun Mehta.md", in: root)!, path: "People/Arjun Mehta.md")
-        #expect(body == "# Arjun Mehta\n\n## About\n- Old friend.\n\n## Now\n- Wants the photos (2026-09-10)\n\n## Earlier\n- 2026-09 — they asked: “dinner?” — you replied 2 Sep 14:00\n- 2026-07 — Asked about the flat\n")
+        let (meta, body) = NoteMeta.parse(raw("People/Kiran Bose.md", in: root)!, path: "People/Kiran Bose.md")
+        #expect(body == "# Kiran Bose\n\n## About\n- Old friend.\n\n## Now\n- Wants the photos (2026-09-10)\n\n## Earlier\n- 2026-09 — they asked: “dinner?” — you replied 2 Sep 14:00\n- 2026-07 — Asked about the flat\n")
         #expect(meta?.updated == "2026-09-01" && meta?.contentHash == NoteMeta.hash(body) && meta?.userEdited == false, "the hash moves with the rewrite; updated does not; nobody edited anything")
-        #expect(raw("People/Priya.md", in: root) == before.0 && raw("Work/Loadmill.md", in: root) == before.1 && raw("People/Archive/Old.md", in: root) == before.2, "in shape, a topic, archived: byte for byte")
+        #expect(raw("People/Tanvi.md", in: root) == before.0 && raw("Work/Tideline.md", in: root) == before.1 && raw("People/Archive/Old.md", in: root) == before.2, "in shape, a topic, archived: byte for byte")
         let again = await VaultGardener.run(root: root, registry: nil, now: Self.now, timeZone: Self.utc, archive: false)
         #expect(again.tidied == 0, "a second night with nothing new changes nothing")
     }
@@ -57,17 +57,17 @@ import Domain
     @Test func aUsersCommentsTablesAndNestedBulletsSurviveTheNight() async throws {
         let root = try fresh()
         // in shape already, with the things a user writes in Obsidian that the shape has no opinion about: untouched, byte for byte
-        let tidy = "# Priya\n\n## About\n- Sister-in-law\n  - lives in Pune\n<!-- ask about the loan next time -->\n\n### Family\n- Two kids\n\n| Name | Role |\n|---|---|\n| Dev | husband |\n\n## Now\n- Flight dates (2026-09-12)\n  - Goa, not Kochi\n"
-        try put("People/Priya.md", stamped("People/Priya.md", tidy), in: root)
+        let tidy = "# Tanvi\n\n## About\n- Sister-in-law\n  - lives in Pune\n<!-- ask about the loan next time -->\n\n### Family\n- Two kids\n\n| Name | Role |\n|---|---|\n| Dev | husband |\n\n## Now\n- Flight dates (2026-09-12)\n  - Goa, not Kochi\n"
+        try put("People/Tanvi.md", stamped("People/Tanvi.md", tidy), in: root)
         // not in shape, with the same things: put in shape with every one of them still there
-        let messy = "# Arjun\n\n## Background\n- Old friend\n<!-- met at IIT -->\n\n## Pending\n- Asked about the flat (2026-09-10)\n  - the one in Pune\n```\n# a heading in a fence is code\n```\n"
-        try put("People/Arjun.md", stamped("People/Arjun.md", messy), in: root)
-        let before = raw("People/Priya.md", in: root)
+        let messy = "# Kiran\n\n## Background\n- Old friend\n<!-- met at IIT -->\n\n## Pending\n- Asked about the flat (2026-09-10)\n  - the one in Pune\n```\n# a heading in a fence is code\n```\n"
+        try put("People/Kiran.md", stamped("People/Kiran.md", messy), in: root)
+        let before = raw("People/Tanvi.md", in: root)
         let s = await VaultGardener.run(root: root, registry: nil, now: Self.now, timeZone: Self.utc, archive: false)
-        #expect(s.tidied == 1 && s.changed == ["People/Arjun.md"])
-        #expect(raw("People/Priya.md", in: root) == before)
-        let (_, body) = NoteMeta.parse(raw("People/Arjun.md", in: root)!, path: "People/Arjun.md")
-        #expect(body == "# Arjun\n\n## About\n- Old friend\n<!-- met at IIT -->\n\n## Now\n- Asked about the flat (2026-09-10)\n  - the one in Pune\n\n```\n# a heading in a fence is code\n```\n")
+        #expect(s.tidied == 1 && s.changed == ["People/Kiran.md"])
+        #expect(raw("People/Tanvi.md", in: root) == before)
+        let (_, body) = NoteMeta.parse(raw("People/Kiran.md", in: root)!, path: "People/Kiran.md")
+        #expect(body == "# Kiran\n\n## About\n- Old friend\n<!-- met at IIT -->\n\n## Now\n- Asked about the flat (2026-09-10)\n  - the one in Pune\n\n```\n# a heading in a fence is code\n```\n")
         let again = await VaultGardener.run(root: root, registry: nil, now: Self.now, timeZone: Self.utc, archive: false)
         #expect(again.tidied == 0)
     }
@@ -75,13 +75,13 @@ import Domain
     /// The line says what the word rules did, when they did anything; a night later there is nothing for them to do.
     @Test func theLineCountsWhatTheLintDid() async throws {
         let root = try fresh()
-        let body = "# Kanika\n\n## About\n- Standing facts about Kanika.\n- The user's colleague at Loadmill.\n\n## Now\n- The user agreed to review the deck; delivery is not confirmed. (2026-09-10)\n- Kanika shared the Q3 deck with the team (2026-09-12)\n- Earlier plans remain historical unless noted above.\n\n## Context\n- Kanika shared the Q3 deck for the team (2026-09-01)\n"
-        try put("People/Kanika.md", stamped("People/Kanika.md", body), in: root)
+        let body = "# Lalita\n\n## About\n- Standing facts about Lalita.\n- The user's colleague at Tideline.\n\n## Now\n- The user agreed to review the deck; delivery is not confirmed. (2026-09-10)\n- Lalita shared the Q3 deck with the team (2026-09-12)\n- Earlier plans remain historical unless noted above.\n\n## Context\n- Lalita shared the Q3 deck for the team (2026-09-01)\n"
+        try put("People/Lalita.md", stamped("People/Lalita.md", body), in: root)
         let s = await VaultGardener.run(root: root, registry: nil, now: Self.now, timeZone: Self.utc, archive: false)
         #expect(s.line == "gardener: 1 note tidied, 0 bullets moved to Earlier, 2 lines put in your voice, 1 hedge removed, 1 empty bullet dropped, 1 repeated bullet merged, 1 meta line cut, 0 archived")
         #expect(s.voiced == 2 && s.hedges == 1 && s.dropped == 1 && s.merged == 1 && s.meta == 1)
-        let (_, out) = NoteMeta.parse(raw("People/Kanika.md", in: root)!, path: "People/Kanika.md")
-        #expect(out == "# Kanika\n\n## About\n- Your colleague at Loadmill.\n\n## Now\n- Kanika shared the Q3 deck with the team (2026-09-12)\n- You agreed to review the deck. (2026-09-10)\n")
+        let (_, out) = NoteMeta.parse(raw("People/Lalita.md", in: root)!, path: "People/Lalita.md")
+        #expect(out == "# Lalita\n\n## About\n- Your colleague at Tideline.\n\n## Now\n- Lalita shared the Q3 deck with the team (2026-09-12)\n- You agreed to review the deck. (2026-09-10)\n")
         let again = await VaultGardener.run(root: root, registry: nil, now: Self.now, timeZone: Self.utc, archive: false)
         #expect(again.tidied == 0 && again.line == "gardener: 0 notes tidied, 0 bullets moved to Earlier, 0 archived")
     }
@@ -106,15 +106,15 @@ import Domain
     /// The line is offered on every night of a fortnight (a closed Mac must not lose it); the note takes it once.
     @Test func aRetiredLineOfferedNightAfterNightIsKeptOnce() async throws {
         let root = try fresh()
-        try put("People/Meera.md", stamped("People/Meera.md", "# Meera\n\n## About\n- x\n"), in: root)
+        try put("People/Meena.md", stamped("People/Meena.md", "# Meena\n\n## About\n- x\n"), in: root)
         let line = "- ✅ 20 Aug — they asked: “dinner?” — you replied 2 Sep 14:00"
         let first = await VaultGardener.run(root: root, registry: nil, now: Self.now, timeZone: Self.utc, retiredLines: { _ in [line] }, archive: false)
         #expect(first.retired == 1 && first.tidied == 1)
-        let once = raw("People/Meera.md", in: root)
+        let once = raw("People/Meena.md", in: root)
         // the next night, and a night a week on: offered again, nothing doubles
         for night in [1.0, 8.0] {
             let again = await VaultGardener.run(root: root, registry: nil, now: Self.now.addingTimeInterval(night * 86400), timeZone: Self.utc, retiredLines: { _ in [line] }, archive: false)
-            #expect(again.retired == 0 && again.tidied == 0 && raw("People/Meera.md", in: root) == once, "night +\(Int(night)): byte for byte")
+            #expect(again.retired == 0 && again.tidied == 0 && raw("People/Meena.md", in: root) == once, "night +\(Int(night)): byte for byte")
         }
         #expect(once!.components(separatedBy: "they asked: “dinner?”").count == 2)
     }
@@ -124,14 +124,14 @@ import Domain
     /// over the brain's merged work when the sync resumes.
     @Test func atLaunchTidiesOnlyAndWaitsForAPendingSync() async throws {
         let root = try fresh()
-        let messy = "# Arjun Mehta\n\nOld friend.\n\n## Pending\n- Asked about the flat (2026-07-01)\n"
-        try put("People/Arjun Mehta.md", stamped("People/Arjun Mehta.md", messy), in: root)
+        let messy = "# Kiran Bose\n\nOld friend.\n\n## Pending\n- Asked about the flat (2026-07-01)\n"
+        try put("People/Kiran Bose.md", stamped("People/Kiran Bose.md", messy), in: root)
         try put("People/Quiet.md", stamped("People/Quiet.md", "# Quiet\n\n## About\n- x\n", updated: "2026-01-01"), in: root)
-        let before = (raw("People/Arjun Mehta.md", in: root), raw("People/Quiet.md", in: root))
+        let before = (raw("People/Kiran Bose.md", in: root), raw("People/Quiet.md", in: root))
         #expect(await VaultGardener.atLaunch(root: root, now: Self.now, timeZone: Self.utc, syncPending: true) == nil)
-        #expect(raw("People/Arjun Mehta.md", in: root) == before.0 && raw("People/Quiet.md", in: root) == before.1, "a sync is mid-way: not a byte")
+        #expect(raw("People/Kiran Bose.md", in: root) == before.0 && raw("People/Quiet.md", in: root) == before.1, "a sync is mid-way: not a byte")
         let s = try #require(await VaultGardener.atLaunch(root: root, now: Self.now, timeZone: Self.utc, syncPending: false))
-        #expect(s.tidied == 1 && s.archived == 0 && s.changed == ["People/Arjun Mehta.md"])
+        #expect(s.tidied == 1 && s.archived == 0 && s.changed == ["People/Kiran Bose.md"])
         #expect(raw("People/Quiet.md", in: root) == before.1 && raw("People/Archive/Quiet.md", in: root) == nil, "quiet, but launch does not archive")
     }
 

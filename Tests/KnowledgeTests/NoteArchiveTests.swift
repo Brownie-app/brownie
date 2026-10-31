@@ -33,7 +33,7 @@ import Domain
         #expect(!due("People/A.md", "2025-01-01", settled), "a settled line's dates are life between you: replied 3 Sep, not quiet yet")
         let settledRaw: String = { var m = NoteMeta.fresh(path: "People/A.md", body: settled, today: "2025-01-01"); m.updated = "2025-01-01"; return m.render() + settled }()
         #expect(NoteArchive.isDue(path: "People/A.md", raw: settledRaw, mtime: Self.now, now: Self.now.addingTimeInterval(180 * 86400), timeZone: Self.utc), "a settled line does not bar the move once its dates are quiet")
-        #expect(!due("Work/Loadmill.md", "2020-01-01") && !due("People/Archive/A.md", "2020-01-01"), "topics and what is already archived are not the rule's")
+        #expect(!due("Work/Tideline.md", "2020-01-01") && !due("People/Archive/A.md", "2020-01-01"), "topics and what is already archived are not the rule's")
         #expect(NoteArchive.isDue(path: "People/B.md", raw: quiet, mtime: Self.now.addingTimeInterval(-200 * 86400), now: Self.now, timeZone: Self.utc) == true, "no front-matter: the file's date decides")
         #expect(NoteArchive.isDue(path: "People/B.md", raw: quiet, mtime: Self.now.addingTimeInterval(-100 * 86400), now: Self.now, timeZone: Self.utc) == false)
     }
@@ -41,7 +41,7 @@ import Domain
     @Test func archivingMovesTheFileAndTheRegistryFollows() async throws {
         let root = try fresh()
         try put("People/Old Friend.md", updated: "2026-01-10", body: "# Old Friend\n\n## About\n- x\n", in: root)
-        try put("People/Kanika Pandey.md", updated: "2026-09-10", body: "# Kanika Pandey\n\n## About\n- y\n", in: root)
+        try put("People/Lalita Pathak.md", updated: "2026-09-10", body: "# Lalita Pathak\n\n## About\n- y\n", in: root)
         try put("Groups/Quiet Group.md", updated: "2026-04-01", body: "# Quiet Group\n\n## About\n- z\n", in: root)
         try put("Groups/Live Group.md", updated: "2026-08-01", body: "# Live Group\n", in: root)
         let registry = PersonRegistry(vault: root, now: { Self.now })
@@ -50,7 +50,7 @@ import Domain
         let moved = await NoteArchive.archive(root: root, registry: registry, now: Self.now, timeZone: Self.utc)
         #expect(moved == ["People/Old Friend.md", "Groups/Quiet Group.md"], "People first, then Groups, each folder in name order")
         #expect(exists("People/Archive/Old Friend.md", in: root) && !exists("People/Old Friend.md", in: root))
-        #expect(exists("Groups/Archive/Quiet Group.md", in: root) && exists("Groups/Live Group.md", in: root) && exists("People/Kanika Pandey.md", in: root))
+        #expect(exists("Groups/Archive/Quiet Group.md", in: root) && exists("Groups/Live Group.md", in: root) && exists("People/Lalita Pathak.md", in: root))
         #expect(await registry.notePath(for: id) == "People/Archive/Old Friend.md")
         let saved = PersonRegistry(vault: root, now: { Self.now }); await saved.load()
         #expect(await saved.notePath(for: id) == "People/Archive/Old Friend.md", "the move is saved")
@@ -59,39 +59,39 @@ import Domain
 
     @Test func aMentionBringsANoteBack() async throws {
         let root = try fresh()
-        try put("People/Archive/Arjun Mehta.md", updated: "2026-01-10", body: "# Arjun Mehta\n\n## About\n- x\n", in: root)
-        try put("People/Archive/Priya.md", updated: "2026-01-10", body: "# Priya\n", in: root)
+        try put("People/Archive/Kiran Bose.md", updated: "2026-01-10", body: "# Kiran Bose\n\n## About\n- x\n", in: root)
+        try put("People/Archive/Tanvi.md", updated: "2026-01-10", body: "# Tanvi\n", in: root)
         try put("Groups/Archive/MPL Days.md", updated: "2026-01-10", body: "# MPL Days\n", in: root)
         let registry = PersonRegistry(vault: root, now: { Self.now })
-        let id = await registry.register(label: "Arjun Mehta", handle: "whatsapp:+2")
-        await registry.setNotePath("People/Archive/Arjun Mehta.md", for: id)
+        let id = await registry.register(label: "Kiran Bose", handle: "whatsapp:+2")
+        await registry.setNotePath("People/Archive/Kiran Bose.md", for: id)
         #expect(await NoteArchive.unarchive(root: root, registry: registry, mentioned: ["Nobody Here"], now: Self.now, timeZone: Self.utc).isEmpty)
-        let back = await NoteArchive.unarchive(root: root, registry: registry, mentioned: ["Arjun", "MPL Days"], now: Self.now, timeZone: Self.utc)
-        #expect(back == ["People/Arjun Mehta.md", "Groups/MPL Days.md"], "a first name names him; the group by its title")
-        #expect(exists("People/Arjun Mehta.md", in: root) && !exists("People/Archive/Arjun Mehta.md", in: root) && exists("People/Archive/Priya.md", in: root))
-        #expect(await registry.notePath(for: id) == "People/Arjun Mehta.md")
+        let back = await NoteArchive.unarchive(root: root, registry: registry, mentioned: ["Kiran", "MPL Days"], now: Self.now, timeZone: Self.utc)
+        #expect(back == ["People/Kiran Bose.md", "Groups/MPL Days.md"], "a first name names him; the group by its title")
+        #expect(exists("People/Kiran Bose.md", in: root) && !exists("People/Archive/Kiran Bose.md", in: root) && exists("People/Archive/Tanvi.md", in: root))
+        #expect(await registry.notePath(for: id) == "People/Kiran Bose.md")
     }
 
     @Test func aRegistryHandleNamesAnArchivedNoteUnderAnotherSpelling() async throws {
         let root = try fresh()
-        try put("People/Archive/Kanika Pandey.md", updated: "2026-01-10", body: "# Kanika Pandey\n", in: root)
+        try put("People/Archive/Lalita Pathak.md", updated: "2026-01-10", body: "# Lalita Pathak\n", in: root)
         let registry = PersonRegistry(vault: root, now: { Self.now })
-        let id = await registry.register(label: "Kanika Pandey", handle: "whatsapp:+3")
-        await registry.register(label: "KP Loadmill", handle: "whatsapp:+3")
-        await registry.setNotePath("People/Archive/Kanika Pandey.md", for: id)
-        #expect(await NoteArchive.unarchive(root: root, registry: registry, mentioned: ["KP Loadmill"], now: Self.now, timeZone: Self.utc) == ["People/Kanika Pandey.md"], "the alias resolves through the registry")
+        let id = await registry.register(label: "Lalita Pathak", handle: "whatsapp:+3")
+        await registry.register(label: "KP Tideline", handle: "whatsapp:+3")
+        await registry.setNotePath("People/Archive/Lalita Pathak.md", for: id)
+        #expect(await NoteArchive.unarchive(root: root, registry: registry, mentioned: ["KP Tideline"], now: Self.now, timeZone: Self.utc) == ["People/Lalita Pathak.md"], "the alias resolves through the registry")
     }
 
     @Test func nothingIsEverOverwritten() async throws {
         let root = try fresh()
-        try put("People/Archive/Arjun.md", updated: "2026-01-10", body: "# Arjun\n", in: root)
-        try put("People/Arjun.md", updated: "2026-09-10", body: "# Arjun\n\n## About\n- new note\n", in: root)
-        #expect(await NoteArchive.unarchive(root: root, registry: nil, mentioned: ["Arjun"], now: Self.now, timeZone: Self.utc).isEmpty)
-        #expect(exists("People/Archive/Arjun.md", in: root), "both stay; a person can be told about it")
+        try put("People/Archive/Kiran.md", updated: "2026-01-10", body: "# Kiran\n", in: root)
+        try put("People/Kiran.md", updated: "2026-09-10", body: "# Kiran\n\n## About\n- new note\n", in: root)
+        #expect(await NoteArchive.unarchive(root: root, registry: nil, mentioned: ["Kiran"], now: Self.now, timeZone: Self.utc).isEmpty)
+        #expect(exists("People/Archive/Kiran.md", in: root), "both stay; a person can be told about it")
     }
 
     @Test func pathsRoundTrip() {
-        #expect(NoteArchive.archivedPath("People/Arjun Mehta.md") == "People/Archive/Arjun Mehta.md" && NoteArchive.activePath("Groups/Archive/MPL Days.md") == "Groups/MPL Days.md")
+        #expect(NoteArchive.archivedPath("People/Kiran Bose.md") == "People/Archive/Kiran Bose.md" && NoteArchive.activePath("Groups/Archive/MPL Days.md") == "Groups/MPL Days.md")
         #expect(NoteArchive.isArchived("People/Archive/X.md") && !NoteArchive.isArchived("People/X.md") && !NoteArchive.isArchived("Archive/X.md"))
         #expect(NoteArchive.archivedPath("People/Archive/X.md") == "People/Archive/X.md", "never twice")
     }
@@ -111,9 +111,9 @@ import Domain
 
     /// A promise from March closed yesterday sits on the block as a settled line: the newest date on the block is life.
     @Test func theStatusBlocksNewestDateIsActivity() {
-        let rel = "People/Karan.md"
+        let rel = "People/Devan.md"
         func note(_ block: String) -> String {
-            let body = "# Karan\n\n<!-- brownie:status -->\n\(block)\n<!-- /brownie:status -->\n\n## About\n- x\n"
+            let body = "# Devan\n\n<!-- brownie:status -->\n\(block)\n<!-- /brownie:status -->\n\n## About\n- x\n"
             var m = NoteMeta.fresh(path: rel, body: body, today: "2025-01-01"); m.updated = "2025-01-01"; return m.render() + body
         }
         let old = Self.now.addingTimeInterval(-300 * 86400)
@@ -125,14 +125,14 @@ import Domain
     /// A WhatsApp contact never saved: the chat is a bare number, which has no name to match, but the registry knows the handle.
     @Test func aHandleBringsBackANoteWhoseLabelIsNoName() async throws {
         let root = try fresh()
-        try put("People/Archive/Nitesh.md", updated: "2026-01-10", body: "# Nitesh\n", in: root)
+        try put("People/Archive/Lokesh.md", updated: "2026-01-10", body: "# Lokesh\n", in: root)
         let registry = PersonRegistry(vault: root, now: { Self.now })
-        let id = await registry.register(label: "+91 98765 43210", handle: "whatsapp:+919876543210")
-        await registry.setNotePath("People/Archive/Nitesh.md", for: id)
-        #expect(await NoteArchive.unarchive(root: root, registry: registry, mentioned: ["+91 98765 43210"], now: Self.now, timeZone: Self.utc).isEmpty, "the number alone names nobody")
-        let back = await NoteArchive.unarchive(root: root, registry: registry, mentioned: [NoteArchive.Mention("+91 98765 43210", handle: "whatsapp:+919876543210")], now: Self.now, timeZone: Self.utc)
-        #expect(back == ["People/Nitesh.md"] && exists("People/Nitesh.md", in: root), "the handle does, whatever the chat is called")
-        #expect(await registry.notePath(for: id) == "People/Nitesh.md")
+        let id = await registry.register(label: "+91 90000 00666", handle: "whatsapp:+919000000666")
+        await registry.setNotePath("People/Archive/Lokesh.md", for: id)
+        #expect(await NoteArchive.unarchive(root: root, registry: registry, mentioned: ["+91 90000 00666"], now: Self.now, timeZone: Self.utc).isEmpty, "the number alone names nobody")
+        let back = await NoteArchive.unarchive(root: root, registry: registry, mentioned: [NoteArchive.Mention("+91 90000 00666", handle: "whatsapp:+919000000666")], now: Self.now, timeZone: Self.utc)
+        #expect(back == ["People/Lokesh.md"] && exists("People/Lokesh.md", in: root), "the handle does, whatever the chat is called")
+        #expect(await registry.notePath(for: id) == "People/Lokesh.md")
     }
 
     /// The household's shared group notes are kept out of Archive/: the sync would take an archived one off the shared folder for everyone.

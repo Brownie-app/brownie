@@ -52,7 +52,7 @@ public struct Person: Codable, Sendable, Identifiable, Equatable {
         return out
     }
     /// Where this person has been seen, from the handles: "WhatsApp", "Slack", "Teams", "iMessage", "Telegram" — what the
-    /// banner says when it asks whether the Nitesh Kumar on Slack is the one on WhatsApp.
+    /// banner says when it asks whether the Lokesh Kadri on Slack is the one on WhatsApp.
     public var sources: [String] {
         var out: [String] = []
         for h in handles {
@@ -190,10 +190,10 @@ public actor PersonRegistry {
 
     /// One person per existing People note, once: a note already owned by someone is left alone; a note whose
     /// title is a spelling of a person without a note becomes theirs, exact spellings before same-key ones (so
-    /// "Kanika Pandey.md" goes to the Kanika Pandey on file even when "Kanika Pandey Loadmill.md" sorts first);
+    /// "Lalita Pathak.md" goes to the Lalita Pathak on file even when "Lalita Pathak Tideline.md" sorts first);
     /// any other note starts a new person. A note whose front-matter carries a record's id is that record's first of
-    /// all — that is how "People/Nitesh Kumar (Slack).md", written for the Nitesh Kumar Brownie is not sure about,
-    /// reaches him and not the Nitesh Kumar of "People/Nitesh Kumar.md"; a note titled the way such a record was told to be
+    /// all — that is how "People/Lokesh Kadri (Slack).md", written for the Lokesh Kadri Brownie is not sure about,
+    /// reaches him and not the Lokesh Kadri of "People/Lokesh Kadri.md"; a note titled the way such a record was told to be
     /// written reaches him too. Notes that vanished (renamed or deleted by the brain or the user)
     /// release their person's path so a new title can claim it. A listing with no People folder is one of two
     /// things: the folder holds no note (every path into it is dead, and is released), or the listing failed on one
@@ -233,11 +233,11 @@ public actor PersonRegistry {
     // MARK: resolving and registering
 
     /// Who a label names: the handle decides when known; then the one person with a spelling of the same key;
-    /// when two people share the key ("Kanika Pandey" and "Kanika Pandey Loadmill", kept apart by the user or
+    /// when two people share the key ("Lalita Pathak" and "Lalita Pathak Tideline", kept apart by the user or
     /// not yet merged) the one spelled exactly like the label, and nobody when neither is — never the first on
     /// file; when the two spelled alike are a pending pair (the same name on two chats, not yet answered) the one
     /// with a note, and nobody when both or neither have one; then a first name alone, but only when exactly one
-    /// person carries it — two Arjuns and the answer is nobody.
+    /// person carries it — two Kirans and the answer is nobody.
     public func resolve(label: String, handle: String?) -> String? { Self.resolve(label: label, handle: handle, among: records) }
     /// The same rule over a roster handed out by `people()`, for callers that hold the list rather than the registry (the brain's file tools).
     public nonisolated static func resolve(label: String, handle: String?, among records: [Person]) -> String? {
@@ -261,8 +261,8 @@ public actor PersonRegistry {
     }
 
     /// Who a People note's title names, for the file tools and the seed: first a record without a note that was told to be
-    /// written under exactly this title ("Nitesh Kumar (Slack)" for the Nitesh Kumar Brownie is not sure about, "Nitesh
-    /// Kumar" for the one it already knew), then whoever the title resolves to as a label.
+    /// written under exactly this title ("Lokesh Kadri (Slack)" for the Lokesh Kadri Brownie is not sure about, "Lokesh
+    /// Kadri" for the one it already knew), then whoever the title resolves to as a label.
     public nonisolated static func resolveTitle(_ title: String, among records: [Person]) -> String? {
         let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
         if let p = records.first(where: { $0.notePath == nil && !$0.pending.isEmpty && Self.spellsAlike(Self.suggestedTitle(for: $0, among: records), t) }) { return p.id }
@@ -272,7 +272,7 @@ public actor PersonRegistry {
 
     /// The file a person is written in: theirs when they have one; otherwise their name — unless someone they may be, or
     /// were kept apart from, is spelled the same and comes first (has the note, or was on file earlier), in which case the
-    /// name with the chat this one was seen on, "People/Nitesh Kumar (Slack).md", so the two are told apart on disk until
+    /// name with the chat this one was seen on, "People/Lokesh Kadri (Slack).md", so the two are told apart on disk until
     /// the user says. A path another record already holds is stepped past with a count.
     public nonisolated static func suggestedNotePath(for p: Person, among records: [Person]) -> String {
         p.notePath ?? "People/" + suggestedTitle(for: p, among: records) + ".md"
@@ -345,15 +345,15 @@ public actor PersonRegistry {
         if shared.count > 1 { return shared.dropFirst().reduce(shared[0]) { Self.keepFirst($0, $1).0 }.id }
         return open(pendingToward: [])
     }
-    /// "People/Nitesh Kumar (Slack).md" → "Nitesh Kumar (Slack)".
+    /// "People/Lokesh Kadri (Slack).md" → "Lokesh Kadri (Slack)".
     nonisolated static func fileTitle(_ path: String) -> String {
         let name = path.split(separator: "/").last.map(String.init) ?? path
         return name.hasSuffix(".md") ? String(name.dropLast(3)) : name
     }
 
     /// A new spelling joins the aliases — every spelling a source used, the name's own included, so an exact
-    /// match can tell "Arjun Mehta" from the "Arjun Mehta (Landlord)" whose shown name is the same; a fuller
-    /// name than the one on file ("Kanika Pandey" after "Kanika") becomes the name.
+    /// match can tell "Kiran Bose" from the "Kiran Bose (Landlord)" whose shown name is the same; a fuller
+    /// name than the one on file ("Lalita Pathak" after "Lalita") becomes the name.
     private static func learn(label: String, into p: inout Person) {
         let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -363,7 +363,7 @@ public actor PersonRegistry {
     }
 
     /// The one record that was seen spelled as the label (case and surrounding space aside), or failing that the
-    /// one whose shown name or own note's title is the label; nil when none or several are — "Kanika Pandey" spelled by
+    /// one whose shown name or own note's title is the label; nil when none or several are — "Lalita Pathak" spelled by
     /// two records decides nothing, and the several are handed back as `tied` for the one rule that can tell a pending pair apart.
     private func exactIndex(label: String) -> Int? { Self.exactMatch(label: label, among: records).hit }
     private static func exactMatch(label: String, among pool: [Person]) -> (hit: Int?, tied: [Int]) {
@@ -387,7 +387,7 @@ public actor PersonRegistry {
     /// nobody's note is better than the wrong person's. When the registry knows nobody by the label, and nobody by
     /// its key either, the one title with exactly the same key answers, or among several the one that is the label
     /// itself — none of them when the label spells neither.
-    /// A first name alone never claims a note by title — that is how "Arjun" leaked into "Arjun Mehta".
+    /// A first name alone never claims a note by title — that is how "Kiran" leaked into "Kiran Bose".
     public func notePath(forLabel label: String, handle: String?, amongNotes notes: [Note]) -> String? {
         if let id = resolve(label: label, handle: handle) { return notePath(for: id) }
         let key = PersonKey.normalise(label)
@@ -535,7 +535,7 @@ public actor PersonRegistry {
 
     /// After a merge, whether a ledger row under `label` (and `handle`) was the dropped person's — by the roster as it
     /// stood before the merge, so the row is renamed only when it resolved to them: never merely because it shares
-    /// their key, which a third person the user keeps apart ("Kanika Pandey Loadmill" beside "Kanika Pandey") does too.
+    /// their key, which a third person the user keeps apart ("Lalita Pathak Tideline" beside "Lalita Pathak") does too.
     public nonisolated static func belonged(label: String, handle: String?, to dropped: String, among before: [Person]) -> Bool {
         resolve(label: label, handle: handle, among: before) == dropped
     }
@@ -549,7 +549,7 @@ public actor PersonRegistry {
 
     /// The `PEOPLE:` lines of the note builder's header: who exists and where they are written, capped. Someone Brownie is
     /// not sure about — the same name on a second chat — is listed on their own line with the file to write them in,
-    /// "People/Nitesh Kumar (Slack).md", and told apart from the one they may be, so the brain never folds the two.
+    /// "People/Lokesh Kadri (Slack).md", and told apart from the one they may be, so the brain never folds the two.
     public static let unsureLine = "Brownie is not sure these are one person; write each in their own file until the user says"
     public static func headerLines(_ people: [Person], cap: Int = 200) -> [String] {
         people.sorted { ($0.notePath == nil ? 1 : 0, $0.name.lowercased()) < ($1.notePath == nil ? 1 : 0, $1.name.lowercased()) }.prefix(cap).map { p in
@@ -577,7 +577,7 @@ public actor PersonRegistry {
 public enum PeopleQuestion {
     public static func isPending(_ pair: (Person, Person)) -> Bool { pair.0.pending.contains(pair.1.id) || pair.1.pending.contains(pair.0.id) }
 
-    /// "Is Nitesh Kumar on Slack the same Nitesh Kumar as on WhatsApp?" — the newcomer (the second of the pair, the one
+    /// "Is Lokesh Kadri on Slack the same Lokesh Kadri as on WhatsApp?" — the newcomer (the second of the pair, the one
     /// without the note) first. When both were seen on the same app, two chats under one name, the question says so
     /// rather than naming the app twice; with no chat known for either, it asks plainly.
     public static func title(_ pair: (Person, Person)) -> String {

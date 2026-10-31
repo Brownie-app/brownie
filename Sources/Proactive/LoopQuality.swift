@@ -71,7 +71,7 @@ public enum LoopQuality {
     }
 
     /// The same promise reported once per side ("they promised: Provide her sister's number" beside "you promised:
-    /// Provide Vivek's sister's number") is one loop. Two loops within three days of each other, in opposite
+    /// Provide Ishan's sister's number") is one loop. Two loops within three days of each other, in opposite
     /// directions, with the same person, whose content words (possessives, pronouns and names stripped) overlap by
     /// six in ten or more are a mirror: the first stays, the later one goes.
     public static func dedupeMirrored(_ loops: [Loop]) -> [Loop] {
@@ -90,7 +90,7 @@ public enum LoopQuality {
     }
     /// The words that carry what a promise is about: lowercased, possessives and pronouns gone, names gone (a
     /// capitalised word past the first is a name — the side that says "her sister" and the side that says
-    /// "Vivek's sister" mean the same sister), short and function words gone.
+    /// "Ishan's sister" mean the same sister), short and function words gone.
     static let functionWords: Set<String> = ["the", "and", "for", "with", "about", "that", "this", "you", "your", "his", "her", "their", "our", "my", "its",
                                              "him", "them", "she", "they", "from", "into", "onto", "over", "will", "would", "can", "could", "please", "again",
                                              "also", "then", "now", "soon", "some", "any", "all"]

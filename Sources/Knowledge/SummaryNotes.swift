@@ -110,7 +110,7 @@ public enum SummaryNotes {
         return trimmed + "\n\n" + body + "\n\n---\nWritten on this Mac by the reader. Nothing left your Mac.\n"
     }
 
-    /// "WhatsApp · Priya Sharma", "Files · Desktop" — the app and the chat or folder it came from.
+    /// "WhatsApp · Tanvi Rege", "Files · Desktop" — the app and the chat or folder it came from.
     static func group(_ s: SummaryRecord) -> String {
         let app = appName(s.source)
         let bucket = s.bucketName.trimmingCharacters(in: .whitespacesAndNewlines)

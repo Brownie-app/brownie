@@ -6,15 +6,15 @@ import Domain
 /// Thumbs-downs become instructions the judge reads; the Sunday letter owns them.
 @Suite struct FeedbackDigestTests {
     let now = Date(timeIntervalSince1970: 1_758_000_000)
-    func fb(_ v: CardFeedback.Verdict, title: String = "Reply to Rohan", person: String? = "Rohan", note: String = "", daysAgo: Double = 1) -> CardFeedback {
+    func fb(_ v: CardFeedback.Verdict, title: String = "Reply to Zubin", person: String? = "Zubin", note: String = "", daysAgo: Double = 1) -> CardFeedback {
         CardFeedback(cardID: UUID().uuidString, cardTitle: title, person: person, sourceLabel: "WhatsApp", verdict: v, note: note, at: now.addingTimeInterval(-daysAgo * 86400))
     }
 
     @Test func nothingSaysNothing() { #expect(FeedbackDigest.instructions([], now: now) == "") }
 
     @Test func notMineBecomesANeverRule() {
-        let s = FeedbackDigest.instructions([fb(.notMine, person: "Rohan"), fb(.notMine, title: "Villa share", person: "Rohan")], now: now)
-        #expect(s == "Anything involving Rohan is not the user's — never make a card about it.", "one rule per person, however many cards")
+        let s = FeedbackDigest.instructions([fb(.notMine, person: "Zubin"), fb(.notMine, title: "Villa share", person: "Zubin")], now: now)
+        #expect(s == "Anything involving Zubin is not the user's — never make a card about it.", "one rule per person, however many cards")
     }
 
     @Test func notImportantOnceIsAHintTwiceIsARule() {
@@ -23,20 +23,20 @@ import Domain
     }
 
     @Test func tooFormalPerPersonAndGlobally() {
-        let one = FeedbackDigest.instructions([fb(.tooFormal, person: "Kanika")], now: now)
-        #expect(one == "Drafts to Kanika: plain and casual, the way the user writes to them.")
-        let two = FeedbackDigest.instructions([fb(.tooFormal, person: "Kanika"), fb(.tooFormal, person: "Meera")], now: now)
+        let one = FeedbackDigest.instructions([fb(.tooFormal, person: "Lalita")], now: now)
+        #expect(one == "Drafts to Lalita: plain and casual, the way the user writes to them.")
+        let two = FeedbackDigest.instructions([fb(.tooFormal, person: "Lalita"), fb(.tooFormal, person: "Meena")], now: now)
         #expect(two.hasPrefix("Every draft was too formal for this user"))
-        #expect(two.contains("Drafts to Kanika") && two.contains("Drafts to Meera"))
+        #expect(two.contains("Drafts to Lalita") && two.contains("Drafts to Meena"))
     }
 
     @Test func specificCardsAreNamedWithTheDate() {
-        let s = FeedbackDigest.instructions([fb(.alreadyDone, title: "Send the deck", daysAgo: 2), fb(.wrongPerson, title: "Book the table", person: "Priya"), fb(.wrongTiming, title: "Diwali flights"), fb(.other, title: "Villa", note: " Rohan handles the villa now ")], now: now)
+        let s = FeedbackDigest.instructions([fb(.alreadyDone, title: "Send the deck", daysAgo: 2), fb(.wrongPerson, title: "Book the table", person: "Tanvi"), fb(.wrongTiming, title: "Diwali flights"), fb(.other, title: "Villa", note: " Zubin handles the villa now ")], now: now)
         let f = DateFormatter(); f.dateFormat = "d MMM"
         #expect(s.contains("“Send the deck” was already done (the user said so on \(f.string(from: now.addingTimeInterval(-2 * 86400))))"))
-        #expect(s.contains("“Book the table” named the wrong person (it was addressed to Priya)"))
+        #expect(s.contains("“Book the table” named the wrong person (it was addressed to Tanvi)"))
         #expect(s.contains("“Diwali flights” came too early"))
-        #expect(s.contains("About “Villa” the user said: “Rohan handles the villa now”."), "notes are trimmed and quoted verbatim")
+        #expect(s.contains("About “Villa” the user said: “Zubin handles the villa now”."), "notes are trimmed and quoted verbatim")
     }
 
     @Test func oldLessonsFadeAndTheListIsCapped() {
@@ -51,8 +51,8 @@ import Domain
         let since = now.addingTimeInterval(-6 * 86400)
         #expect(FeedbackDigest.weekLine([], since: since) == "")
         #expect(FeedbackDigest.weekLine([fb(.notMine, daysAgo: 10)], since: since) == "", "only this week")
-        let line = FeedbackDigest.weekLine([fb(.notMine, person: "Rohan"), fb(.tooFormal), fb(.tooFormal), fb(.alreadyDone)], since: since)
-        #expect(line == "You corrected 4 cards this week: 1 wasn't yours (Rohan) · 1 already done · 2 too formal. Those lessons are now in Brownie's standing instructions.")
+        let line = FeedbackDigest.weekLine([fb(.notMine, person: "Zubin"), fb(.tooFormal), fb(.tooFormal), fb(.alreadyDone)], since: since)
+        #expect(line == "You corrected 4 cards this week: 1 wasn't yours (Zubin) · 1 already done · 2 too formal. Those lessons are now in Brownie's standing instructions.")
     }
 
     @Test func roundTripsThroughJSON() throws {
@@ -62,8 +62,8 @@ import Domain
 
     @Test func cardPersonComesFromTheRecipe() {
         func c(_ r: Recipe) -> Card { Card(id: "1", title: "t", sourceLabel: "s", why: "", actionLabel: "", dueLine: "", urgency: .low, draftLabel: "", draft: "", recipe: r, evidence: [], verification: .verified, verifiedLine: "", createdAt: now) }
-        #expect(c(.whatsapp(chat: "Rohan", body: "")).person == "Rohan")
-        #expect(c(.mail(to: "arif@x.com", subject: "", body: "", attachments: [])).person == "arif@x.com")
+        #expect(c(.whatsapp(chat: "Zubin", body: "")).person == "Zubin")
+        #expect(c(.mail(to: "noor@x.test", subject: "", body: "", attachments: [])).person == "noor@x.test")
         #expect(c(.browser(url: "u")).person == nil)
     }
 }

@@ -4,30 +4,30 @@ import Foundation
 import LocalSources
 import Domain
 
-let teamsMe = #"{"id":"ME","displayName":"Vivek Upreti"}"#
+let teamsMe = #"{"id":"ME","displayName":"Ishan Shirke"}"#
 let teamsChats = #"""
 {"value":[
- {"id":"19:a","chatType":"oneOnOne","topic":null,"members":[{"userId":"ME","displayName":"Vivek Upreti"},{"userId":"U2","displayName":"Meera Nair"}]},
- {"id":"19:b","chatType":"group","topic":"Pricing v2","members":[{"userId":"ME","displayName":"Vivek Upreti"},{"userId":"U2","displayName":"Meera Nair"},{"userId":"U3","displayName":"Rohan"}]},
- {"id":"19:c","chatType":"group","topic":"","members":[{"userId":"ME","displayName":"Vivek Upreti"},{"userId":"U2","displayName":"Meera Nair"},{"userId":"U3","displayName":"Rohan"}]},
+ {"id":"19:a","chatType":"oneOnOne","topic":null,"members":[{"userId":"ME","displayName":"Ishan Shirke"},{"userId":"U2","displayName":"Meena Pillai"}]},
+ {"id":"19:b","chatType":"group","topic":"Pricing v2","members":[{"userId":"ME","displayName":"Ishan Shirke"},{"userId":"U2","displayName":"Meena Pillai"},{"userId":"U3","displayName":"Zubin"}]},
+ {"id":"19:c","chatType":"group","topic":"","members":[{"userId":"ME","displayName":"Ishan Shirke"},{"userId":"U2","displayName":"Meena Pillai"},{"userId":"U3","displayName":"Zubin"}]},
  {"id":"19:d","chatType":"meeting","topic":"","members":[]}]}
 """#
 let teamsTeams = #"{"value":[{"id":"T1","displayName":"Founders"}]}"#
 let teamsChannels = #"{"value":[{"id":"C1","displayName":"General","membershipType":"standard"},{"id":"C2","displayName":"Design","membershipType":"private"}]}"#
 let teamsMessages = #"""
 {"value":[
- {"id":"1757600000000","messageType":"message","createdDateTime":"2025-09-11T14:13:20.000Z","from":{"user":{"id":"U2","displayName":"Meera Nair"}},"body":{"contentType":"html","content":"<p>Did you send the pricing notes? <at id=\"0\">Vivek</at></p>"}},
+ {"id":"1757600000000","messageType":"message","createdDateTime":"2025-09-11T14:13:20.000Z","from":{"user":{"id":"U2","displayName":"Meena Pillai"}},"body":{"contentType":"html","content":"<p>Did you send the pricing notes? <at id=\"0\">Ishan</at></p>"}},
  {"id":"1757599000000","messageType":"systemEventMessage","createdDateTime":"2025-09-11T13:56:40Z","body":{"contentType":"html","content":"<systemEventMessage/>"}},
- {"id":"1757590000000","messageType":"message","createdDateTime":"2025-09-11T11:26:40Z","from":{"user":{"id":"ME","displayName":"Vivek Upreti"}},"body":{"contentType":"text","content":"I'll send it by Thursday"}},
- {"id":"1757580000000","messageType":"message","createdDateTime":"2025-09-11T08:40:00Z","deletedDateTime":"2025-09-11T09:00:00Z","from":{"user":{"id":"ME","displayName":"Vivek"}},"body":{"contentType":"text","content":"oops"}},
- {"id":"1757570000000","messageType":"message","createdDateTime":"2025-09-11T05:53:20Z","from":{"user":{"id":"U2","displayName":"Meera Nair"}},"body":{"contentType":"html","content":""},"attachments":[{"name":"pricing.pdf"}]}]}
+ {"id":"1757590000000","messageType":"message","createdDateTime":"2025-09-11T11:26:40Z","from":{"user":{"id":"ME","displayName":"Ishan Shirke"}},"body":{"contentType":"text","content":"I'll send it by Thursday"}},
+ {"id":"1757580000000","messageType":"message","createdDateTime":"2025-09-11T08:40:00Z","deletedDateTime":"2025-09-11T09:00:00Z","from":{"user":{"id":"ME","displayName":"Ishan"}},"body":{"contentType":"text","content":"oops"}},
+ {"id":"1757570000000","messageType":"message","createdDateTime":"2025-09-11T05:53:20Z","from":{"user":{"id":"U2","displayName":"Meena Pillai"}},"body":{"contentType":"html","content":""},"attachments":[{"name":"pricing.pdf"}]}]}
 """#
-let teamsOldPage = #"{"value":[{"id":"1","messageType":"message","createdDateTime":"2025-05-01T00:00:00Z","from":{"user":{"id":"U2","displayName":"Meera Nair"}},"body":{"contentType":"text","content":"ancient"}}]}"#
+let teamsOldPage = #"{"value":[{"id":"1","messageType":"message","createdDateTime":"2025-05-01T00:00:00Z","from":{"user":{"id":"U2","displayName":"Meena Pillai"}},"body":{"contentType":"text","content":"ancient"}}]}"#
 
 @Suite struct TeamsParsingTests {
     @Test func chatsAreNamedForPeopleOrTopics() {
         let c = TeamsParsing.chats(json(teamsChats), me: "ME")
-        #expect(c.map(\.name) == ["Meera Nair", "Pricing v2", "Group · Meera Nair, Rohan", "Meeting chat"])
+        #expect(c.map(\.name) == ["Meena Pillai", "Pricing v2", "Group · Meena Pillai, Zubin", "Meeting chat"])
         #expect(c.map(\.id.rawValue) == ["teams:chat:19:a", "teams:chat:19:b", "teams:chat:19:c", "teams:chat:19:d"])
         #expect(c[0].isGroup == false && c[0].detail == "Direct" && c[1].detail == "Group chat · 3 people")
     }
@@ -41,7 +41,7 @@ let teamsOldPage = #"{"value":[{"id":"1","messageType":"message","createdDateTim
 
     @Test func messagesDropSystemEventsAndDeletionsAndFlattenHTML() {
         let m = TeamsParsing.messages(json(teamsMessages), me: "ME")
-        #expect(m.map(\.text) == ["[attachment: pricing.pdf]", "I'll send it by Thursday", "Did you send the pricing notes? @Vivek"])
+        #expect(m.map(\.text) == ["[attachment: pricing.pdf]", "I'll send it by Thursday", "Did you send the pricing notes? @Ishan"])
         #expect(m.map(\.isMe) == [false, true, false])
         #expect(m[2].date == Date(timeIntervalSince1970: 1757600000))
         #expect(m[1].rowID == 1757590000000)
@@ -70,7 +70,7 @@ let teamsOldPage = #"{"value":[{"id":"1","messageType":"message","createdDateTim
 
     @Test func discoverListsChatsThenChannels() async throws {
         let b = try await source(wired()).discoverBuckets()
-        #expect(b.map(\.name) == ["Meera Nair", "Pricing v2", "Group · Meera Nair, Rohan", "Meeting chat", "Founders · General", "Founders · Design"])
+        #expect(b.map(\.name) == ["Meena Pillai", "Pricing v2", "Group · Meena Pillai, Zubin", "Meeting chat", "Founders · General", "Founders · Design"])
         let t = wired(); _ = try await source(t).discoverBuckets()
         #expect(t.count("$expand=members") == 1 || t.count("%24expand=members") == 1, "chats come with their members in one call")
     }
@@ -80,7 +80,7 @@ let teamsOldPage = #"{"value":[{"id":"1","messageType":"message","createdDateTim
         let out = try await source(t).buckets(since: [:], enabled: [BucketID("teams:chat:19:a")])
         #expect(out.count == 1 && t.count("/messages") == 1)
         let c = try #require(out[0].items.first)
-        #expect(c.kind == .directMessage && c.metadata["chat"] == "Meera Nair")
+        #expect(c.kind == .directMessage && c.metadata["chat"] == "Meena Pillai")
         #expect(c.itemDate == Date(timeIntervalSince1970: 1757600000))
         #expect(c.id == "teams:chat:19:a:1757600000000")
     }
@@ -123,7 +123,7 @@ let teamsOldPage = #"{"value":[{"id":"1","messageType":"message","createdDateTim
     @Test func aReadSinceTheMarkPagesDownToTheMarkPastThePageCap() async throws {
         let pages = TeamsSource.pageCap + 1
         func message(_ k: Int) -> String {
-            #"{"id":"\#(k)","messageType":"message","createdDateTime":"2025-09-11T14:\#(String(format: "%02d", 30 - k)):00Z","from":{"user":{"id":"U2","displayName":"Meera Nair"}},"body":{"contentType":"text","content":"page \#(k)"}}"#
+            #"{"id":"\#(k)","messageType":"message","createdDateTime":"2025-09-11T14:\#(String(format: "%02d", 30 - k)):00Z","from":{"user":{"id":"U2","displayName":"Meena Pillai"}},"body":{"contentType":"text","content":"page \#(k)"}}"#
         }
         func page(_ k: Int) -> String {
             let next = k < pages ? #""@odata.nextLink":"https://graph.microsoft.com/v1.0/me/chats/19:a/messages?$top=50&$skiptoken=p\#(k + 1)","# : ""
@@ -144,6 +144,6 @@ let teamsOldPage = #"{"value":[{"id":"1","messageType":"message","createdDateTim
         let c = try await s.buckets(since: [:], enabled: [BucketID("teams:channel:T1/C1")])[0].items[0]
         let text = try #require(try await s.load(c).text)
         #expect(text.hasPrefix("Chat: Founders · General · GROUP"))
-        #expect(text.contains("Me: I'll send it by Thursday") && text.contains("Meera Nair: Did you send the pricing notes? @Vivek"))
+        #expect(text.contains("Me: I'll send it by Thursday") && text.contains("Meena Pillai: Did you send the pricing notes? @Ishan"))
     }
 }

@@ -8,14 +8,14 @@ import Domain
 /// never the other party. An invented cast says all of them.
 @Suite struct LoopQualityTests {
     static let now = Date(timeIntervalSince1970: 1_789_560_000)   // 2026-09-16
-    func loop(_ what: String, person: String = "Priya Bhatt", dir: LoopDirection = .mine, at: Date = now, id: String = UUID().uuidString) -> Loop {
+    func loop(_ what: String, person: String = "Lalita Pathak", dir: LoopDirection = .mine, at: Date = now, id: String = UUID().uuidString) -> Loop {
         Loop(id: id, direction: dir, person: person, what: what, quote: "q", sourceLabel: "WhatsApp · Fri", due: nil, openedAt: at)
     }
 
     @Test func sentimentsAndAgreementsInPrincipleAreNotCommitments() {
-        for what in ["Build something big", "Build a company with Priya", "Not back out of the venture if Priya goes full-time",
+        for what in ["Build something big", "Build a company with Lalita", "Not back out of the venture if Lalita goes full-time",
                      "Discuss the future of the company and the goal of building a multimillion dollar business",
-                     "Focus on her network", "Focus on improving the user experience", "Go full time on Harbour to chase more deals"] {
+                     "Focus on her network", "Focus on improving the user experience", "Go full time on Vantage to chase more deals"] {
             #expect(!LoopQuality.isCommitment(what), "“\(what)” is a sentiment, not a deliverable: \(LoopQuality.reason(what) ?? "accepted")")
         }
     }
@@ -27,13 +27,13 @@ import Domain
         }
     }
     @Test func deliverablesAreCommitments() {
-        for what in ["Send Ravi the final proposal for commentary on slides 6–11", "Call Mr. Varma", "Provide her sister's number and email for Tideline",
+        for what in ["Send Ishan the final proposal for commentary on slides 6–11", "Call Mr. Vartak", "Provide her sister's number and email for Harbour",
                      "Provide rough estimates for the three requested tasks", "Ping Noor again", "Join the meeting", "Copy Lanterna design for the product"] {
             #expect(LoopQuality.isCommitment(what), "“\(what)” is a deliverable: \(LoopQuality.reason(what) ?? "")")
         }
     }
     @Test func anyConcreteVerbWithAnObjectPassesAndAModalPrefixIsForgiven() {
-        for what in ["Pay 500 to Kiran", "Book the villa for the 12th", "Set up the Slack channel", "Introduce Priya to Asha", "Finalise the deck",
+        for what in ["Pay 500 to Kiran", "Book the villa for the 12th", "Set up the Slack channel", "Introduce Lalita to Zubin", "Finalise the deck",
                      "to send the invoice", "will share the recording", "Nudge the landlord about the deposit", "Keepsake photo for Lata"] {
             #expect(LoopQuality.isCommitment(what), "“\(what)”: \(LoopQuality.reason(what) ?? "")")
         }
@@ -42,8 +42,8 @@ import Domain
     }
 
     @Test func theSamePromiseOncePerSideIsOneLoop() {
-        let theirs = loop("Provide her sister's number and email for Tideline", dir: .theirs, id: "A")
-        let mine = loop("Provide Ravi's sister's number and email for Tideline", dir: .mine, at: Self.now.addingTimeInterval(86400), id: "B")
+        let theirs = loop("Provide her sister's number and email for Harbour", dir: .theirs, id: "A")
+        let mine = loop("Provide Ishan's sister's number and email for Harbour", dir: .mine, at: Self.now.addingTimeInterval(86400), id: "B")
         let out = LoopQuality.dedupeMirrored([theirs, mine])
         #expect(out.map(\.id) == ["A"], "the first stays, the mirror goes")
         #expect(LoopQuality.dedupeMirrored([mine, theirs]).map(\.id) == ["B"], "whichever came first")
@@ -51,23 +51,23 @@ import Domain
     @Test func twoRealLoopsInOppositeDirectionsStay() {
         let a = loop("Send the signed NDA", dir: .mine, id: "A"), b = loop("Share the cap table", dir: .theirs, id: "B")
         #expect(LoopQuality.dedupeMirrored([a, b]).count == 2, "different promises are not mirrors")
-        let far = loop("Provide Ravi's sister's number and email for Tideline", dir: .theirs, at: Self.now.addingTimeInterval(-5 * 86400), id: "C")
-        #expect(LoopQuality.dedupeMirrored([loop("Provide her sister's number and email for Tideline", id: "D"), far]).count == 2, "five days apart is not the same night's mirror")
-        let sameSide = loop("Provide Ravi's sister's number and email for Tideline", dir: .mine, id: "E")
-        #expect(LoopQuality.dedupeMirrored([loop("Provide her sister's number and email for Tideline", id: "F"), sameSide]).count == 2, "the same direction is the ledger's own dedupe, not a mirror")
-        #expect(LoopQuality.dedupeMirrored([loop("Send the deck", person: "Kiran", id: "G"), loop("Send the deck", person: "Priya", dir: .theirs, id: "H")]).count == 2, "another person is another loop")
+        let far = loop("Provide Ishan's sister's number and email for Harbour", dir: .theirs, at: Self.now.addingTimeInterval(-5 * 86400), id: "C")
+        #expect(LoopQuality.dedupeMirrored([loop("Provide her sister's number and email for Harbour", id: "D"), far]).count == 2, "five days apart is not the same night's mirror")
+        let sameSide = loop("Provide Ishan's sister's number and email for Harbour", dir: .mine, id: "E")
+        #expect(LoopQuality.dedupeMirrored([loop("Provide her sister's number and email for Harbour", id: "F"), sameSide]).count == 2, "the same direction is the ledger's own dedupe, not a mirror")
+        #expect(LoopQuality.dedupeMirrored([loop("Send the deck", person: "Kiran", id: "G"), loop("Send the deck", person: "Lalita", dir: .theirs, id: "H")]).count == 2, "another person is another loop")
     }
 
     @Test func theGateDropsSentimentsMirrorsAndTheUserAsTheOtherParty() {
-        let loops = [loop("Build a company with Priya", id: "1"), loop("Close one more deal after Meridian", person: "Ravi Sharma", id: "2"),
-                     loop("Provide her sister's number and email for Tideline", dir: .theirs, id: "3"), loop("Provide Ravi's sister's number and email for Tideline", id: "4"),
-                     loop("Send Priya the final proposal", id: "5"), loop("Ping Noor again", person: "Ravi", id: "6")]
-        let out = LoopQuality.admit(loops, selfNames: ["Ravi Sharma", "ravi"])
+        let loops = [loop("Build a company with Lalita", id: "1"), loop("Close one more deal after Meridian", person: "Ishan Shirke", id: "2"),
+                     loop("Provide her sister's number and email for Harbour", dir: .theirs, id: "3"), loop("Provide Ishan's sister's number and email for Harbour", id: "4"),
+                     loop("Send Lalita the final proposal", id: "5"), loop("Ping Noor again", person: "Ishan", id: "6")]
+        let out = LoopQuality.admit(loops, selfNames: ["Ishan Shirke", "ravi"])
         #expect(out.kept.map(\.id) == ["3", "5"])
         #expect(out.rejected.map(\.loop.id) == ["1", "2", "4", "6"])
         #expect(out.rejected[0].reason.contains("intention") && out.rejected[1].reason.contains("the user") && out.rejected[2].reason.contains("mirrors") && out.rejected[3].reason.contains("the user"))
         #expect(LoopQuality.admit(loops).kept.count == 4, "with no self names known, only the bar and the mirror rule apply")
-        let open = loop("Provide her sister's number and email for Tideline", dir: .theirs, at: Self.now.addingTimeInterval(-2 * 86400), id: "OPEN")
+        let open = loop("Provide her sister's number and email for Harbour", dir: .theirs, at: Self.now.addingTimeInterval(-2 * 86400), id: "OPEN")
         let lastNight = LoopQuality.admit([loops[3]], existing: [open])
         #expect(lastNight.kept.isEmpty && lastNight.rejected.first?.reason.contains("mirrors") == true, "the mirror of a loop still open from an earlier night is turned away too")
         var closed = open; closed.status = .closed
@@ -82,21 +82,21 @@ import Domain
     }
     @Test func nobodyIsNoOtherParty() {
         for bad in ["another contact", "someone", "the team", "a colleague", "them", "Unknown", "N/A", "123", ""] { #expect(!LoopQuality.isPersonLabel(bad), "\(bad)") }
-        for good in ["Sam", "Priya Bhatt Northwind", "Mr. Varma", "Lata", "Dev", "Asha's team lead"] { #expect(LoopQuality.isPersonLabel(good), "\(good)") }
+        for good in ["Sam", "Lalita Pathak Tideline", "Mr. Vartak", "Lata", "Lokesh", "Zubin's team lead"] { #expect(LoopQuality.isPersonLabel(good), "\(good)") }
     }
     @Test func theSweepHoldsAnOldLedgerToTheBar() {
-        let loops = [loop("Priya Bhatt Northwind", "Build something big"), loop("Priya Bhatt Northwind", "Build a company with Priya", .closed), loop("another contact", "Call them to discuss something else", .closed),
-                     loop("Ravi Sharma", "Close one more deal after Meridian"), loop("Priya Bhatt Northwind", "Call Mr. Varma"), loop("Dev", "Provide rough estimates for the three requested tasks"), loop("Sam", "Send Sam an update")]
-        let (kept, dropped) = LoopQuality.sweep(loops, selfNames: ["Ravi Sharma"])
-        #expect(kept.map(\.what) == ["Call Mr. Varma", "Provide rough estimates for the three requested tasks", "Send Sam an update"])
+        let loops = [loop("Lalita Pathak Tideline", "Build something big"), loop("Lalita Pathak Tideline", "Build a company with Lalita", .closed), loop("another contact", "Call them to discuss something else", .closed),
+                     loop("Ishan Shirke", "Close one more deal after Meridian"), loop("Lalita Pathak Tideline", "Call Mr. Vartak"), loop("Lokesh", "Provide rough estimates for the three requested tasks"), loop("Sam", "Send Sam an update")]
+        let (kept, dropped) = LoopQuality.sweep(loops, selfNames: ["Ishan Shirke"])
+        #expect(kept.map(\.what) == ["Call Mr. Vartak", "Provide rough estimates for the three requested tasks", "Send Sam an update"])
         #expect(dropped.count == 4 && dropped.contains { $0.reason.contains("nobody") } && dropped.contains { $0.reason.contains("the user") })
-        #expect(LoopQuality.sweep(kept, selfNames: ["Ravi Sharma"]).dropped.isEmpty, "a clean ledger is untouched")
+        #expect(LoopQuality.sweep(kept, selfNames: ["Ishan Shirke"]).dropped.isEmpty, "a clean ledger is untouched")
     }
 }
 
 @Suite struct LoopQualityVerbShapesTests {
     @Test func implementIsAVerbAndTryToIsAHedgeOnADeliverable() {
-        for good in ["Implement the feature Dev sent", "Try to send Tara the outstanding payment via UPI", "Will try to call Mr. Varma", "Document the API for Noor", "Present the deck to Meridian", "Agreed to send the invoice"] {
+        for good in ["Implement the feature Lokesh sent", "Try to send Nayra the outstanding payment via UPI", "Will try to call Mr. Vartak", "Document the API for Noor", "Present the deck to Meridian", "Agreed to send the invoice"] {
             #expect(LoopQuality.isCommitment(good), "\(good): \(LoopQuality.reason(good) ?? "")")
         }
         for bad in ["Try harder", "Try", "Implementation of the feature", "Try to be better", "Figure out the product confusion", "Work out the pricing"] { #expect(!LoopQuality.isCommitment(bad), "\(bad)") }

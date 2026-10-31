@@ -34,10 +34,10 @@ public enum VaultGardener {
         }
     }
 
-    /// `retiredLines` answers, for a note's vault path ("People/Kanika Pandey.md"), the status-block lines that left it
+    /// `retiredLines` answers, for a note's vault path ("People/Lalita Pathak.md"), the status-block lines that left it
     /// lately (`StatusBlock.retiredLines` in Proactive; the pipeline passes it so Knowledge never imports Proactive). It is
     /// keyed by path, not title, so the lines go where the registry routed the block — never re-derived from a name,
-    /// which is how "Arjun"'s promise once landed in both Arjuns' notes. `archive` false skips the move; `keep` names
+    /// which is how "Kiran"'s promise once landed in both Kirans' notes. `archive` false skips the move; `keep` names
     /// the notes the move never takes (`NoteArchive.archive`).
     @discardableResult
     public static func run(root: URL, registry: PersonRegistry? = nil, now: Date, timeZone: TimeZone = .current,

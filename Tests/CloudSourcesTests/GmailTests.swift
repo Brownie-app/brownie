@@ -62,29 +62,29 @@ import LocalSources
     static let thread = #"""
 {"id":"t9","messages":[
  {"id":"m1","internalDate":"1757232000000","payload":{"headers":[
-   {"name":"From","value":"Devika Ranganathan <devika@raghavan-co.in>"},
-   {"name":"To","value":"Vivek Upreti <vivek@usebrownie.com>"},
+   {"name":"From","value":"Rhea Chhabra <rhea@chhabra-co.test>"},
+   {"name":"To","value":"Ishan Shirke <ishan@usebrownie.com>"},
    {"name":"Subject","value":"FY25 audited accounts"}],
-   "mimeType":"text/plain","body":{"data":"SGVsbG8sCgpDb3VsZCB5b3Ugc2VuZCBhY3Jvc3MgdGhlIGF1ZGl0ZWQgYWNjb3VudHMgZm9yIEZZMjUgYmVmb3JlIHRoZSBib2FyZCBjYWxsPwoKVGhhbmtzLApEZXZpa2E"}}},
+   "mimeType":"text/plain","body":{"data":"SGVsbG8sCgpDb3VsZCB5b3Ugc2VuZCBhY3Jvc3MgdGhlIGF1ZGl0ZWQgYWNjb3VudHMgZm9yIEZZMjUgYmVmb3JlIHRoZSBib2FyZCBjYWxsPwoKVGhhbmtzLApSaGVh"}}},
  {"id":"m2","internalDate":"1757404800000","payload":{"headers":[
-   {"name":"From","value":"Vivek Upreti <vivek@usebrownie.com>"},
-   {"name":"To","value":"Devika Ranganathan <devika@raghavan-co.in>"},
+   {"name":"From","value":"Ishan Shirke <ishan@usebrownie.com>"},
+   {"name":"To","value":"Rhea Chhabra <rhea@chhabra-co.test>"},
    {"name":"Subject","value":"Re: FY25 audited accounts"}],
-   "mimeType":"text/plain","body":{"data":"QXR0YWNoaW5nIHRoZSBhdWRpdGVkIGFjY291bnRzIGZvciBGWTI1LgoKU2VudCBmcm9tIG15IGlQaG9uZQoKT24gTW9uLCA3IFNlcCAyMDI2IGF0IDEwOjAwLCBEZXZpa2EgUmFuZ2FuYXRoYW4gPGRldmlrYUByYWdoYXZhbi1jby5pbj4gd3JvdGU6Cj4gQ291bGQgeW91IHNlbmQgYWNyb3NzIHRoZSBhdWRpdGVkIGFjY291bnRzIGZvciBGWTI1IGJlZm9yZSB0aGUgYm9hcmQgY2FsbD8"}}}]}
+   "mimeType":"text/plain","body":{"data":"QXR0YWNoaW5nIHRoZSBhdWRpdGVkIGFjY291bnRzIGZvciBGWTI1LgoKU2VudCBmcm9tIG15IGlQaG9uZQoKT24gTW9uLCA3IFNlcCAyMDI2IGF0IDEwOjAwLCBSaGVhIENoaGFicmEgPHJoZWFAY2hoYWJyYS1jby50ZXN0PiB3cm90ZToKPiBDb3VsZCB5b3Ugc2VuZCBhY3Jvc3MgdGhlIGF1ZGl0ZWQgYWNjb3VudHMgZm9yIEZZMjUgYmVmb3JlIHRoZSBib2FyZCBjYWxsPw"}}}]}
 """#
     func wired(_ threadJSON: String = GmailAskTests.thread) -> FakeTransport {
-        FakeTransport().on("users/me/profile", #"{"emailAddress":"vivek@usebrownie.com"}"#)
+        FakeTransport().on("users/me/profile", #"{"emailAddress":"ishan@usebrownie.com"}"#)
             .on("users/me/threads?q=", #"{"threads":[{"id":"t9","historyId":"9"}]}"#)
             .on("users/me/threads/t9", threadJSON)
     }
     func source(_ t: FakeTransport) -> GmailSource { GmailSource(transport: t, token: { "ya29" }, policy: { FirstRead() }) }
-    let scan = AskScan(since: Date(timeIntervalSince1970: 1_757_000_000), selfNames: ["Vivek Upreti", "Vivek"])
+    let scan = AskScan(since: Date(timeIntervalSince1970: 1_757_000_000), selfNames: ["Ishan Shirke", "Ishan"])
 
     @Test func mailCarriesAsksLikeAnyOtherChannel() async throws {
         let asks = try await source(wired()).recentAsks(enabled: [BucketID("gmail:inbox")], scan: scan)
         let a = try #require(asks.first)
         #expect(asks.count == 1, "one request in the thread, not one per message")
-        #expect(a.person == "Devika Ranganathan" && a.handle == "email:devika@raghavan-co.in")
+        #expect(a.person == "Rhea Chhabra" && a.handle == "email:rhea@chhabra-co.test")
         #expect(a.bucket == BucketID("gmail:t9"), "each thread is its own chat, so one late reply does not re-read the inbox")
         #expect(a.question.contains("audited accounts for FY25"))
         #expect(a.answeredAt != nil && a.reply?.contains("Attaching the audited accounts") == true, "the user's own reply, paired")
@@ -98,8 +98,8 @@ import LocalSources
 
     @Test func aThreadIsAChatWithTheOtherPersonsNameOnIt() async throws {
         let chats = try await source(wired()).chats()
-        #expect(chats.map(\.name) == ["Devika Ranganathan"])
-        #expect(chats[0].isGroup == false && chats[0].handle == "email:devika@raghavan-co.in" && chats[0].detail == "FY25 audited accounts")
+        #expect(chats.map(\.name) == ["Rhea Chhabra"])
+        #expect(chats[0].isGroup == false && chats[0].handle == "email:rhea@chhabra-co.test" && chats[0].detail == "FY25 audited accounts")
         let msgs = try await source(wired()).messages(in: BucketID("gmail:t9"), from: .distantPast, to: .distantFuture)
         #expect(msgs.map(\.isMe) == [false, true])
         #expect(msgs[0].text.hasPrefix("FY25 audited accounts"), "the subject rides on the opening message only")
@@ -107,18 +107,18 @@ import LocalSources
     }
 
     @Test func addressesAreReadWithOrWithoutADisplayName() {
-        #expect(GmailSource.parse("Devika Ranganathan <devika@raghavan-co.in>")?.name == "Devika Ranganathan")
-        #expect(GmailSource.parse("\"Ranganathan, Devika\" <D@x.io>")?.name == "Ranganathan, Devika")
-        #expect(GmailSource.parse("devika@raghavan-co.in")?.address == "devika@raghavan-co.in")
-        #expect(GmailSource.parse("devika@raghavan-co.in")?.name == "devika")
+        #expect(GmailSource.parse("Rhea Chhabra <rhea@chhabra-co.test>")?.name == "Rhea Chhabra")
+        #expect(GmailSource.parse("\"Chhabra, Rhea\" <D@x.io>")?.name == "Chhabra, Rhea")
+        #expect(GmailSource.parse("rhea@chhabra-co.test")?.address == "rhea@chhabra-co.test")
+        #expect(GmailSource.parse("rhea@chhabra-co.test")?.name == "rhea")
         #expect(GmailSource.parse("<D@X.IO>")?.address == "d@x.io", "addresses compare lowercased")
         #expect(GmailSource.parse("not an address") == nil && GmailSource.parse("  ") == nil)
     }
 
     @Test func aReplyIsReadWithoutTheMailItQuotes() {
-        let s = "Attaching them.\n\nOn Mon, 7 Sep 2026 at 10:00, Devika <d@x.io> wrote:\n> Could you send the accounts?"
+        let s = "Attaching them.\n\nOn Mon, 7 Sep 2026 at 10:00, Rhea <d@x.io> wrote:\n> Could you send the accounts?"
         #expect(GmailSource.unquote(s) == "Attaching them.")
         #expect(GmailSource.unquote("Done.\n-----Original Message-----\nFrom: x") == "Done.")
-        #expect(GmailSource.unquote("Sure thing.\n--\nVivek\nBrownie") == "Sure thing.", "a signature is not a line anyone said")
+        #expect(GmailSource.unquote("Sure thing.\n--\nIshan\nBrownie") == "Sure thing.", "a signature is not a line anyone said")
     }
 }

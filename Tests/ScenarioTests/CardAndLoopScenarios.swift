@@ -15,25 +15,25 @@ import Proactive
     /// are addressed to the same person about the same thing in other words. Two different people get two cards,
     /// because two people each need telling — that is the rule, not an accident.
     @Test func oneCommitmentRoutedTwoWays() async {
-        let w = World([.direct("whatsapp:91", "Meera Joshi", handle: "whatsapp:+919810011001"),
-                       .direct("whatsapp:92", "Arjun Rane", handle: "whatsapp:+919810092009")])
-        let loop = Loop.proposed("Send the signed lease to the broker", .mine, with: "Meera Joshi", openedAt: w.at(1, 10), id: "L-lease")
+        let w = World([.direct("whatsapp:91", "Meena Joshi", handle: "whatsapp:+919000000709"),
+                       .direct("whatsapp:92", "Kiran Rane", handle: "whatsapp:+919000000718")])
+        let loop = Loop.proposed("Send the signed lease to the broker", .mine, with: "Meena Joshi", openedAt: w.at(1, 10), id: "L-lease")
 
         // One loop, two channels, two recipients: the loop id ties them, so it is one card.
-        let n1 = await w.night(1, judge: JudgeScript(cards: [.proposed("Tell Meera the lease is signed", to: "Meera Joshi", why: "You promised the signed lease", loop: "L-lease"),
-                                                             .proposed("Mail Arjun the signed lease", to: "arjun@example.com", on: .mail, why: "You promised the signed lease", loop: "L-lease")],
+        let n1 = await w.night(1, judge: JudgeScript(cards: [.proposed("Tell Meena the lease is signed", to: "Meena Joshi", why: "You promised the signed lease", loop: "L-lease"),
+                                                             .proposed("Mail Kiran the signed lease", to: "kiran@example.com", on: .mail, why: "You promised the signed lease", loop: "L-lease")],
                                                      loops: [loop]))
         #expect(n1.cards.count == 1, "one commitment is one card, whatever channel it would go out on — \(n1.line)")
         #expect(n1.foldedCards == 1, n1.summary)
 
         // The same thing said twice to one person on two channels: no loop, but the words give it away.
-        let n2 = await w.night(2, judge: JudgeScript(cards: [.proposed("Send Meera the signed lease", to: "Meera Joshi", why: "She is waiting on the signed lease", draft: "The signed lease is attached."),
-                                                             .proposed("Mail Meera the signed lease", to: "Meera Joshi", on: .mail, why: "She is waiting on the signed lease", draft: "The signed lease is attached.")]))
+        let n2 = await w.night(2, judge: JudgeScript(cards: [.proposed("Send Meena the signed lease", to: "Meena Joshi", why: "She is waiting on the signed lease", draft: "The signed lease is attached."),
+                                                             .proposed("Mail Meena the signed lease", to: "Meena Joshi", on: .mail, why: "She is waiting on the signed lease", draft: "The signed lease is attached.")]))
         #expect(n2.cards.count == 1, "one person, one thing, one card — \(n2.line)")
 
         // Two people about the same thing: two cards, because each of them needs telling.
-        let n3 = await w.night(3, judge: JudgeScript(cards: [.proposed("Send Meera the signed lease", to: "Meera Joshi", why: "She is waiting on the signed lease"),
-                                                             .proposed("Send Arjun the signed lease", to: "Arjun Rane", why: "He is waiting on the signed lease")]))
+        let n3 = await w.night(3, judge: JudgeScript(cards: [.proposed("Send Meena the signed lease", to: "Meena Joshi", why: "She is waiting on the signed lease"),
+                                                             .proposed("Send Kiran the signed lease", to: "Kiran Rane", why: "He is waiting on the signed lease")]))
         #expect(n3.cards.count == 2, "two people, two messages — \(n3.line)")
     }
 
@@ -54,7 +54,7 @@ import Proactive
 
     // 11 ───────────────────────────────────────────────────────────────────────────────────────────
 
-    /// EXPECTED: in the same group, Sneha turns to the user by name — "Vivek, can you send the deck before
+    /// EXPECTED: in the same group, Sneha turns to the user by name — "Ishan, can you send the deck before
     /// the meeting?" — and that is an ask like any other: open, on the ledger, on the note.
     ///
     /// WHAT HAPPENS: nothing. `scanAsks` drops every group before the detector ever sees a line
@@ -62,11 +62,11 @@ import Proactive
     /// invisible to the ask ledger. The detector itself reads the line correctly — it is never handed it.
     @Test
     func aGroupQuestionAddressedToTheUser() async {
-        let w = World([.group("whatsapp:111", "Loadmill — Launch")])
-        w.say("whatsapp:111", from: "Sneha Kulkarni", "Vivek, can you send the deck before the meeting?", day: 1, at: 9)
+        let w = World([.group("whatsapp:111", "Tideline — Launch")])
+        w.say("whatsapp:111", from: "Sneha Kulkarni", "Ishan, can you send the deck before the meeting?", day: 1, at: 9)
         w.say("whatsapp:111", from: "Deepak Iyer", "same question about the pricing sheet", day: 1, at: 9.2)
         let n1 = await w.night(1)
-        #expect(AskDetector.isAsk("Vivek, can you send the deck before the meeting?"), "the detector reads the line — it is simply never given it")
+        #expect(AskDetector.isAsk("Ishan, can you send the deck before the meeting?"), "the detector reads the line — it is simply never given it")
         #expect(n1.openAsks.count == 1, "a request to you by name is an ask wherever it was made — \(n1.line)")
     }
 
@@ -76,7 +76,7 @@ import Proactive
     /// promise anyway; the bar turns it away with a reason, and the ledger stays empty. A real deliverable
     /// said in the same breath is admitted, so the bar is a filter and not a wall.
     @Test func aPromiseThatIsASentiment() async {
-        let w = World([.direct("whatsapp:121", "Ishaan Verma", handle: "whatsapp:+919810121012")])
+        let w = World([.direct("whatsapp:121", "Ishaan Verma", handle: "whatsapp:+919000000719")])
         w.say("whatsapp:121", "great call today, let's build something big together", day: 1, at: 20)
         w.say("whatsapp:121", "absolutely — sending you the cap table tonight", mine: true, day: 1, at: 20.5)
         let n1 = await w.night(1, judge: JudgeScript(loops: [
@@ -95,7 +95,7 @@ import Proactive
     /// week" is a week out, a named day in September is that day — and a loop with a date gets its card the
     /// morning before the date, even though nothing new was said.
     @Test func aPromiseWithADueDateInWords() async {
-        let w = World([.direct("whatsapp:131", "Kanika Pandey", handle: "whatsapp:+919810131013")])
+        let w = World([.direct("whatsapp:131", "Lalita Pathak", handle: "whatsapp:+919000000555")])
         // The judge dates a loop against the run's own clock, not the hour the promise was said: night 1 is
         // 3 AM on Wednesday 9 September 2026, and day 1 is the Tuesday before it.
         let tz = w.timeZone, run = w.nightAt(1)
@@ -105,10 +105,10 @@ import Proactive
 
         w.say("whatsapp:131", "good call today", day: 1, at: 15)
         w.say("whatsapp:131", "I'll get you the perpetual licensing numbers by Friday", mine: true, day: 1, at: 16)
-        let loop = Loop.proposed("Send Kanika the perpetual licensing numbers", .mine, with: "Kanika Pandey",
+        let loop = Loop.proposed("Send Lalita the perpetual licensing numbers", .mine, with: "Lalita Pathak",
                                  quote: "by Friday", due: "by Friday", openedAt: w.at(1, 16), id: "L-lic")
         let n1 = await w.night(1, judge: JudgeScript(loops: [loop]))
-        #expect(n1.loop("Send Kanika the perpetual licensing numbers")?.dueDate == w.at(4, 9), "the words became a date — \(n1.line)")
+        #expect(n1.loop("Send Lalita the perpetual licensing numbers")?.dueDate == w.at(4, 9), "the words became a date — \(n1.line)")
         #expect(n1.cards.isEmpty, "nothing is due yet — \(n1.line)")
 
         let n2 = await w.night(2)   // the morning of Thursday 10 September, the morning before Friday
@@ -129,10 +129,10 @@ import Proactive
     /// Friday passes with nothing said.
     @Test
     func aPromiseInReplyClosesTheLoopItPromised() async {
-        let w = World([.direct("whatsapp:133", "Kanika Pandey", handle: "whatsapp:+919810131013")])
+        let w = World([.direct("whatsapp:133", "Lalita Pathak", handle: "whatsapp:+919000000555")])
         w.say("whatsapp:133", "when can you get me the perpetual licensing numbers?", day: 1, at: 15)
         w.say("whatsapp:133", "by Friday", mine: true, day: 1, at: 16)
-        let loop = Loop.proposed("Send Kanika the perpetual licensing numbers", .mine, with: "Kanika Pandey",
+        let loop = Loop.proposed("Send Lalita the perpetual licensing numbers", .mine, with: "Lalita Pathak",
                                  quote: "by Friday", due: "by Friday", openedAt: w.at(1, 16), id: "L-lic")
         let n1 = await w.night(1, judge: JudgeScript(loops: [loop]))
         #expect(n1.openLoops.count == 1, n1.summary)
@@ -145,9 +145,9 @@ import Proactive
     /// A date said as a day-and-month that has just gone by is read as the past and is overdue on the spot.
     /// "September 6" said on the 8th means next year to a person and two days ago to `DueWords`.
     @Test func aNamedDayThatHasJustGoneBy() async {
-        let w = World([.direct("whatsapp:132", "Kanika Pandey", handle: "whatsapp:+919810131013")])
+        let w = World([.direct("whatsapp:132", "Lalita Pathak", handle: "whatsapp:+919000000555")])
         #expect(DueWords.date("September 6", now: w.nightAt(1), timeZone: w.timeZone) == w.at(-1, 9), "three days in the past, not next year")
-        let loop = Loop.proposed("Send Kanika the revised quote", .mine, with: "Kanika Pandey", due: "September 6", openedAt: w.at(1, 16), id: "L-q")
+        let loop = Loop.proposed("Send Lalita the revised quote", .mine, with: "Lalita Pathak", due: "September 6", openedAt: w.at(1, 16), id: "L-q")
         let n1 = await w.night(1, judge: JudgeScript(loops: [loop]))
         #expect(n1.cards.first?.dueLine == "Overdue 3 days", "so the nudge fires the same night — \(n1.line)")
     }
@@ -158,7 +158,7 @@ import Proactive
     /// user's and once as Anjali's. That is one promise: the first stays, the mirror is turned away with a
     /// reason, and the Loops screen shows one line, not two facing each other.
     @Test func theSamePromiseFromBothSides() async {
-        let w = World([.direct("whatsapp:141", "Anjali Deshpande", handle: "whatsapp:+919810141014")])
+        let w = World([.direct("whatsapp:141", "Anjali Deshpande", handle: "whatsapp:+919000000720")])
         w.say("whatsapp:141", "can you send the electricity bill for the flat?", day: 1, at: 14)
         w.say("whatsapp:141", "yes, I'll send the electricity bill tonight", mine: true, day: 1, at: 14.2)
         let n1 = await w.night(1, judge: JudgeScript(loops: [

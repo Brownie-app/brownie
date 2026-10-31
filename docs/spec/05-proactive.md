@@ -23,7 +23,7 @@ never invent a date or fact; "a confident wrong item is worse than a miss".
 For each candidate, in one pass:
 1. **Verify** against live data — the KB, the mail/calendar/ticket APIs (read-only), the web — that
    it is still real, still the user's, still needed. Receipts only: a live fact may be stated only if a
-   tool returned it this run. Identity must match (right Priya, right thread). "Couldn't confirm" is a
+   tool returned it this run. Identity must match (right Tanvi, right thread). "Couldn't confirm" is a
    valid outcome (`unverified`), shown with lower confidence, never dropped silently.
 2. **Prepare** survivors ready to fire: `preparedContent` (the draft, in the user's voice, learned
    from their own messages in the KB) and an `executionRecipe` (routing only).

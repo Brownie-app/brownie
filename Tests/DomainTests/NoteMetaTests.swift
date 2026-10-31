@@ -17,7 +17,7 @@ import Foundation
         ---
         brownie: person
         id: p-1
-        aliases: [Kanika Pandey Loadmill, "Pandey, Kanika"]
+        aliases: [Lalita Pathak Tideline, "Pathak, Lalita"]
         sources: [whatsapp, gmail]
         created: 2026-09-01
         updated: 2026-09-10
@@ -28,21 +28,21 @@ import Foundation
           - work
         cssclass: wide
         ---
-        # Kanika Pandey
+        # Lalita Pathak
 
         A friend.
 
         """
-        let (meta, body) = NoteMeta.parse(raw, path: "People/Kanika Pandey.md")
+        let (meta, body) = NoteMeta.parse(raw, path: "People/Lalita Pathak.md")
         let m = try #require(meta)
         #expect(m.brownie == "person" && m.id == "p-1" && m.created == "2026-09-01" && m.updated == "2026-09-10" && m.contentHash == "abc" && !m.userEdited)
-        #expect(m.aliases == ["Kanika Pandey Loadmill", "Pandey, Kanika"] && m.sources == ["whatsapp", "gmail"])
+        #expect(m.aliases == ["Lalita Pathak Tideline", "Pathak, Lalita"] && m.sources == ["whatsapp", "gmail"])
         #expect(m.extraOrder == ["tags", "cssclass"], "the user's keys, in the order they wrote them")
         #expect(m.extra["tags"] == "\n  - friend\n  - work" && m.extra["cssclass"] == " wide")
-        #expect(body == "# Kanika Pandey\n\nA friend.\n")
+        #expect(body == "# Lalita Pathak\n\nA friend.\n")
         let again = m.render() + body
         #expect(again == raw, "rendered back byte for byte")
-        #expect(NoteMeta.parse(again, path: "People/Kanika Pandey.md").meta == m)
+        #expect(NoteMeta.parse(again, path: "People/Lalita Pathak.md").meta == m)
     }
 
     @Test func noFrontMatterIsNilAndALegacyBlockLosesItsTimestamp() throws {
@@ -56,17 +56,17 @@ import Foundation
 
     @Test func kindComesFromTheFolder() {
         #expect(NoteMeta.kind(forPath: "People/A.md") == "person" && NoteMeta.kind(forPath: "Groups/G.md") == "group")
-        #expect(NoteMeta.kind(forPath: "README.md") == "portrait" && NoteMeta.kind(forPath: "Work/Loadmill.md") == "topic" && NoteMeta.kind(forPath: "Ideas.md") == "topic")
+        #expect(NoteMeta.kind(forPath: "README.md") == "portrait" && NoteMeta.kind(forPath: "Work/Tideline.md") == "topic" && NoteMeta.kind(forPath: "Ideas.md") == "topic")
     }
 
     @Test func hashIgnoresTheStatusBlockAndTrailingWhitespace() {
-        let plain = "# Arif\n\nArif is a friend.\n"
+        let plain = "# Noor\n\nNoor is a friend.\n"
         let withBlock = NoteStatus.insert(Self.block, into: plain)
-        #expect(withBlock.contains("<!-- brownie:status -->") && withBlock.hasPrefix("# Arif\n\n<!-- brownie:status -->"))
+        #expect(withBlock.contains("<!-- brownie:status -->") && withBlock.hasPrefix("# Noor\n\n<!-- brownie:status -->"))
         #expect(NoteMeta.hash(withBlock) == NoteMeta.hash(plain), "the block coming and going changes nothing")
         #expect(NoteMeta.hash(plain + "\n\n") == NoteMeta.hash(plain))
-        #expect(NoteMeta.hash("# Arif\n\nArif is a colleague.\n") != NoteMeta.hash(plain))
-        let legacy = plain.replacingOccurrences(of: "# Arif\n", with: "# Arif\n\n<!-- brownie:between-you -->\nold\n<!-- /brownie:between-you -->\n")
+        #expect(NoteMeta.hash("# Noor\n\nNoor is a colleague.\n") != NoteMeta.hash(plain))
+        let legacy = plain.replacingOccurrences(of: "# Noor\n", with: "# Noor\n\n<!-- brownie:between-you -->\nold\n<!-- /brownie:between-you -->\n")
         #expect(NoteMeta.hash(legacy) == NoteMeta.hash(plain), "the old markers are stripped too")
     }
 
@@ -78,27 +78,27 @@ import Foundation
     }
 
     @Test func restampMovesTheHashWithACodeRewriteButKeepsAnEditVisible() throws {
-        let meta = NoteMeta.fresh(path: "Work/Plan.md", body: "# Plan\n\nwith [[Arjun]].\n", today: "2026-09-01")
-        let raw = meta.render() + "# Plan\n\nwith [[Arjun]].\n"
+        let meta = NoteMeta.fresh(path: "Work/Plan.md", body: "# Plan\n\nwith [[Kiran]].\n", today: "2026-09-01")
+        let raw = meta.render() + "# Plan\n\nwith [[Kiran]].\n"
         #expect(NoteMeta.restamp(raw, path: "Work/Plan.md") { _ in nil } == nil, "nothing to change, nothing written")
-        let renamed = try #require(NoteMeta.restamp(raw, path: "Work/Plan.md") { $0.replacingOccurrences(of: "[[Arjun]]", with: "[[Arjun Mehta]]") })
+        let renamed = try #require(NoteMeta.restamp(raw, path: "Work/Plan.md") { $0.replacingOccurrences(of: "[[Kiran]]", with: "[[Kiran Bose]]") })
         let (m, body) = NoteMeta.parse(renamed, path: "Work/Plan.md")
-        #expect(body == "# Plan\n\nwith [[Arjun Mehta]].\n")
+        #expect(body == "# Plan\n\nwith [[Kiran Bose]].\n")
         #expect(m?.contentHash == NoteMeta.hash(body) && m?.bodyDiffers(body) == false, "the rename is code's, not an edit")
         #expect(m?.updated == "2026-09-01" && m?.created == "2026-09-01", "the substance did not change, so the day does not move")
         // A body the user had already touched keeps the stale hash, so the next read still sees their edit.
-        let edited = meta.render() + "# Plan\n\nwith [[Arjun]], edited by hand.\n"
-        let both = try #require(NoteMeta.restamp(edited, path: "Work/Plan.md") { $0.replacingOccurrences(of: "[[Arjun]]", with: "[[Arjun Mehta]]") })
+        let edited = meta.render() + "# Plan\n\nwith [[Kiran]], edited by hand.\n"
+        let both = try #require(NoteMeta.restamp(edited, path: "Work/Plan.md") { $0.replacingOccurrences(of: "[[Kiran]]", with: "[[Kiran Bose]]") })
         let (m2, body2) = NoteMeta.parse(both, path: "Work/Plan.md")
-        #expect(body2.contains("[[Arjun Mehta]], edited by hand") && m2?.bodyDiffers(body2) == true)
-        #expect(NoteMeta.restamp("# bare\n[[Arjun]]\n", path: "Work/Bare.md") { $0.replacingOccurrences(of: "Arjun", with: "A") } == "# bare\n[[A]]\n", "no front-matter, no block invented")
+        #expect(body2.contains("[[Kiran Bose]], edited by hand") && m2?.bodyDiffers(body2) == true)
+        #expect(NoteMeta.restamp("# bare\n[[Kiran]]\n", path: "Work/Bare.md") { $0.replacingOccurrences(of: "Kiran", with: "A") } == "# bare\n[[A]]\n", "no front-matter, no block invented")
     }
 
     @Test func statusBlockStripAndInsertRoundTrip() {
-        let body = "# Arif\n\n" + Self.block + "\n\nArif is a friend.\n"
+        let body = "# Noor\n\n" + Self.block + "\n\nNoor is a friend.\n"
         #expect(NoteStatus.extract(from: body) == Self.block)
         let stripped = NoteStatus.strip(body)
-        #expect(stripped == "# Arif\n\nArif is a friend.\n")
+        #expect(stripped == "# Noor\n\nNoor is a friend.\n")
         #expect(NoteStatus.insert(Self.block, into: stripped) == body, "put back where it was, byte for byte")
         #expect(NoteStatus.insert(Self.block, into: "no title\n") == Self.block + "\n\nno title\n")
         #expect(NoteStatus.strip("# A\nnothing here\n") == "# A\nnothing here\n")
@@ -113,34 +113,34 @@ import Foundation
     }
 
     @Test func renderQuotesWhatWouldBreakTheList() {
-        let m = NoteMeta(brownie: "person", aliases: ["Pandey, Kanika", "plain"], created: "2026-09-01", updated: "2026-09-01")
-        #expect(m.render().contains("aliases: [\"Pandey, Kanika\", plain]"))
-        #expect(NoteMeta.parse(m.render() + "# x", path: "People/x.md").meta?.aliases == ["Pandey, Kanika", "plain"])
+        let m = NoteMeta(brownie: "person", aliases: ["Pathak, Lalita", "plain"], created: "2026-09-01", updated: "2026-09-01")
+        #expect(m.render().contains("aliases: [\"Pathak, Lalita\", plain]"))
+        #expect(NoteMeta.parse(m.render() + "# x", path: "People/x.md").meta?.aliases == ["Pathak, Lalita", "plain"])
     }
 
     /// A note the brain wrote with no blank line under its title used to come back from insert-then-strip with one,
     /// and that blank line was read as the user's edit for good.
     @Test func insertAndStripAreInversesWhetherOrNotTheTitleHasABlankLineUnderIt() {
-        for body in ["# Arif\nArif is a friend.\n", "# Arif\n\nArif is a friend.\n", "# Arif\n", "# Arif", "no title\n\nprose\n", ""] {
+        for body in ["# Noor\nNoor is a friend.\n", "# Noor\n\nNoor is a friend.\n", "# Noor\n", "# Noor", "no title\n\nprose\n", ""] {
             let with = NoteStatus.insert(Self.block, into: body)
             #expect(NoteStatus.strip(with) == body, "strip undoes insert for \(body.debugDescription)")
             #expect(NoteStatus.upsert("", into: with) == body && NoteStatus.upsert(Self.block, into: body) == with)
-            #expect(NoteMeta.hash(with) == NoteMeta.hash(body) && !NoteMeta.fresh(path: "People/Arif.md", body: body, today: "2026-09-16").bodyDiffers(with))
+            #expect(NoteMeta.hash(with) == NoteMeta.hash(body) && !NoteMeta.fresh(path: "People/Noor.md", body: body, today: "2026-09-16").bodyDiffers(with))
         }
-        #expect(NoteStatus.insert(Self.block, into: "# Arif\nArif is a friend.\n") == "# Arif\n\n" + Self.block + "\nArif is a friend.\n", "the block still sits under a blank line")
-        #expect(NoteMeta.hash("# Arif\nArif is a friend.\n") == NoteMeta.hash("# Arif\n\n\nArif is a friend.\n"), "a blank line more or less is never an edit")
-        #expect(NoteMeta.hash("# Arif\nArif is a friend.\n") != NoteMeta.hash("# Arif\nArif is a colleague.\n"))
-        let replaced = NoteStatus.upsert(Self.block.replacingOccurrences(of: "lunch", with: "dinner"), into: "# Arif\n\n" + Self.block + "\n\nprose\n")
-        #expect(replaced == "# Arif\n\n" + Self.block.replacingOccurrences(of: "lunch", with: "dinner") + "\n\nprose\n", "replaced in place, the lines around it untouched")
+        #expect(NoteStatus.insert(Self.block, into: "# Noor\nNoor is a friend.\n") == "# Noor\n\n" + Self.block + "\nNoor is a friend.\n", "the block still sits under a blank line")
+        #expect(NoteMeta.hash("# Noor\nNoor is a friend.\n") == NoteMeta.hash("# Noor\n\n\nNoor is a friend.\n"), "a blank line more or less is never an edit")
+        #expect(NoteMeta.hash("# Noor\nNoor is a friend.\n") != NoteMeta.hash("# Noor\nNoor is a colleague.\n"))
+        let replaced = NoteStatus.upsert(Self.block.replacingOccurrences(of: "lunch", with: "dinner"), into: "# Noor\n\n" + Self.block + "\n\nprose\n")
+        #expect(replaced == "# Noor\n\n" + Self.block.replacingOccurrences(of: "lunch", with: "dinner") + "\n\nprose\n", "replaced in place, the lines around it untouched")
     }
 
     /// The brain opens and separates sections with horizontal rules; a rule at the top of a note is not a fence.
     @Test func aBodyThatOpensWithARuleIsBodyAndRoundTrips() throws {
-        let prose = "---\n# Kanika\n\nA friend.\n\n---\n\nMore.\n"
-        let bare = NoteMeta.parse(prose, path: "People/Kanika.md")
+        let prose = "---\n# Lalita\n\nA friend.\n\n---\n\nMore.\n"
+        let bare = NoteMeta.parse(prose, path: "People/Lalita.md")
         #expect(bare.meta == nil && bare.body == prose, "nothing between those rules is a key, so nothing is front-matter")
-        let stamped = NoteMeta.fresh(path: "People/Kanika.md", body: prose, today: "2026-09-16").render() + prose
-        let (m, body) = NoteMeta.parse(stamped, path: "People/Kanika.md")
+        let stamped = NoteMeta.fresh(path: "People/Lalita.md", body: prose, today: "2026-09-16").render() + prose
+        let (m, body) = NoteMeta.parse(stamped, path: "People/Lalita.md")
         #expect(m?.created == "2026-09-16" && body == prose, "with Brownie's block in front, the block closes at its own fence and the rules stay body")
         #expect(NoteMeta.parse("---\n\n---\nbody\n", path: "Work/A.md").meta == nil, "a fence with no key is not front-matter")
         #expect(NoteMeta.parse("---\n- a list\n---\nbody\n", path: "Work/A.md").meta == nil)
@@ -176,7 +176,7 @@ import Foundation
         user_edited: false
         content_hash: abc
         tags: [friend]
-        # reviewed with Kanika
+        # reviewed with Lalita
 
         cssclass: wide
         # note: remember this
@@ -186,7 +186,7 @@ import Foundation
         let (m, body) = NoteMeta.parse(raw, path: "Work/T.md")
         let meta = try #require(m)
         #expect(meta.extraOrder == ["tags", "cssclass"] && meta.extra["cssclass"] == " wide", "a comment with a colon in it is not a key")
-        #expect(meta.comments == ["created": "# stamped by hand", "tags": "# reviewed with Kanika\n", "cssclass": "# note: remember this"])
+        #expect(meta.comments == ["created": "# stamped by hand", "tags": "# reviewed with Lalita\n", "cssclass": "# note: remember this"])
         #expect(meta.render() + body == raw, "byte for byte")
         // a comment above the first key, and one between the items of a list value, stay where they were too
         let user = "---\n# my properties\ntags:\n  - a\n  # the second\n\n  - b\n---\n# T\n"

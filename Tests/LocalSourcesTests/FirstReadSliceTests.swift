@@ -12,7 +12,7 @@ import Domain
     }
 
     /// `count` messages inside the last 90 days, evenly spaced, the newest now, ascending.
-    func dense(_ count: Int, sender: String = "Rohan") -> [ChatMessage] {
+    func dense(_ count: Int, sender: String = "Zubin") -> [ChatMessage] {
         (0..<count).reversed().map { i in ChatMessage(rowID: Int64(count - i), date: now.addingTimeInterval(-Double(i) * (89 * 86_400 / Double(count))), sender: sender, isMe: false, text: "m\(i)") }
     }
 
@@ -53,7 +53,7 @@ import Domain
 
     @Test func aBusyGroupIsCappedAtTheNewestThreeHundredAndCountsTheRest() {
         // Ten messages a day for 90 days: 900 inside the window.
-        let dense = (0..<900).reversed().map { i in ChatMessage(rowID: Int64(900 - i), date: now.addingTimeInterval(-Double(i) * 8_640), sender: "Rohan", isMe: false, text: "m\(i)") }
+        let dense = (0..<900).reversed().map { i in ChatMessage(rowID: Int64(900 - i), date: now.addingTimeInterval(-Double(i) * 8_640), sender: "Zubin", isMe: false, text: "m\(i)") }
         let cut = ChatWindowing.firstReadSlice(dense, isGroup: true, policy: FirstRead(), source: "telegram", now: now)
         #expect(cut.messages.count == 300 && cut.deferred == 600)
         #expect(cut.messages.last?.text == "m0" && cut.messages.first?.text == "m299", "the newest 300")

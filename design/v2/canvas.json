@@ -277,7 +277,7 @@
    "y": 0,
    "w": 1440,
    "h": 900,
-   "title": "02 · For You: an “Ours” band — who’s handling what, and what Priya already did",
+   "title": "02 · For You: an “Ours” band — who’s handling what, and what Tanvi already did",
    "page": "page-5"
   },
   {
@@ -306,7 +306,7 @@
    "y": -150,
    "w": 560,
    "page": "page-1",
-   "text": "Brownie v2 — the bets on top of the shipping app.\n\nClick around the prototype: Loops in the sidebar, the Rohan card → brief, the Sunday letter, Recipes → Teach Hands (a 3-step flow), the footer link → What left your Mac, Settings → Brain → This Mac only, Settings → Privacy → Erase everything.\n\nFirst-time tips play once per new screen and complete on the action, as in v1."
+   "text": "Brownie v2 — the bets on top of the shipping app.\n\nClick around the prototype: Loops in the sidebar, the Zubin card → brief, the Sunday letter, Recipes → Teach Hands (a 3-step flow), the footer link → What left your Mac, Settings → Brain → This Mac only, Settings → Privacy → Erase everything.\n\nFirst-time tips play once per new screen and complete on the action, as in v1."
   },
   {
    "id": "kb-note",
@@ -330,7 +330,7 @@
    "y": -200,
    "w": 660,
    "page": "page-5",
-   "text": "A household — Brownie for two people who share a life, without sharing a Mac or their private chats.\n\nHow it works: each person keeps their own Brownie and their own vault. A household is one shared iCloud Drive folder both Macs sync to. Only group chats BOTH people are in can be shared (Brownie checks the member list); direct messages, mail, files and People/ notes never cross over.\n\n1 · Settings → Household: who you share with, which of the eligible chats, and the plain list of what never leaves.\n2 · For You gets an “Ours” band: each card says who’s on it (you / Priya / either), and a card the other person already handled shows up dimmed with “Priya did this” — so you don’t both reply to the school.\n3 · Loops gets an Ours section with an owner column. Either Brownie can close a loop; the other sees it the next sync.\n4 · Household/ notes are written by both Macs; a line that came from a chat only the other person has is marked with their Mac.\n\nOpen questions for you: should the partner be able to see your CARD text for shared items (it is derived only from shared chats, so I think yes)? And do you want a third slot (a nanny, a flatmate) or is two the product?"
+   "text": "A household — Brownie for two people who share a life, without sharing a Mac or their private chats.\n\nHow it works: each person keeps their own Brownie and their own vault. A household is one shared iCloud Drive folder both Macs sync to. Only group chats BOTH people are in can be shared (Brownie checks the member list); direct messages, mail, files and People/ notes never cross over.\n\n1 · Settings → Household: who you share with, which of the eligible chats, and the plain list of what never leaves.\n2 · For You gets an “Ours” band: each card says who’s on it (you / Tanvi / either), and a card the other person already handled shows up dimmed with “Tanvi did this” — so you don’t both reply to the school.\n3 · Loops gets an Ours section with an owner column. Either Brownie can close a loop; the other sees it the next sync.\n4 · Household/ notes are written by both Macs; a line that came from a chat only the other person has is marked with their Mac.\n\nOpen questions for you: should the partner be able to see your CARD text for shared items (it is derived only from shared chats, so I think yes)? And do you want a third slot (a nanny, a flatmate) or is two the product?"
   }
  ],
  "launch": {

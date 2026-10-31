@@ -7,7 +7,7 @@ public struct MCPAsk: Codable, Sendable, Identifiable, Equatable {
     public let client: String
     public let tool: String
     public let query: String
-    public let result: String   // "2 notes · People/Karan, Trips/Goa October"
+    public let result: String   // "2 notes · People/Devan, Trips/Goa October"
     public init(id: String = UUID().uuidString, at: Date, client: String, tool: String, query: String, result: String) {
         self.id = id; self.at = at; self.client = client; self.tool = tool; self.query = query; self.result = result
     }

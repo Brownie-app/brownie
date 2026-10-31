@@ -17,7 +17,7 @@ import Domain
             CREATE INDEX summary_created ON summary(created_at);
             """)
             try db.run("INSERT INTO summary(run_id, source_id, bucket_id, bucket_name, kind, title, text, item_date, created_at) VALUES(?,?,?,?,?,?,?,?,?)",
-                       [.int(1), .text("whatsapp"), .text("whatsapp:1"), .text("Nayan"), .text("directMessage"), .text("T"), .text("old row"), .real(1_700_000_000), .real(1_700_000_100)])
+                       [.int(1), .text("whatsapp"), .text("whatsapp:1"), .text("Nayra"), .text("directMessage"), .text("T"), .text("old row"), .real(1_700_000_000), .real(1_700_000_100)])
         }
         return path
     }
@@ -110,7 +110,7 @@ import Domain
         let run = try await store.beginRun(trigger: .test, at: Date())
         let key = ItemKey(order: 42, tiebreak: "m42")
         let c = Candidate(source: "whatsapp", bucket: BucketID("whatsapp:1"), key: key, kind: .directMessage, id: "m42", itemDate: Date())
-        try await store.commit(runID: run, cursor: BucketCursor(bucket: c.bucket, source: c.source, mark: key, floor: nil), bucketName: "Nayan",
+        try await store.commit(runID: run, cursor: BucketCursor(bucket: c.bucket, source: c.source, mark: key, floor: nil), bucketName: "Nayra",
                                candidate: c, outcome: Outcome(reason: .kept, survivor: Survivor(_unchecked: "T", summary: "s")), at: Date())
         let row = try #require(try await store.summaries(since: nil).first)
         #expect(row.sid == SQLiteRunStore.stableID(c))

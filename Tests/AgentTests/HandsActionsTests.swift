@@ -148,7 +148,7 @@ import Foundation
         #expect(BrowserSkill.searchURL(site: "flipkart", query: "iphone") == "https://www.flipkart.com/search?q=iphone")
         #expect(BrowserSkill.searchURL(site: "wikipedia", query: "house spirit") == "https://en.wikipedia.org/w/index.php?search=house%20spirit")
         #expect(BrowserSkill.searchURL(site: "github", query: "swift-testing") == "https://github.com/search?q=swift-testing")
-        #expect(BrowserSkill.searchURL(site: "linkedin", query: "Vivek") == "https://www.linkedin.com/search/results/all/?keywords=Vivek")
+        #expect(BrowserSkill.searchURL(site: "linkedin", query: "Ishan") == "https://www.linkedin.com/search/results/all/?keywords=Ishan")
         #expect(BrowserSkill.searchURL(site: "x", query: "#swiftlang") == "https://x.com/search?q=%23swiftlang")
         #expect(BrowserSkill.searchURL(site: "twitter.com", query: "a") == "https://x.com/search?q=a")
         #expect(BrowserSkill.searchURL(site: "reddit", query: "macOS") == "https://www.reddit.com/search/?q=macOS")

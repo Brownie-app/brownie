@@ -37,10 +37,10 @@ import Foundation
     }
 
     @Test func foldsAFiringsEvents() throws {
-        let j = HandsJourney.fold([.step("Hands is starting", done: true), .plan(["Open the chat", "Put the message in", "Stop for you"]), .step("Opening the WhatsApp conversation with Kanika", done: true), .stepDone(1, "chat open"), .step("Putting the message in the box", done: true), .stepDone(2, ""), .pausedForUser("Press Send when ready"), .finished(.pausedAtUserStep)])
+        let j = HandsJourney.fold([.step("Hands is starting", done: true), .plan(["Open the chat", "Put the message in", "Stop for you"]), .step("Opening the WhatsApp conversation with Lalita", done: true), .stepDone(1, "chat open"), .step("Putting the message in the box", done: true), .stepDone(2, ""), .pausedForUser("Press Send when ready"), .finished(.pausedAtUserStep)])
         #expect(j.loose == ["Hands is starting"])
         #expect(j.steps.map(\.state) == [.done, .done, .current])
-        #expect(j.steps[0].actions == ["Opening the WhatsApp conversation with Kanika"] && j.steps[0].note == "chat open")
+        #expect(j.steps[0].actions == ["Opening the WhatsApp conversation with Lalita"] && j.steps[0].note == "chat open")
         #expect(j.steps[2].actions == ["Press Send when ready"])
         #expect(try JSONDecoder().decode(HandsJourney.self, from: JSONEncoder().encode(j)) == j)
     }

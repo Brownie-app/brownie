@@ -22,11 +22,11 @@ import Platform
         }
         let fresh = now.addingTimeInterval(-86400)
         try put("README.md", "# Brownie Knowledge Base\n\n" + words(400), modified: fresh)                                   // over the README budget
-        try put("People/Arjun Mehta.md", "---\nbrownie: person\naliases: []\nsources: [whatsapp]\ncreated: 2026-01-10\nupdated: 2026-01-10\nuser_edited: false\ncontent_hash: \n---\n# Arjun Mehta\n\nOld friend. See [[Priya Sharma]] and [[Nobody]].\n\n<!-- brownie:status -->\n- ⏳ 2 Aug — they asked: “dinner?” — no reply yet\n- ✅ 1 Jan — you promised (1 Jan): a thing — done 3 Jan\n- ⏳ 20 Dec — you promised (20 Dec): the book\n<!-- /brownie:status -->\n", modified: fresh)   // quiet by front matter; 20 Dec is last year's
-        try put("People/Arjun.md", "# Arjun\n\nA single word, so may be Arjun Mehta.", modified: fresh)
-        try put("People/Priya Sharma.md", "# Priya Sharma\n\n" + words(1600) + "\n\n[[priya sharma]] links to herself; [[Nobody|him]] and [[nobody#Pending]] are the same missing note; [[Arjun Mehta#Pending]] resolves.", modified: fresh)   // over the person budget
-        try put("People/Kanika Pandey Loadmill.md", "# Kanika Pandey Loadmill\n\nquiet by mtime", modified: now.addingTimeInterval(-91 * 86400))
-        try put("Groups/Upreti Family.md", "# Upreti Family\n\n[[Kanika Pandey Loadmill]] and [[Lost Group]].", modified: fresh)
+        try put("People/Kiran Bose.md", "---\nbrownie: person\naliases: []\nsources: [whatsapp]\ncreated: 2026-01-10\nupdated: 2026-01-10\nuser_edited: false\ncontent_hash: \n---\n# Kiran Bose\n\nOld friend. See [[Tanvi Rege]] and [[Nobody]].\n\n<!-- brownie:status -->\n- ⏳ 2 Aug — they asked: “dinner?” — no reply yet\n- ✅ 1 Jan — you promised (1 Jan): a thing — done 3 Jan\n- ⏳ 20 Dec — you promised (20 Dec): the book\n<!-- /brownie:status -->\n", modified: fresh)   // quiet by front matter; 20 Dec is last year's
+        try put("People/Kiran.md", "# Kiran\n\nA single word, so may be Kiran Bose.", modified: fresh)
+        try put("People/Tanvi Rege.md", "# Tanvi Rege\n\n" + words(1600) + "\n\n[[tanvi rege]] links to herself; [[Nobody|him]] and [[nobody#Pending]] are the same missing note; [[Kiran Bose#Pending]] resolves.", modified: fresh)   // over the person budget
+        try put("People/Lalita Pathak Tideline.md", "# Lalita Pathak Tideline\n\nquiet by mtime", modified: now.addingTimeInterval(-91 * 86400))
+        try put("Groups/Shirke Family.md", "# Shirke Family\n\n[[Lalita Pathak Tideline]] and [[Lost Group]].", modified: fresh)
         try put("Notes/Trip.md", "# Goa trip\n\n" + words(2600) + " [[Goa Trip]]", modified: fresh)                    // over the note budget; its title resolves a link
         try put("Notes/Short.md", "# Short\n\none two three", modified: fresh)
         // Not part of the measure.
@@ -42,7 +42,7 @@ import Platform
         let h = VaultHealth.compute(root: try Self.vault(), now: Self.now, timeZone: Self.utc)
         #expect(h.notes == 8 && h.notesPerFolder == [".": 1, "People": 4, "Groups": 1, "Notes": 2])
         #expect(h.readmeWords == 404, "the heading counts")
-        #expect(h.largest.map(\.path) == ["Notes/Trip.md", "People/Priya Sharma.md", "README.md", "People/Arjun Mehta.md", "People/Arjun.md"])
+        #expect(h.largest.map(\.path) == ["Notes/Trip.md", "People/Tanvi Rege.md", "README.md", "People/Kiran Bose.md", "People/Kiran.md"])
         #expect(h.largest.map(\.words) == [2605, 1619, 404, 54, 10])
         #expect(h.words == 4713, "the five largest and the three small notes: 9, 7 and 5 words")
         #expect(h.medianWords == (10 + 54) / 2, "an even count averages the two middle notes")
@@ -50,13 +50,13 @@ import Platform
 
     @Test func budgetsDependOnWhereTheNoteLives() throws {
         let h = VaultHealth.compute(root: try Self.vault(), now: Self.now, timeZone: Self.utc)
-        #expect(h.overBudget.map(\.path) == ["Notes/Trip.md", "People/Priya Sharma.md", "README.md"])
+        #expect(h.overBudget.map(\.path) == ["Notes/Trip.md", "People/Tanvi Rege.md", "README.md"])
         #expect(VaultHealth.readmeBudget == 350 && VaultHealth.personBudget == 1500 && VaultHealth.noteBudget == 2500)
     }
 
     @Test func quietPeopleByFrontMatterOrElseByMtime() throws {
         let h = VaultHealth.compute(root: try Self.vault(), now: Self.now, timeZone: Self.utc)
-        #expect(h.quietPeople == ["People/Arjun Mehta.md", "People/Kanika Pandey Loadmill.md"], "an old `updated:` day counts even on a fresh file; no front matter falls back to the file's date")
+        #expect(h.quietPeople == ["People/Kiran Bose.md", "People/Lalita Pathak Tideline.md"], "an old `updated:` day counts even on a fresh file; no front matter falls back to the file's date")
     }
 
     /// `updated:` is the day Brownie stamps (`YYYY-MM-DD`), never the file's clock: the status block moving, a link
@@ -80,7 +80,7 @@ import Platform
     @Test func danglingLinksAreNamesNoNoteAnswersTo() throws {
         let h = VaultHealth.compute(root: try Self.vault(), now: Self.now, timeZone: Self.utc)
         #expect(h.danglingLinks.map(\.name) == ["Lost Group", "Nobody"], "alias and heading forms fold into one name; title and file name both resolve, case-insensitively")
-        #expect(h.danglingLinks.map(\.path) == ["Groups/Upreti Family.md", "People/Arjun Mehta.md"], "the first note it was found in")
+        #expect(h.danglingLinks.map(\.path) == ["Groups/Shirke Family.md", "People/Kiran Bose.md"], "the first note it was found in")
     }
 
     /// A link resolves the way Obsidian resolves it: by title, file name, an alias in the note's front-matter, a note
@@ -92,23 +92,23 @@ import Platform
             try FileManager.default.createDirectory(at: u.deletingLastPathComponent(), withIntermediateDirectories: true)
             try text.write(to: u, atomically: true, encoding: .utf8)
         }
-        try put("People/Kanika Pandey Loadmill.md", NoteMeta.fresh(path: "People/Kanika Pandey Loadmill.md", body: "", today: "2026-09-01", aliases: ["Kanika Pandey", "Pandey, Kanika"]).render() + "# Kanika Pandey Loadmill\n\nhas aliases\n")
-        try put("People/Nitesh Kumar.md", "# Nitesh Kumar\n\nthe registry knows him as Nitesh\n")
+        try put("People/Lalita Pathak Tideline.md", NoteMeta.fresh(path: "People/Lalita Pathak Tideline.md", body: "", today: "2026-09-01", aliases: ["Lalita Pathak", "Pathak, Lalita"]).render() + "# Lalita Pathak Tideline\n\nhas aliases\n")
+        try put("People/Lokesh Kadri.md", "# Lokesh Kadri\n\nthe registry knows him as Lokesh\n")
         try put("People/Archive/Old Friend.md", "# Old Friend\n\narchived, still a note\n")
-        try put("Notes/Trip.md", "# Trip\n\n[[Kanika Pandey]], [[pandey, kanika|her]], [[Old Friend#Now]], [[Nitesh]] resolve; [[Ghost]] and [[Nobody]] do not.\n")
+        try put("Notes/Trip.md", "# Trip\n\n[[Lalita Pathak]], [[pathak, lalita|her]], [[Old Friend#Now]], [[Lokesh]] resolve; [[Ghost]] and [[Nobody]] do not.\n")
         let people = [
-            Person(id: "p1", name: "Nitesh Kumar", aliases: ["Nitesh", "Nitesh (+919540752593)"], notePath: "People/Nitesh Kumar.md", firstSeen: Self.now, lastSeen: Self.now),
+            Person(id: "p1", name: "Lokesh Kadri", aliases: ["Lokesh", "Lokesh (+919000000111)"], notePath: "People/Lokesh Kadri.md", firstSeen: Self.now, lastSeen: Self.now),
             Person(id: "p2", name: "Ghost", aliases: [], notePath: nil, firstSeen: Self.now, lastSeen: Self.now),   // known, but no note: the link still leads nowhere
         ]
         let h = VaultHealth.compute(root: root, now: Self.now, timeZone: Self.utc, people: people)
         #expect(h.danglingLinks.map(\.name) == ["Ghost", "Nobody"])
         #expect(h.notes == 3 && h.notesPerFolder["People"] == 2, "the archived note answers to its link but is not counted")
-        #expect(VaultHealth.compute(root: root, now: Self.now, timeZone: Self.utc).danglingLinks.map(\.name) == ["Ghost", "Nitesh", "Nobody"], "without the registry, only the notes' own spellings resolve")
+        #expect(VaultHealth.compute(root: root, now: Self.now, timeZone: Self.utc).danglingLinks.map(\.name) == ["Ghost", "Lokesh", "Nobody"], "without the registry, only the notes' own spellings resolve")
     }
 
     @Test func duplicateSuspectsAreTheSamePersonKeyOrAFirstNameAlone() throws {
         let h = VaultHealth.compute(root: try Self.vault(), now: Self.now, timeZone: Self.utc)
-        #expect(h.duplicateSuspects == [.init(a: "People/Arjun Mehta.md", b: "People/Arjun.md")])
+        #expect(h.duplicateSuspects == [.init(a: "People/Kiran Bose.md", b: "People/Kiran.md")])
     }
 
     /// "Keep separate" is kept: a pair the registry holds in each other's `notSame` is not a suspect — through
@@ -116,15 +116,15 @@ import Platform
     @Test func aPairTheUserKeptSeparateIsNotASuspect() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("vault-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: root.appendingPathComponent("People"), withIntermediateDirectories: true)
-        for n in ["Arjun", "Arjun Mehta", "Priya", "Priya Sharma"] { try "# \(n)\n\nsomeone\n".write(to: root.appendingPathComponent("People/\(n).md"), atomically: true, encoding: .utf8) }
+        for n in ["Kiran", "Kiran Bose", "Tanvi", "Tanvi Rege"] { try "# \(n)\n\nsomeone\n".write(to: root.appendingPathComponent("People/\(n).md"), atomically: true, encoding: .utf8) }
         let people = [
-            Person(id: "p1", name: "Arjun", notePath: "People/Arjun.md", notSame: ["p2"], firstSeen: Self.now, lastSeen: Self.now),
-            Person(id: "p2", name: "Arjun Mehta", notePath: "People/Arjun Mehta.md", notSame: ["p1"], firstSeen: Self.now, lastSeen: Self.now),
-            Person(id: "p3", name: "Priya", notePath: "People/Priya.md", firstSeen: Self.now, lastSeen: Self.now),
-            Person(id: "p4", name: "Priya Sharma", notePath: "People/Priya Sharma.md", firstSeen: Self.now, lastSeen: Self.now),
+            Person(id: "p1", name: "Kiran", notePath: "People/Kiran.md", notSame: ["p2"], firstSeen: Self.now, lastSeen: Self.now),
+            Person(id: "p2", name: "Kiran Bose", notePath: "People/Kiran Bose.md", notSame: ["p1"], firstSeen: Self.now, lastSeen: Self.now),
+            Person(id: "p3", name: "Tanvi", notePath: "People/Tanvi.md", firstSeen: Self.now, lastSeen: Self.now),
+            Person(id: "p4", name: "Tanvi Rege", notePath: "People/Tanvi Rege.md", firstSeen: Self.now, lastSeen: Self.now),
         ]
-        let priya = VaultHealth.Pair(a: "People/Priya Sharma.md", b: "People/Priya.md"), arjun = VaultHealth.Pair(a: "People/Arjun Mehta.md", b: "People/Arjun.md")
-        #expect(VaultHealth.compute(root: root, now: Self.now, timeZone: Self.utc).duplicateSuspects == [arjun, priya], "without the registry both pairs look like one person")
+        let priya = VaultHealth.Pair(a: "People/Tanvi Rege.md", b: "People/Tanvi.md"), kiran = VaultHealth.Pair(a: "People/Kiran Bose.md", b: "People/Kiran.md")
+        #expect(VaultHealth.compute(root: root, now: Self.now, timeZone: Self.utc).duplicateSuspects == [kiran, priya], "without the registry both pairs look like one person")
         #expect(VaultHealth.compute(root: root, now: Self.now, timeZone: Self.utc, people: people).duplicateSuspects == [priya])
         // The same answer from the vault's own people.json, the way the night reads it.
         struct File: Codable { var version = 1; var people: [Person] }

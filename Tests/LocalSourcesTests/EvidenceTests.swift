@@ -6,19 +6,19 @@ import Domain
 /// The labels the brain writes on evidence, read back into something the app can open.
 @Suite struct EvidenceRefTests {
     @Test(arguments: [
-        ("#1 · WhatsApp · nayan bsb (+919034935256)", EvidenceRef.chat(app: "whatsapp", name: "nayan bsb")),
-        ("WhatsApp summary #1 · Kanika Pandey Loadmill", .chat(app: "whatsapp", name: "Kanika Pandey Loadmill")),
-        ("WhatsApp with Nayan", .chat(app: "whatsapp", name: "Nayan")),
+        ("#1 · WhatsApp · nayra bsb (+919000000222)", EvidenceRef.chat(app: "whatsapp", name: "nayra bsb")),
+        ("WhatsApp summary #1 · Lalita Pathak Tideline", .chat(app: "whatsapp", name: "Lalita Pathak Tideline")),
+        ("WhatsApp with Nayra", .chat(app: "whatsapp", name: "Nayra")),
         ("iMessage · Amma · Fri", .chat(app: "imessage", name: "Amma")),
-        ("Messages · Rohan", .chat(app: "imessage", name: "Rohan")),
+        ("Messages · Zubin", .chat(app: "imessage", name: "Zubin")),
         ("Slack · #design · Wed", .chat(app: "slack", name: "#design")),
         ("Teams · Founders · General", .chat(app: "teams", name: "Founders")),
         ("Telegram summary #3 · Goa 2026", .chat(app: "telegram", name: "Goa 2026")),
-        ("People/Kanika Pandey.md", .note(path: "People/Kanika Pandey.md")),
+        ("People/Lalita Pathak.md", .note(path: "People/Lalita Pathak.md")),
         ("README.md", .note(path: "README.md")),
         ("Projects/Micro‑Apps (2026).md", .note(path: "Projects/Micro‑Apps (2026).md")),
         ("Loops ledger", .loops),
-        ("Recording · Meera call · 03:12", .recording(name: "Meera call", seconds: 192)),
+        ("Recording · Meena call · 03:12", .recording(name: "Meena call", seconds: 192)),
         ("Voice Memo · Standup · 1:02:05", .recording(name: "Standup", seconds: 3725)),
         ("Recording · Board call", .recording(name: "Board call", seconds: nil)),
         ("Summary #4 · Gmail Inbox", .mail(label: "Summary #4 · Gmail Inbox")),
@@ -45,10 +45,10 @@ import Domain
 }
 
 @Suite struct EvidenceMatchTests {
-    func m(_ i: Int64, _ t: String, me: Bool = false) -> ChatMessage { ChatMessage(rowID: i, date: Date(timeIntervalSince1970: Double(i)), sender: me ? "Me" : "Kanika", isMe: me, text: t) }
+    func m(_ i: Int64, _ t: String, me: Bool = false) -> ChatMessage { ChatMessage(rowID: i, date: Date(timeIntervalSince1970: Double(i)), sender: me ? "Me" : "Lalita", isMe: me, text: t) }
     @Test func picksTheLineTheSummaryCameFrom() {
-        let msgs = [m(1, "hi, how was Goa?"), m(2, "Arif asked for perpetual pricing, can you send an update tomorrow?"), m(3, "sure, will send tomorrow after we speak", me: true), m(4, "thanks")]
-        #expect(EvidenceMatch.best(msgs, text: "Kanika said Arif asked for perpetual and that the user agreed to send an update tomorrow") == 1)
+        let msgs = [m(1, "hi, how was Goa?"), m(2, "Noor asked for perpetual pricing, can you send an update tomorrow?"), m(3, "sure, will send tomorrow after we speak", me: true), m(4, "thanks")]
+        #expect(EvidenceMatch.best(msgs, text: "Lalita said Noor asked for perpetual and that the user agreed to send an update tomorrow") == 1)
         #expect(EvidenceMatch.best(msgs, text: "The user agreed to send an update tomorrow after speaking") == 2)
         #expect(EvidenceMatch.best(msgs, text: "the villa deposit for December") == nil, "nothing overlaps enough")
         #expect(EvidenceMatch.best([], text: "x") == nil)
@@ -66,31 +66,31 @@ struct FakeReader: ChatReader {
 final class Box<T>: @unchecked Sendable { var value: T; init(_ v: T) { value = v } }
 
 @Suite struct EvidenceResolverTests {
-    let kanika = BucketInfo(id: BucketID("whatsapp:7"), name: "Kanika Pandey Loadmill", detail: "Direct", isGroup: false, count: 100)
-    let nayan = BucketInfo(id: BucketID("whatsapp:9"), name: "Nayan BSB", detail: "Direct · +919034935256", isGroup: false, count: 50)
+    let lalita = BucketInfo(id: BucketID("whatsapp:7"), name: "Lalita Pathak Tideline", detail: "Direct", isGroup: false, count: 100)
+    let nayra = BucketInfo(id: BucketID("whatsapp:9"), name: "Nayra BSB", detail: "Direct · +919000000222", isGroup: false, count: 50)
     let goa = BucketInfo(id: BucketID("whatsapp:3"), name: "Goa 2026", detail: "Group · 6 people", isGroup: true, count: 900)
 
     @Test func chatMatchingIsForgiving() {
-        let all = [kanika, nayan, goa]
-        #expect(EvidenceResolver.chat(named: "nayan bsb (+919034935256)", in: all)?.id == nayan.id)
-        #expect(EvidenceResolver.chat(named: "Kanika Pandey", in: all)?.id == kanika.id, "a shorter name still finds the chat")
+        let all = [lalita, nayra, goa]
+        #expect(EvidenceResolver.chat(named: "nayra bsb (+919000000222)", in: all)?.id == nayra.id)
+        #expect(EvidenceResolver.chat(named: "Lalita Pathak", in: all)?.id == lalita.id, "a shorter name still finds the chat")
         #expect(EvidenceResolver.chat(named: "goa", in: all)?.id == goa.id)
-        #expect(EvidenceResolver.chat(named: "Rohan", in: all) == nil)
+        #expect(EvidenceResolver.chat(named: "Zubin", in: all) == nil)
         #expect(EvidenceResolver.chat(named: "", in: all) == nil)
     }
 
     @Test func resolvesAWindowAroundTheDayAndHighlightsTheLine() async throws {
         let day = EvidenceRef.date(when: "12 Sep 2026")!
-        let msgs = [ChatMessage(rowID: 1, date: day.addingTimeInterval(-5 * 86400), sender: "Kanika", isMe: false, text: "old"),
-                    ChatMessage(rowID: 2, date: day.addingTimeInterval(3600), sender: "Kanika", isMe: false, text: "Arif asked for perpetual, send an update tomorrow?"),
+        let msgs = [ChatMessage(rowID: 1, date: day.addingTimeInterval(-5 * 86400), sender: "Lalita", isMe: false, text: "old"),
+                    ChatMessage(rowID: 2, date: day.addingTimeInterval(3600), sender: "Lalita", isMe: false, text: "Noor asked for perpetual, send an update tomorrow?"),
                     ChatMessage(rowID: 3, date: day.addingTimeInterval(7200), sender: "Me", isMe: true, text: "will do after we speak")]
-        let r = FakeReader(chatsList: [kanika, nayan], msgs: [kanika.id: msgs])
-        let w = try await EvidenceResolver.resolve(.chat(app: "whatsapp", name: "Kanika Pandey Loadmill"), when: "12 Sep 2026", text: "Kanika said Arif asked for perpetual and an update tomorrow", reader: r)
-        #expect(w?.chat.id == kanika.id)
+        let r = FakeReader(chatsList: [lalita, nayra], msgs: [lalita.id: msgs])
+        let w = try await EvidenceResolver.resolve(.chat(app: "whatsapp", name: "Lalita Pathak Tideline"), when: "12 Sep 2026", text: "Lalita said Noor asked for perpetual and an update tomorrow", reader: r)
+        #expect(w?.chat.id == lalita.id)
         #expect(w?.messages.map(\.rowID) == [2, 3], "the message from five days before is outside the window")
         #expect(w?.highlight == 0)
         let (b, from, to) = r.asked!
-        #expect(b == kanika.id && from == day.addingTimeInterval(-2 * 86400) && to == day.addingTimeInterval(3 * 86400))
+        #expect(b == lalita.id && from == day.addingTimeInterval(-2 * 86400) && to == day.addingTimeInterval(3 * 86400))
     }
 
     @Test func unknownDayMeansTheLastWeek() async throws {

@@ -2,7 +2,7 @@ import Foundation
 import Domain
 
 /// What was promised out loud. The reader writes a transcript's summary with lines like
-/// `At [03:12] the user says "I'll send it by Thursday" to Meera.` — this turns them into loops
+/// `At [03:12] the user says "I'll send it by Thursday" to Meena.` — this turns them into loops
 /// deterministically, so a spoken promise never depends on the judge noticing it.
 public enum TranscriptPromises {
     public struct Found: Sendable, Equatable {

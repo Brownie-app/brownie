@@ -48,7 +48,7 @@ import Domain
 @Suite struct SaneMessagesTests {
     @Test func messagesFromTheFutureAreDropped() {
         let now = Date(timeIntervalSince1970: 1_789_500_000)
-        func m(_ t: Double) -> ChatMessage { ChatMessage(rowID: Int64(t), date: Date(timeIntervalSince1970: t), sender: "Nitesh", isMe: false, text: "hi") }
+        func m(_ t: Double) -> ChatMessage { ChatMessage(rowID: Int64(t), date: Date(timeIntervalSince1970: t), sender: "Lokesh", isMe: false, text: "hi") }
         let msgs = [m(1_789_400_000), m(1_789_499_000), m(1_789_500_000 + 3600), m(2_001_513_725)]
         #expect(ChatWindowing.sane(msgs, now: now).map(\.rowID) == [1_789_400_000, 1_789_499_000, 1_789_503_600], "an hour ahead is clock skew; 2033 is not")
     }

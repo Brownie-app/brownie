@@ -20,12 +20,12 @@ import Foundation
 
     @Test func firstSyncSendsEverythingToThePhoneAndRecordsTheBase() throws {
         let (mac, phone) = try fresh()
-        try put("# Nayan\nfriend", "People/Nayan.md", in: mac)
+        try put("# Nayra\nfriend", "People/Nayra.md", in: mac)
         try put("index", "index.sqlite", in: mac)
         let r = try Vault.sync(mac, to: phone)
         #expect(r.toPhone == 1 && r.fromPhone == 0 && r.conflicts == 0)
-        #expect(read("People/Nayan.md", in: phone) == "# Nayan\nfriend")
-        #expect(read("People/Nayan.md", in: mac.appendingPathComponent(".sync")) == "# Nayan\nfriend", "the base copy is what both sides last agreed on")
+        #expect(read("People/Nayra.md", in: phone) == "# Nayra\nfriend")
+        #expect(read("People/Nayra.md", in: mac.appendingPathComponent(".sync")) == "# Nayra\nfriend", "the base copy is what both sides last agreed on")
         #expect(read("index.sqlite", in: phone) == nil, "only notes travel")
         let again = try Vault.sync(mac, to: phone)
         #expect(again.toPhone == 0 && again.fromPhone == 0 && again.conflicts == 0, "nothing changed → nothing moves")

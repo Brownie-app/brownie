@@ -524,7 +524,7 @@ public actor RunCoordinator {
 
     /// The status block ("Between you") on every People note that has asks or loops: written straight to the file, so it never counts as the user's edit.
     /// Each ask and loop goes to exactly one note — the registry's, or failing that a title with the very same key.
-    /// A first name alone never claims a note by its title; that is how "Arjun" once leaked into "Arjun Mehta".
+    /// A first name alone never claims a note by its title; that is how "Kiran" once leaked into "Kiran Bose".
     /// Returns the routing, so the lines that retire from a block are kept under the same note and no other.
     @discardableResult
     public static func writeStatusBlock(asks: [Ask], loops: [Loop], knowledge: any KnowledgeStore, registry: PersonRegistry?, now: Date, timeZone: TimeZone = .current) async -> StatusRouting {

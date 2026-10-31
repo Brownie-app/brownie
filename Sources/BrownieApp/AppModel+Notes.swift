@@ -88,7 +88,7 @@ extension AppModel {
 
     // MARK: from a note to elsewhere
 
-    /// Ask, with the question started for the user: "about Meera: ".
+    /// Ask, with the question started for the user: "about Meena: ".
     func askAbout(_ name: String) { askPrefill = "about \(name): "; overlay = .none; screen = .ask }
     /// The chat with this person, by the handle's own address (`ChatLink`): WhatsApp or iMessage straight to the chat;
     /// a handle with no address, or an app with no per-person link, goes the evidence sheet's way (Contacts, else the app).

@@ -116,7 +116,7 @@ public enum QuietCheck {
         return Double(wa.intersection(wb).count) / Double(min(wa.count, wb.count)) >= twinOverlap
     }
 
-    /// One matcher for the whole app: "Nitesh (+919540752593)" and "Nitesh" are one person, by `PersonKey`.
+    /// One matcher for the whole app: "Lokesh (+919000000111)" and "Lokesh" are one person, by `PersonKey`.
     static func samePerson(_ a: String?, _ b: String) -> Bool {
         guard let a else { return false }
         return PersonKey.same(a, b)

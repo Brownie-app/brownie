@@ -85,7 +85,7 @@ public actor FileKnowledgeStore: KnowledgeStore {
     }
 
     /// Notes for a question: every term must match (the last as a prefix); when nothing does — a question
-    /// carries words no note has — its content words are OR-ed, so "who is nayan?" still finds Nayan and
+    /// carries words no note has — its content words are OR-ed, so "who is nayra?" still finds Nayra and
     /// "who is Ravi?" finds nothing rather than every note with a "whoever" in it.
     public func search(_ query: String, limit: Int) throws -> [Note] {
         try reindex()
@@ -221,7 +221,7 @@ enum Fingerprint {
 }
 
 /// Turns what was typed into an FTS5 query. `fts` is strict: every term must match, the last one as a prefix
-/// (so the word still being typed finds "Nayan's"), a "quoted phrase" passes through whole, and only pure function
+/// (so the word still being typed finds "Nayra's"), a "quoted phrase" passes through whole, and only pure function
 /// words are dropped — "open", "promise", "ask" and "last" are words a note can be found by. `loose` is the
 /// fallback for questions: the content words alone, OR-ed, so "who is Ravi?" is a search for Ravi and not for
 /// every note that says "whoever" — and nothing at all when the question has no content word.
@@ -242,7 +242,7 @@ public enum KnowledgeQuery {
         }
         if inQuote { rest += " " + cur }   // an unclosed quote is just words
         // Split where the unicode61 tokenizer splits — on anything that is not a letter or a digit, the apostrophe
-        // included — so "D'Souza" asks for the stored "souza" and "Nitesh's" for "nitesh"; the one-letter leftovers go.
+        // included — so "D'Souza" asks for the stored "souza" and "Lokesh's" for "lokesh"; the one-letter leftovers go.
         let words = rest.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init)
         var kept = words.filter { !stop.contains($0) && $0.count > 1 }
         if kept.isEmpty, phrases.isEmpty { kept = words.filter { $0.count > 1 } }

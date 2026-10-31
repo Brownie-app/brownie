@@ -14,17 +14,17 @@ import Foundation
 
     @Test func firesOncePerChangeAndNeverForHiddenFolders() async throws {
         let d = try temp()
-        try "# Arif\nold\n".write(to: d.appendingPathComponent("People/Arif.md"), atomically: true, encoding: .utf8)
+        try "# Noor\nold\n".write(to: d.appendingPathComponent("People/Noor.md"), atomically: true, encoding: .utf8)
         try await Task.sleep(nanoseconds: 1_200_000_000)   // FSEvents may still hand over a write from the last moment before the watch began
         let w = VaultWatcher(), box = Box()
         w.start(d, settle: 0.4) { paths in Task { await box.add(paths) } }
         try await Task.sleep(nanoseconds: 500_000_000)
-        try "# Arif\nnew\n".write(to: d.appendingPathComponent("People/Arif.md"), atomically: true, encoding: .utf8)   // Obsidian's save
+        try "# Noor\nnew\n".write(to: d.appendingPathComponent("People/Noor.md"), atomically: true, encoding: .utf8)   // Obsidian's save
         try await Task.sleep(nanoseconds: 2_500_000_000)
         var got = await box.bursts
         #expect(got.count == 1, "one save, one reload: \(got)")
-        #expect(got.first?.map { ($0 as NSString).lastPathComponent } == ["Arif.md"])
-        try "base".write(to: d.appendingPathComponent(".sync/People/Arif.md"), atomically: true, encoding: .utf8)   // the sync's base copy
+        #expect(got.first?.map { ($0 as NSString).lastPathComponent } == ["Noor.md"])
+        try "base".write(to: d.appendingPathComponent(".sync/People/Noor.md"), atomically: true, encoding: .utf8)   // the sync's base copy
         try "junk".write(to: d.appendingPathComponent("People/notes.txt"), atomically: true, encoding: .utf8)
         try await Task.sleep(nanoseconds: 2_000_000_000)
         got = await box.bursts
@@ -33,12 +33,12 @@ import Foundation
     }
 
     @Test func mattersIsTheRule() {
-        #expect(VaultWatcher.matters("/v/People/Arif.md", root: "/v"))
-        #expect(!VaultWatcher.matters("/v/.sync/People/Arif.md", root: "/v"))
+        #expect(VaultWatcher.matters("/v/People/Noor.md", root: "/v"))
+        #expect(!VaultWatcher.matters("/v/.sync/People/Noor.md", root: "/v"))
         #expect(!VaultWatcher.matters("/v/.brownie/people.json", root: "/v"))
         #expect(!VaultWatcher.matters("/v/People/a.txt", root: "/v"))
-        #expect(!VaultWatcher.matters("/elsewhere/People/Arif.md", root: "/v"))
-        #expect(!VaultWatcher.matters("/v2/People/Arif.md", root: "/v"), "a sibling folder with the same prefix is not the vault")
-        #expect(VaultWatcher.matters("/private/var/x/People/Arif.md", root: "/var/x"), "FSEvents says /private/var; Foundation says /var")
+        #expect(!VaultWatcher.matters("/elsewhere/People/Noor.md", root: "/v"))
+        #expect(!VaultWatcher.matters("/v2/People/Noor.md", root: "/v"), "a sibling folder with the same prefix is not the vault")
+        #expect(VaultWatcher.matters("/private/var/x/People/Noor.md", root: "/var/x"), "FSEvents says /private/var; Foundation says /var")
     }
 }

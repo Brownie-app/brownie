@@ -246,7 +246,7 @@ struct KnowledgePane: View {
                 SettingRow(title: m.lastSync.map { "Last sync · \(DateFormatter.localizedString(from: $0.at, dateStyle: .none, timeStyle: .short))" } ?? "Not synced yet", detail: m.lastSync?.line ?? "Runs after every read and every 15 minutes while Brownie is open.") { HStack(spacing: 8) { if m.lastSync != nil { HStack(spacing: 6) { Circle().fill(t.ok).frame(width: 7, height: 7); Text("In sync").font(.system(size: 12, weight: .medium)) } }; BButton(title: "Sync now", kind: .quiet) { m.syncNow() } } }.padding(.horizontal, 16); Divider()
                 SettingRow(title: "When both sides changed the same note", detail: "Brownie keeps both: what you wrote on the phone stays as the note; its own version goes under a “Brownie's version” heading for you to pick from. Your words are never overwritten.") { EmptyView() }.padding(.horizontal, 16); Divider()
             }
-            SettingRow(title: "Wikilinks between notes", detail: "[[Priya]] instead of plain text, so people, groups and trips connect — here and in Obsidian. Always on.") { Toggle2(on: .constant(true)).disabled(true) }.padding(.horizontal, 16)
+            SettingRow(title: "Wikilinks between notes", detail: "[[Tanvi]] instead of plain text, so people, groups and trips connect — here and in Obsidian. Always on.") { Toggle2(on: .constant(true)).disabled(true) }.padding(.horizontal, 16)
         } }
         VaultHealthCard()
         MCPSection()
@@ -432,7 +432,7 @@ struct ProactivePane: View {
                 if m.signMessages {
                     Divider()
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Hi Priya, quick update on the licence — sending it by Thursday.").font(.system(size: 12.5))
+                        Text("Hi Tanvi, quick update on the licence — sending it by Thursday.").font(.system(size: 12.5))
                         Text(Signature.line).font(.system(size: 12.5)).foregroundStyle(t.ink2)
                     }.padding(14).frame(maxWidth: .infinity, alignment: .leading).background(t.code)
                 }
@@ -724,7 +724,7 @@ struct TelegramSignIn: View {
         case .waitingForPhone, .waitingForParameters:
             VStack(alignment: .leading, spacing: 8) {
                 Text("Phone number, with country code").font(.system(size: 12, weight: .medium))
-                HStack { TextField("+91 98450 12345", text: $phone).textFieldStyle(.roundedBorder).frame(width: 240).disabled(busy).onSubmit { sendPhone() }; action("Send code", sendPhone) }
+                HStack { TextField("+91 90000 00724", text: $phone).textFieldStyle(.roundedBorder).frame(width: 240).disabled(busy).onSubmit { sendPhone() }; action("Send code", sendPhone) }
                 Text("Telegram sends a code to your other Telegram apps (or by SMS if you have none).").font(.system(size: 11)).foregroundStyle(t.ink2)
             }
         case .waitingForCode:
@@ -881,7 +881,7 @@ struct HouseholdPane: View {
                     Text("Give the person's name and, so Brownie can tell which group chats they're in, their number. The shared folder lives in iCloud Drive — share it with them through Files › Share so their Mac syncs it too.").font(.system(size: 12.5)).foregroundStyle(t.ink2)
                     HStack(spacing: 10) {
                         TextField("Their name", text: $name).textFieldStyle(.roundedBorder).frame(width: 200)
-                        TextField("+91 98450 67890", text: $phone).textFieldStyle(.roundedBorder).frame(width: 170)
+                        TextField("+91 90000 00444", text: $phone).textFieldStyle(.roundedBorder).frame(width: 170)
                         BButton(title: folder.map { $0.lastPathComponent } ?? "Folder: iCloud Drive/Brownie Household", kind: .quiet) { let p = NSOpenPanel(); p.canChooseDirectories = true; p.canChooseFiles = false; p.canCreateDirectories = true; if p.runModal() == .OK { folder = p.url } }
                     }
                     HStack { Spacer(); BButton(title: "Start sharing", kind: .primary) { m.startHousehold(with: name, phone: phone, folder: folder) }.disabled(name.trimmingCharacters(in: .whitespaces).isEmpty) }

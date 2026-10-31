@@ -41,17 +41,28 @@ show a name it has to get right. Both publish whoever was in the chat. It has ha
 rule is written down: a contact's mobile number reached 89 places across 17 files, and a cloud account id sat
 in a test fixture beside its region, both public for weeks.
 
-Use these, and add to the cast rather than inventing alongside it:
+Use the cast that is already here, and add to it rather than inventing alongside it:
 
 | | |
 |---|---|
-| **People** | Ravi Sharma, Priya Bhatt, Asha Mehta, Dev Iyer, Noor Siddiqui, Lata Pillai, Sam |
-| …sharing a first name | Kiran Bose and Kiran Dutta — two people, for the matcher tests |
-| …the same person twice | "Priya Bhatt" and "Priya Bhatt Northwind", who fold to one key |
-| **Companies** | Northwind, Tideline |
-| **Phone numbers** | `+91 90000 0xxxx` — a real prefix so formatting behaves, a body no operator issues |
+| **People** | Lalita Pathak, Lokesh Kadri, Meena Pillai, Devan Mehra, Tanvi Rege, Zubin Patel, Rhea Chhabra, Noor, Nayra, Sam |
+| …the user | Ishan Shirke |
+| …sharing a first name | Kiran Bose, Kiran Dutta, Kiran Sethi — three people the matchers must keep apart |
+| …the same person twice | "Lalita Pathak" and "Lalita Pathak Tideline", which fold to one key |
+| …two who must not fold | "Lokesh Kadri" and "Lokesh Dalal"; "Meena Pillai" and "Meena Iyer" |
+| **Companies** | Tideline, Harbour, Lanterna, Clearwater, Meridian |
+| **Phone numbers** | `+91 90000 0xxxx` — a real prefix so formatting behaves, a body no operator issues. Keep the 5+5 grouping, and keep the E.164 form equal to `91` + the national form, because `PersonProof` dedupes the two |
 | **Email** | `someone@example.com`, or `someone@tideline.test`. `.test`, `.example` and `.invalid` are reserved by RFC 2606 and can never belong to anyone |
 | **Ids, keys, accounts** | obviously patterned digits — `100200300400500`, not something copied |
+
+Two names are **reserved** and mean something: `Ravi` must stay absent from every seeded vault, because
+`KnowledgeQueryTests` proves a search for a stranger finds nothing; and `Ghost` and `Nobody` are the dangling
+links in `VaultHealthTests`, which also pins `Lokesh` to sort between them.
+
+Some fixtures are deliberately awkward and must be left exactly as they are: `Zoë Müller` and `Jörg` are
+Unicode folding cases, `4111 1111 1111 1111` and `2345 6789 0124` are a Luhn-valid card and a Verhoeff-valid
+Aadhaar that the PII scanner's own tests depend on, and `A@B.co` / `12345` / `ext 42` are validator edges.
+Changing any of them inverts the assertion rather than breaking it, which is worse.
 
 If you have a case from real data that a test should cover, keep the *shape* and change everything else: the
 name, the number, the amount, the company. The shape is the only part the test reads.

@@ -26,8 +26,8 @@ import Support
 
     @Test func aRecordingDatedInTheFutureOpensItsPromisesToday() {
         let now = Date(timeIntervalSince1970: 1_789_500_000), future = Date(timeIntervalSince1970: 2_001_513_725), past = Date(timeIntervalSince1970: 1_789_400_000)
-        let summary = #"At [03:12] the user says "I'll send it by Thursday" to Meera."#
-        #expect(TranscriptPromises.parse(summary: summary, recording: "Meera call", date: future, now: now).first?.loop.openedAt == now)
-        #expect(TranscriptPromises.parse(summary: summary, recording: "Meera call", date: past, now: now).first?.loop.openedAt == past)
+        let summary = #"At [03:12] the user says "I'll send it by Thursday" to Meena."#
+        #expect(TranscriptPromises.parse(summary: summary, recording: "Meena call", date: future, now: now).first?.loop.openedAt == now)
+        #expect(TranscriptPromises.parse(summary: summary, recording: "Meena call", date: past, now: now).first?.loop.openedAt == past)
     }
 }

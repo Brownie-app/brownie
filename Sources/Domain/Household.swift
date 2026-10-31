@@ -5,7 +5,7 @@ public struct HouseholdMember: Codable, Sendable, Equatable, Identifiable {
     public let id: String
     public var name: String
     public var isMe: Bool
-    /// Digits only, for matching chat members ("919034935256"); optional.
+    /// Digits only, for matching chat members ("919000000222"); optional.
     public var phone: String?
     public init(id: String = UUID().uuidString, name: String, isMe: Bool, phone: String? = nil) { self.id = id; self.name = name; self.isMe = isMe; self.phone = phone }
     /// The name as it appears on cards: first name.
@@ -26,7 +26,7 @@ public struct Household: Codable, Sendable, Equatable {
     }
     public var me: HouseholdMember? { members.first { $0.isMe } }
     public var others: [HouseholdMember] { members.filter { !$0.isMe } }
-    /// "Priya" · "Priya and Amma" — for sentences.
+    /// "Tanvi" · "Tanvi and Amma" — for sentences.
     public var othersLine: String {
         let n = others.map(\.firstName)
         switch n.count { case 0: return "no one yet"; case 1: return n[0]; default: return n.dropLast().joined(separator: ", ") + " and " + n.last! }

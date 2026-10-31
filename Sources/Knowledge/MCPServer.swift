@@ -34,7 +34,7 @@ public final class MCPServer {
 
     static let tools: [[String: Any]] = [
         ["name": "search_notes", "description": "Full-text search of the user's private knowledge base (Markdown notes Brownie wrote from their messages, mail and files). Returns matching note paths and the first lines.", "inputSchema": ["type": "object", "properties": ["query": ["type": "string"]], "required": ["query"]]],
-        ["name": "read_note", "description": "Read one note by its path, e.g. People/Priya.md.", "inputSchema": ["type": "object", "properties": ["path": ["type": "string"]], "required": ["path"]]],
+        ["name": "read_note", "description": "Read one note by its path, e.g. People/Tanvi.md.", "inputSchema": ["type": "object", "properties": ["path": ["type": "string"]], "required": ["path"]]],
         ["name": "who_is", "description": "What Brownie knows about a person: their People note and open promises between them and the user.", "inputSchema": ["type": "object", "properties": ["name": ["type": "string"]], "required": ["name"]]],
         ["name": "open_loops", "description": "Promises still open, both directions: what the user owes people and what people owe the user.", "inputSchema": ["type": "object", "properties": [:]]],
         ["name": "recent_cards", "description": "The morning cards Brownie prepared recently — things waiting on the user.", "inputSchema": ["type": "object", "properties": [:]]],

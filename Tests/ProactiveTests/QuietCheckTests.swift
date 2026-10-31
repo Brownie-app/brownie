@@ -12,7 +12,7 @@ import Domain
         return c
     }
     func loop(_ id: String, closed: Bool = false, how: String? = nil) -> Loop {
-        Loop(id: id, direction: .mine, person: "Kanika", what: "send the update", quote: "", sourceLabel: "WhatsApp", due: nil, status: closed ? .closed : .open, openedAt: now.addingTimeInterval(-86400), closedAt: closed ? now : nil, closedHow: how)
+        Loop(id: id, direction: .mine, person: "Lalita", what: "send the update", quote: "", sourceLabel: "WhatsApp", due: nil, status: closed ? .closed : .open, openedAt: now.addingTimeInterval(-86400), closedAt: closed ? now : nil, closedHow: how)
     }
     func run(_ cards: [Card], loops: [Loop] = [], past: [Card] = [], notes: [String: Date] = [:], files: Set<String> = [], staleDays: Int = 7) -> QuietCheck.Result {
         QuietCheck.run(cards: cards, loops: loops, past: past, noteUpdated: { notes[$0] }, fileExists: { files.contains($0) }, now: now, staleDays: staleDays)
@@ -41,7 +41,7 @@ import Domain
     }
 
     @Test func aMissingAttachmentDropsTheCard() {
-        let c = card("a", recipe: .mail(to: "arif", subject: "s", body: "b", attachments: ["/Users/v/Desktop/deck.pdf"]))
+        let c = card("a", recipe: .mail(to: "noor", subject: "s", body: "b", attachments: ["/Users/v/Desktop/deck.pdf"]))
         #expect(run([c], files: []).dropped.map(\.why) == ["the file it needs is gone: deck.pdf"])
         #expect(run([c], files: ["/Users/v/Desktop/deck.pdf"]).kept.count == 1)
         let named = card("b", recipe: .imessage(to: "Amma", body: "", attachments: ["photo from Sunday"]))
@@ -50,14 +50,14 @@ import Domain
 
     @Test func oldNotesFlagOrDropDependingOnWhatElseThereIs() {
         let old = now.addingTimeInterval(-10 * 86400), fresh = now.addingTimeInterval(-86400)
-        let notes = ["People/Kanika.md": old, "People/Meera.md": fresh]
-        let onlyOld = card("a", evidence: [Evidence(source: "People/Kanika.md", when: "x", text: "t")])
+        let notes = ["People/Lalita.md": old, "People/Meena.md": fresh]
+        let onlyOld = card("a", evidence: [Evidence(source: "People/Lalita.md", when: "x", text: "t")])
         #expect(run([onlyOld], notes: notes).dropped.map(\.why) == ["built only on notes last updated 10 days ago"])
         #expect(run([onlyOld], notes: notes, staleDays: 14).kept.first?.staleLine == nil, "within the setting it is simply fine")
-        let mixed = card("b", evidence: [Evidence(source: "People/Kanika.md", when: "x", text: "t"), Evidence(source: "WhatsApp · Kanika · Fri", when: "12 Sep 2026", text: "t")])
+        let mixed = card("b", evidence: [Evidence(source: "People/Lalita.md", when: "x", text: "t"), Evidence(source: "WhatsApp · Lalita · Fri", when: "12 Sep 2026", text: "t")])
         let r = run([mixed], notes: notes)
-        #expect(r.kept.count == 1 && r.kept[0].staleLine == "Partly from a note last updated 10 days ago (People/Kanika.md)")
-        let freshOnly = card("c", evidence: [Evidence(source: "People/Meera.md", when: "x", text: "t")])
+        #expect(r.kept.count == 1 && r.kept[0].staleLine == "Partly from a note last updated 10 days ago (People/Lalita.md)")
+        let freshOnly = card("c", evidence: [Evidence(source: "People/Meena.md", when: "x", text: "t")])
         #expect(run([freshOnly], notes: notes).kept.first?.staleLine == nil)
         let unknown = card("d", evidence: [Evidence(source: "People/Gone.md", when: "x", text: "t")])
         #expect(run([unknown], notes: notes).kept.count == 1, "a note we can't date is left alone")
@@ -88,26 +88,26 @@ import Domain
     func run(_ cards: [Card], past: [Card]) -> QuietCheck.Result { QuietCheck.run(cards: cards, loops: [], past: past, noteUpdated: { _ in nil }, fileExists: { _ in true }, now: now, staleDays: 7) }
 
     @Test func aCardToSomeoneYouJustWroteToIsLetGo() {
-        let sent = card("old", to: "Nitesh (+919540752593)", state: .fired, resolvedAgo: 120)
-        let r = run([card("new", to: "Nitesh")], past: [sent])
-        #expect(r.kept.isEmpty && r.dropped.first?.why == "you wrote to Nitesh 2 minutes ago")
-        #expect(run([card("new", to: "Nitesh")], past: [card("old", to: "Nitesh", state: .fired, resolvedAgo: 7 * 3600)]).kept.count == 1, "after six hours it's fair game")
-        #expect(run([card("new", to: "Kanika Pandey")], past: [sent]).kept.count == 1, "someone else")
-        #expect(run([card("new", to: "Nitesh")], past: [card("old", to: "Nitesh", state: .dismissed, resolvedAgo: 120)]).kept.count == 1, "only a card you fired counts as writing")
+        let sent = card("old", to: "Lokesh (+919000000111)", state: .fired, resolvedAgo: 120)
+        let r = run([card("new", to: "Lokesh")], past: [sent])
+        #expect(r.kept.isEmpty && r.dropped.first?.why == "you wrote to Lokesh 2 minutes ago")
+        #expect(run([card("new", to: "Lokesh")], past: [card("old", to: "Lokesh", state: .fired, resolvedAgo: 7 * 3600)]).kept.count == 1, "after six hours it's fair game")
+        #expect(run([card("new", to: "Lalita Pathak")], past: [sent]).kept.count == 1, "someone else")
+        #expect(run([card("new", to: "Lokesh")], past: [card("old", to: "Lokesh", state: .dismissed, resolvedAgo: 120)]).kept.count == 1, "only a card you fired counts as writing")
     }
     @Test func aCardYouTurnedDownDoesNotComeBack() {
-        let dismissed = card("mon", to: "Nitesh", state: .dismissed, resolvedAgo: 40 * 3600, about: "the deposit")
-        let r = run([card("tue", to: "Nitesh", about: "the deposit")], past: [dismissed])
+        let dismissed = card("mon", to: "Lokesh", state: .dismissed, resolvedAgo: 40 * 3600, about: "the deposit")
+        let r = run([card("tue", to: "Lokesh", about: "the deposit")], past: [dismissed])
         #expect(r.kept.isEmpty && r.dropped.first?.why == "you turned this down yesterday")
-        #expect(run([card("tue", to: "Nitesh", about: "the flat viewing")], past: [dismissed]).kept.count == 1, "a different thing to say still gets through")
-        #expect(run([card("tue", to: "Kanika", about: "the deposit")], past: [dismissed]).kept.count == 1, "someone else")
-        #expect(run([card("tue", to: "Nitesh", about: "the deposit")], past: [card("mon", to: "Nitesh", state: .dismissed, resolvedAgo: 15 * 86400, about: "the deposit")]).kept.count == 1, "after a fortnight it may be raised again")
-        #expect(run([card("tue", to: "Nitesh", cameBack: true, about: "the deposit")], past: [dismissed]).kept.count == 1, "a came-back card is news")
+        #expect(run([card("tue", to: "Lokesh", about: "the flat viewing")], past: [dismissed]).kept.count == 1, "a different thing to say still gets through")
+        #expect(run([card("tue", to: "Lalita", about: "the deposit")], past: [dismissed]).kept.count == 1, "someone else")
+        #expect(run([card("tue", to: "Lokesh", about: "the deposit")], past: [card("mon", to: "Lokesh", state: .dismissed, resolvedAgo: 15 * 86400, about: "the deposit")]).kept.count == 1, "after a fortnight it may be raised again")
+        #expect(run([card("tue", to: "Lokesh", cameBack: true, about: "the deposit")], past: [dismissed]).kept.count == 1, "a came-back card is news")
     }
 
     @Test func aCardYouAlreadyDidDoesNotComeBack() {
-        #expect(run([card("tue", to: "Nitesh", about: "the deposit")], past: [card("mon", to: "Nitesh", state: .fired, resolvedAgo: 30 * 3600, about: "the deposit")]).kept.isEmpty, "you did this yesterday")
-        #expect(run([card("tue", to: "Nitesh", about: "the deposit")], past: [card("mon", to: "Nitesh", state: .fired, resolvedAgo: 3 * 86400, about: "the deposit")]).kept.count == 1, "past the card's lifetime the same errand is fair again")
+        #expect(run([card("tue", to: "Lokesh", about: "the deposit")], past: [card("mon", to: "Lokesh", state: .fired, resolvedAgo: 30 * 3600, about: "the deposit")]).kept.isEmpty, "you did this yesterday")
+        #expect(run([card("tue", to: "Lokesh", about: "the deposit")], past: [card("mon", to: "Lokesh", state: .fired, resolvedAgo: 3 * 86400, about: "the deposit")]).kept.count == 1, "past the card's lifetime the same errand is fair again")
     }
 
     /// A card that chases an answer carries no loop id, so nothing above catches it. This is the backstop for a
@@ -125,26 +125,26 @@ import Domain
         }
         // a real chase card, titled the way the preparer titles one — not the helper's "Update <person> about …",
         // whose extra words would make any share-of-words rule read lower than it should
-        let chase = Card(id: "chase", title: "Review Arif's pricing PR", sourceLabel: "Slack", why: "He asked on Monday and you have not replied",
+        let chase = Card(id: "chase", title: "Review Noor's pricing PR", sourceLabel: "Slack", why: "He asked on Monday and you have not replied",
                          actionLabel: "Send", dueLine: "", urgency: .medium, draftLabel: "Draft", draft: "",
-                         recipe: .whatsapp(chat: "Arif Qureshi", body: "reviewing now"), evidence: [], verification: .verified, verifiedLine: "",
+                         recipe: .whatsapp(chat: "Noor Qureshi", body: "reviewing now"), evidence: [], verification: .verified, verifiedLine: "",
                          state: .ready, createdAt: now.addingTimeInterval(-600))
-        let answered = ask("can you review the pricing PR today or tomorrow?", from: "Arif Qureshi", answeredAgo: 3600)
+        let answered = ask("can you review the pricing PR today or tomorrow?", from: "Noor Qureshi", answeredAgo: 3600)
         #expect(run([chase], [answered]).kept.isEmpty, "they wrote back about it — nobody should be chased")
         #expect(run([chase], []).kept.count == 1, "with no ask behind it the card stands")
-        #expect(run([chase], [ask("can you review the pricing PR today?", from: "Arif Qureshi", answeredAgo: nil)]).kept.count == 1, "no reply, still a fair chase")
-        #expect(run([chase], [ask("can you review the pricing PR today?", from: "Arif Qureshi", answeredAgo: 3600, outcome: .promised)]).kept.count == 1,
+        #expect(run([chase], [ask("can you review the pricing PR today?", from: "Noor Qureshi", answeredAgo: nil)]).kept.count == 1, "no reply, still a fair chase")
+        #expect(run([chase], [ask("can you review the pricing PR today?", from: "Noor Qureshi", answeredAgo: 3600, outcome: .promised)]).kept.count == 1,
                 "a promise is not an answer")
-        #expect(run([chase], [ask("can you review the pricing PR today?", from: "Meera Nair", answeredAgo: 3600)]).kept.count == 1, "someone else answered something else")
-        #expect(run([chase], [ask("are you coming to the offsite?", from: "Arif Qureshi", answeredAgo: 3600)]).kept.count == 1, "a different question of theirs")
-        #expect(run([chase], [ask("can you review the pricing PR today?", from: "Arif Qureshi", answeredAgo: 20 * 86400)]).kept.count == 1,
+        #expect(run([chase], [ask("can you review the pricing PR today?", from: "Meena Pillai", answeredAgo: 3600)]).kept.count == 1, "someone else answered something else")
+        #expect(run([chase], [ask("are you coming to the offsite?", from: "Noor Qureshi", answeredAgo: 3600)]).kept.count == 1, "a different question of theirs")
+        #expect(run([chase], [ask("can you review the pricing PR today?", from: "Noor Qureshi", answeredAgo: 20 * 86400)]).kept.count == 1,
                 "an answer three weeks old is not why this card was made")
     }
 
     @Test func aDueOrCameBackCardStays() {
-        let sent = card("old", to: "Nitesh", state: .fired, resolvedAgo: 60)
-        #expect(run([card("due", to: "Nitesh", due: now.addingTimeInterval(86400))], past: [sent]).kept.count == 1)
-        #expect(run([card("back", to: "Nitesh", cameBack: true)], past: [sent]).kept.count == 1)
+        let sent = card("old", to: "Lokesh", state: .fired, resolvedAgo: 60)
+        #expect(run([card("due", to: "Lokesh", due: now.addingTimeInterval(86400))], past: [sent]).kept.count == 1)
+        #expect(run([card("back", to: "Lokesh", cameBack: true)], past: [sent]).kept.count == 1)
     }
     @Test func agoWording() {
         #expect(QuietCheck.ago(30) == "just now" && QuietCheck.ago(150) == "2 minutes ago" && QuietCheck.ago(3700) == "1 hour ago" && QuietCheck.ago(9000) == "2 hours ago")

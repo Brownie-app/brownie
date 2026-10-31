@@ -12,11 +12,11 @@ import Domain
     var cal: Calendar { var c = Calendar(identifier: .gregorian); c.timeZone = TimeZone(identifier: "Asia/Kolkata")!; return c }
 
     @Test func rendersReadyCardsMostUrgentFirstWithHiddenIDs() {
-        let md = TodayNote.render(cards: [card("a", title: "Reply to Rohan"), card("b", title: "Pay the deposit", urgency: .high, draft: "Paying\ntoday", due: "Due Friday"), card("c", title: "Old", state: .fired)], date: now, calendar: cal)
+        let md = TodayNote.render(cards: [card("a", title: "Reply to Zubin"), card("b", title: "Pay the deposit", urgency: .high, draft: "Paying\ntoday", due: "Due Friday"), card("c", title: "Old", state: .fired)], date: now, calendar: cal)
         #expect(md.hasPrefix("# Today — Tuesday 16 September"))
         let lines = md.split(separator: "\n").map(String.init)
         let cardLines = lines.filter { $0.hasPrefix("- [ ]") }
-        #expect(cardLines.count == 2 && cardLines[0].contains("Pay the deposit") && cardLines[1].contains("Reply to Rohan"), "fired cards are not listed; urgent first")
+        #expect(cardLines.count == 2 && cardLines[0].contains("Pay the deposit") && cardLines[1].contains("Reply to Zubin"), "fired cards are not listed; urgent first")
         #expect(cardLines[0] == "- [ ] **Pay the deposit** — because of this · _Due Friday_ <!-- card:b -->")
         #expect(lines.contains("    > Paying") && lines.contains("    > today"), "the draft rides along as a quote")
         #expect(md.contains("a tick here only says “done”"))
@@ -31,7 +31,7 @@ import Domain
         # Today
         - [x] **Pay the deposit** — why <!-- card:b -->
             > draft
-        - [ ] **Reply to Rohan** — why <!-- card:a -->
+        - [ ] **Reply to Zubin** — why <!-- card:a -->
         - [X] **Book the table** — why <!--  card:c  -->
         - [ ] a line someone typed by hand with no id
         """
@@ -39,7 +39,7 @@ import Domain
     }
 
     @Test func roundTrip() {
-        let md = TodayNote.render(cards: [card("a", title: "Reply to Rohan"), card("b", title: "Pay")], date: now, calendar: cal)
+        let md = TodayNote.render(cards: [card("a", title: "Reply to Zubin"), card("b", title: "Pay")], date: now, calendar: cal)
         #expect(TodayNote.parse(md).map(\.cardID).sorted() == ["a", "b"] && TodayNote.parse(md).allSatisfy { !$0.checked })
     }
 

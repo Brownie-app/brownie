@@ -7,15 +7,15 @@ import Domain
     typealias Step = TaughtRecipe.Step
     @Test func testCleanStripsDirectionMarks() {
         #expect(Recorder.clean("\u{200E}WhatsApp\u{200E}") == "WhatsApp")
-        #expect(Recorder.clean("  Vivek, You \u{200B}") == "Vivek, You")
+        #expect(Recorder.clean("  Ishan, You \u{200B}") == "Ishan, You")
     }
     @Test func testPersonComesFromTheSearchBox() {
         let steps = [Step(kind: .launch, app: "WhatsApp", target: "WhatsApp"), Step(kind: .click, app: "WhatsApp", target: "Search", role: "StaticText"),
-                     Step(kind: .type, app: "WhatsApp", target: "Search", role: "TextField", text: "vivek you"), Step(kind: .click, app: "WhatsApp", target: "Vivek", role: "Button"),
+                     Step(kind: .type, app: "WhatsApp", target: "Search", role: "TextField", text: "ishan you"), Step(kind: .click, app: "WhatsApp", target: "Ishan", role: "Button"),
                      Step(kind: .type, app: "WhatsApp", target: "Compose message", role: "TextField", text: "hi")]
         let p = Recorder.suggestParameters(steps)
         #expect(p.map(\.name) == ["person", "message"])
-        #expect(p[0].original == "vivek you"); #expect(p[1].original == "hi")
+        #expect(p[0].original == "ishan you"); #expect(p[1].original == "hi")
     }
     @Test func testPersonFallsBackToTheRowAndSkipsChrome() {
         let steps = [Step(kind: .click, app: "Messages", target: "New Chat", role: "Button"), Step(kind: .click, app: "Messages", target: "Amma", role: "Row"), Step(kind: .type, app: "Messages", target: "Message", role: "TextField", text: "on my way")]
@@ -23,12 +23,12 @@ import Domain
         #expect(p.first?.original == "Amma")
     }
     @Test func testSearchTextIsNeverTheMessage() {
-        let steps = [Step(kind: .type, app: "WhatsApp", target: "Search", role: "TextField", text: "rohan")]
+        let steps = [Step(kind: .type, app: "WhatsApp", target: "Search", role: "TextField", text: "zubin")]
         #expect(Recorder.suggestParameters(steps).first { $0.name == "message" } == nil)
     }
     @Test func testSuggestedName() {
-        let p = [TaughtRecipe.Parameter(name: "person", original: "Rohan")]
-        #expect(Recorder.suggestName([Step(kind: .launch, app: "WhatsApp", target: "WhatsApp")], parameters: p) == "Message Rohan in WhatsApp")
+        let p = [TaughtRecipe.Parameter(name: "person", original: "Zubin")]
+        #expect(Recorder.suggestName([Step(kind: .launch, app: "WhatsApp", target: "WhatsApp")], parameters: p) == "Message Zubin in WhatsApp")
     }
     @Test func testMethodLadder() {
         let wa = TaughtRecipe(name: "w", steps: [Step(kind: .launch, app: "WhatsApp", target: "WhatsApp"), Step(kind: .type, app: "WhatsApp", target: "Compose message", role: "TextField", text: "hi")], parameters: [], createdAt: Date())
